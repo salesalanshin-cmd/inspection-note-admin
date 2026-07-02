@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #14181D;
+  color: #E7ECF0;
+  background-image:
+    linear-gradient(rgba(242, 169, 59, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(242, 169, 59, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2C3640;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gauge-tick {
+  background-image: repeating-linear-gradient(
+    90deg,
+    #F2A93B 0px,
+    #F2A93B 2px,
+    transparent 2px,
+    transparent 10px
+  );
+}
