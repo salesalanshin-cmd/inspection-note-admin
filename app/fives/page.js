@@ -1,51 +1,286 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
+import { SOS_ERROR_CODES, fivesErrorCode, fivesLabel } from '../../lib/constants';
+import {
+  exportToExcel,
+  formatDateRangeForFilename,
+  formatExportDateTime,
+  resolveFileName,
+} from '../../lib/exportExcel';
+import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
+import { requestClassifyPhotosBatch } from '../../lib/classifyClient';
+import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
+import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
+import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 import SignedImage from '../../components/SignedImage';
+import FivesEditModal from '../../components/FivesEditModal';
+import BatchClassifyReviewModal from '../../components/BatchClassifyReviewModal';
+import BatchClassifyProgress from '../../components/BatchClassifyProgress';
+import ConfirmDialog from '../../components/ConfirmDialog';
+import GalleryFloatingBar from '../../components/GalleryFloatingBar';
+import DateRangePicker from '../../components/DateRangePicker';
+
+const exportBtnClass =
+  'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
+
+const dangerBtnClass =
+  'rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50';
+
+const SOS_CODE_OPTIONS = Object.entries(SOS_ERROR_CODES).map(([value, label]) => ({
+  value,
+  label,
+}));
 
 export default function FivesPage() {
-  const { loading, error, fives } = useReports();
+  const { loading, error, fives, refetch } = useReports();
+  const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
+  const [selected, setSelected] = useState(null);
+  const [batchProgress, setBatchProgress] = useState(null);
+  const [batchResults, setBatchResults] = useState(null);
+  const [batchError, setBatchError] = useState(null);
+  const [trashConfirm, setTrashConfirm] = useState(false);
+  const [trashLoading, setTrashLoading] = useState(false);
+  const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
+    useGalleryBatchSelect();
 
-  if (loading) return <div className="p-8 text-muted font-mono text-sm">데이터 불러오는 중...</div>;
-  if (error) return <div className="p-8 text-danger font-mono text-sm">오류: {error}</div>;
+  const filtered = useMemo(
+    () => filterByCreatedAtDateRange(fives, dateRange),
+    [fives, dateRange]
+  );
+
+  const canExport = isDateRangeValid(dateRange) && filtered.length > 0;
+
+  const selectedRecords = useMemo(
+    () => filtered.filter((f) => selectedIds.has(f.id)),
+    [filtered, selectedIds]
+  );
+
+  const recordsById = useMemo(() => new Map(filtered.map((f) => [f.id, f])), [filtered]);
+
+  async function handleBatchClassify() {
+    const items = selectedRecords
+      .filter((f) => f.image_url)
+      .map((f) => ({ id: f.id, imageUrl: f.image_url }));
+
+    if (!items.length) {
+      setBatchError('이미지가 있는 항목을 선택해 주세요.');
+      return;
+    }
+
+    setBatchError(null);
+    setBatchProgress({ done: 0, total: items.length });
+
+    try {
+      const results = await requestClassifyPhotosBatch(items, 'sos', (done, total) => {
+        setBatchProgress({ done, total });
+      });
+      setBatchResults(results);
+    } catch (err) {
+      setBatchError(err.message);
+    } finally {
+      setBatchProgress(null);
+    }
+  }
+
+  async function handleBatchSave(updates) {
+    const responses = await Promise.all(
+      updates.map((u) =>
+        supabase
+          .from('fives_reports')
+          .update({
+            sos_error_code: u.code,
+            sos_code: u.code,
+            area_type: SOS_ERROR_CODES[u.code],
+            ai_suggested_code: u.ai_suggested_code,
+            ai_confidence: u.ai_confidence,
+            ai_reason: u.ai_reason,
+          })
+          .eq('id', u.id)
+      )
+    );
+    const failed = responses.find((r) => r.error);
+    if (failed?.error) throw new Error(failed.error.message);
+    clearAll();
+    refetch();
+  }
+
+  async function handleMoveToTrash() {
+    setTrashLoading(true);
+    try {
+      await moveToTrash(TRASH_TABLES.fives, [...selectedIds]);
+      clearAll();
+      setTrashConfirm(false);
+      refetch();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[fives trash]', err);
+    } finally {
+      setTrashLoading(false);
+    }
+  }
+
+  function handleExportExcel() {
+    const rows = filtered.map((f) => ({
+      작업자: f.worker_name || '',
+      구역: f.area_type || '',
+      SOS코드: fivesErrorCode(f) || '',
+      설명: f.description || '',
+      촬영시각: formatExportDateTime(f.created_at),
+      파일명: resolveFileName(f),
+    }));
+    exportToExcel(
+      rows,
+      `3정5S기록_${formatDateRangeForFilename(dateRange.start, dateRange.end)}.xlsx`
+    );
+  }
+
+  if (loading) return <div className="p-8 text-muted text-sm">데이터 불러오는 중...</div>;
+  if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   return (
     <div>
-      <PageHeader eyebrow="WORKPLACE" title="3정5S 기록" description={`총 ${fives.length}건`} />
+      <PageHeader eyebrow="WORKPLACE" title="3정5S 기록" description={`총 ${filtered.length}건`} />
 
-      <div className="p-8">
+      <div className="p-8 space-y-6">
+        <div className="flex flex-wrap items-start gap-3">
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={!canExport}
+            className={exportBtnClass}
+          >
+            엑셀 다운로드
+          </button>
+          <button
+            type="button"
+            onClick={() => selectAll(filtered)}
+            disabled={filtered.length === 0}
+            className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
+          >
+            전체 선택
+          </button>
+          <button
+            type="button"
+            onClick={clearAll}
+            disabled={selectedCount === 0}
+            className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
+          >
+            선택 해제
+          </button>
+        </div>
+
+        {batchError ? (
+          <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{batchError}</div>
+        ) : null}
+
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {fives.map((f) => (
-            <div key={f.id} className="bg-surface border border-border rounded-sm overflow-hidden">
-              <div className="relative aspect-square bg-surface2">
+          {filtered.map((f) => (
+            <div key={f.id} className="bg-surface rounded-xl shadow-card overflow-hidden group">
+              <div
+                className="relative aspect-square bg-surface2 cursor-pointer"
+                onClick={() => setSelected(f)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelected(f);
+                  }
+                }}
+              >
+                <label
+                  className="absolute top-2 left-2 z-30 flex h-6 w-6 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface/90"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected(f.id)}
+                    onChange={() => toggle(f.id)}
+                    className="h-3.5 w-3.5 accent-accent"
+                    aria-label={`${f.worker_name || '작업자'} 선택`}
+                  />
+                </label>
                 {f.image_url ? (
-                  <SignedImage url={f.image_url} alt={f.area_type || '3정5S'} />
+                  <SignedImage url={f.image_url} alt={fivesLabel(f)} />
                 ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-muted text-xs font-mono">
+                  <div className="absolute inset-0 flex items-center justify-center text-muted text-xs">
                     이미지 없음
                   </div>
                 )}
-                <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-accent/90 text-bg text-[10px] font-mono rounded-sm">
-                  {f.area_type || '구역 미상'}
+                <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-accentSoft text-accent text-[10px] font-medium rounded-full">
+                  {fivesLabel(f)}
                 </div>
               </div>
               <div className="p-2.5 text-xs">
                 <div className="text-text font-medium">{f.worker_name || '작업자 미상'}</div>
                 {f.description ? <div className="text-muted mt-0.5">{f.description}</div> : null}
-                <div className="text-muted font-mono mt-0.5">
+                <div className="text-muted mt-0.5">
                   {f.created_at ? new Date(f.created_at).toLocaleString('ko-KR') : ''}
                 </div>
               </div>
             </div>
           ))}
-          {fives.length === 0 && (
-            <div className="col-span-full text-center py-12 text-muted font-mono text-xs">
-              기록이 없습니다
+          {filtered.length === 0 && (
+            <div className="col-span-full text-center py-12 text-muted text-xs">
+              조건에 맞는 기록이 없습니다
             </div>
           )}
         </div>
       </div>
+
+      {selected ? (
+        <FivesEditModal
+          report={selected}
+          onClose={() => setSelected(null)}
+          onSaved={() => refetch()}
+        />
+      ) : null}
+
+      {batchProgress ? (
+        <BatchClassifyProgress
+          done={batchProgress.done}
+          total={batchProgress.total}
+          label="3정5S AI 일괄판정 중..."
+        />
+      ) : null}
+
+      {batchResults ? (
+        <BatchClassifyReviewModal
+          title="3정5S AI 일괄판정 결과"
+          codeSet="sos"
+          recordsById={recordsById}
+          results={batchResults}
+          codeOptions={SOS_CODE_OPTIONS}
+          onSave={handleBatchSave}
+          onClose={() => setBatchResults(null)}
+        />
+      ) : null}
+
+      <ConfirmDialog
+        open={trashConfirm}
+        title="휴지통으로 이동"
+        message={`선택한 ${selectedCount}개 항목을 휴지통으로 이동합니다. 휴지통에서 복구하거나 완전히 삭제할 수 있습니다.`}
+        confirmLabel="휴지통으로 이동"
+        confirmTone="danger"
+        loading={trashLoading}
+        onConfirm={handleMoveToTrash}
+        onCancel={() => setTrashConfirm(false)}
+      />
+
+      {selectedCount > 0 && !batchProgress ? (
+        <GalleryFloatingBar count={selectedCount}>
+          <button type="button" onClick={handleBatchClassify} className={exportBtnClass}>
+            AI 일괄판정
+          </button>
+          <button type="button" onClick={() => setTrashConfirm(true)} className={dangerBtnClass}>
+            휴지통으로 이동
+          </button>
+        </GalleryFloatingBar>
+      ) : null}
     </div>
   );
 }

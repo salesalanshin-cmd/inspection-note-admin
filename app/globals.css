@@ -3,12 +3,9 @@
 @tailwind utilities;
 
 body {
-  background-color: #14181D;
-  color: #E7ECF0;
-  background-image:
-    linear-gradient(rgba(242, 169, 59, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(242, 169, 59, 0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
+  background-color: #F7F8FA;
+  color: #8B94A7;
+  font-size: 14px;
 }
 
 ::-webkit-scrollbar {
@@ -16,19 +13,9 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2C3640;
+  background: #D1D5DE;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
-}
-
-.gauge-tick {
-  background-image: repeating-linear-gradient(
-    90deg,
-    #F2A93B 0px,
-    #F2A93B 2px,
-    transparent 2px,
-    transparent 10px
-  );
 }

@@ -8,7 +8,8 @@ import { extractStoragePath } from '../lib/storagePath';
 // signed URL 재발급 유효 시간 (초) - 화면 보는 동안만 유효하면 되므로 1시간이면 충분
 const SIGNED_URL_TTL = 60 * 60;
 
-export default function SignedImage({ url, alt }) {
+export default function SignedImage({ url, alt, fit = 'cover', sizes = '200px' }) {
+  const objectFit = fit === 'contain' ? 'object-contain' : 'object-cover';
   const [src, setSrc] = useState(null);
   const [failed, setFailed] = useState(false);
 
@@ -48,7 +49,7 @@ export default function SignedImage({ url, alt }) {
 
   if (failed) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-muted text-[11px] font-mono text-center px-2">
+      <div className="absolute inset-0 flex items-center justify-center text-muted text-[11px] text-center px-2">
         이미지를 불러올 수 없음
       </div>
     );
@@ -56,7 +57,7 @@ export default function SignedImage({ url, alt }) {
 
   if (!src) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-muted text-[11px] font-mono">
+      <div className="absolute inset-0 flex items-center justify-center text-muted text-[11px]">
         불러오는 중...
       </div>
     );
@@ -67,8 +68,8 @@ export default function SignedImage({ url, alt }) {
       src={src}
       alt={alt}
       fill
-      sizes="200px"
-      className="object-cover"
+      sizes={sizes}
+      className={objectFit}
       onError={() => setFailed(true)}
     />
   );

@@ -7,10 +7,9 @@ export default function StatCard({ label, value, sub, tone = 'default' }) {
   }[tone];
 
   return (
-    <div className="relative bg-surface border border-border rounded-sm p-5 overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-[3px] gauge-tick opacity-60" />
-      <div className="text-[11px] tracking-[0.2em] text-muted font-mono uppercase">{label}</div>
-      <div className={`font-display text-3xl font-semibold mt-2 ${toneColor}`}>{value}</div>
+    <div className="bg-surface rounded-xl shadow-card p-5">
+      <div className="text-xs font-medium text-muted">{label}</div>
+      <div className={`text-3xl font-semibold mt-2 ${toneColor}`}>{value}</div>
       {sub ? <div className="text-xs text-muted mt-1">{sub}</div> : null}
     </div>
   );
