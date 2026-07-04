@@ -8,15 +8,16 @@ import { Sparkles } from 'lucide-react';
 const NAV = [
   { href: '/dashboard', label: '대시보드', code: '01' },
   { href: '/workers', label: '작업자 현황', code: '02' },
-  { href: '/frequent-check', label: '자주검사 현황', code: '03' },
-  { href: '/defects', label: '불량기록', code: '04' },
-  { href: '/documents', label: '문서스캔', code: '05' },
-  { href: '/fives', label: '3정5S', code: '06' },
+  { href: '/daily-performance', label: '일일 실적 관리', code: '03' },
+  { href: '/frequent-check', label: '자주검사 현황', code: '04' },
+  { href: '/defects', label: '불량기록', code: '05' },
+  { href: '/documents', label: '문서스캔', code: '06' },
+  { href: '/fives', label: '3정5S', code: '07' },
 ];
 
 const SETTINGS_NAV = [
-  { href: '/worker-management', label: '작업자 관리', code: '07' },
-  { href: '/trash', label: '휴지통', code: '08' },
+  { href: '/worker-management', label: '작업자 관리', code: '08' },
+  { href: '/trash', label: '휴지통', code: '09' },
 ];
 
 const INSIGHT_LAB_NAV = {
