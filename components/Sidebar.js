@@ -44,19 +44,19 @@ function InsightLabNavLink({ active }) {
   return (
     <Link
       href={INSIGHT_LAB_NAV.href}
-      className={`group relative flex items-center gap-2.5 overflow-hidden rounded-xl px-3 py-2.5 text-sm transition-colors ${
+      className={`group relative flex items-center gap-2.5 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
         active
-          ? 'bg-gradient-to-r from-accent/10 to-transparent text-accent font-medium'
-          : 'bg-gradient-to-r from-accent/5 to-transparent text-text hover:from-accent/10'
+          ? 'bg-gradient-to-r from-accent/20 to-accent/0 text-accent'
+          : 'bg-gradient-to-r from-accent/10 to-accent/0 text-text hover:from-accent/20'
       }`}
     >
       <span
-        className={`absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-gradient-to-b from-accent to-[#6366F1] ${
-          active ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'
+        className={`absolute left-0 top-1 bottom-1 w-1 rounded-full bg-accent ${
+          active ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'
         }`}
       />
       <Sparkles
-        className={`ml-1 h-4 w-4 shrink-0 ${active ? 'text-accent' : 'text-accent/70 group-hover:text-accent'}`}
+        className={`ml-1 h-4 w-4 shrink-0 ${active ? 'text-accent' : 'text-accent group-hover:text-accent'}`}
         strokeWidth={2}
       />
       <span>{INSIGHT_LAB_NAV.label}</span>
@@ -81,11 +81,11 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-60 shrink-0 bg-surface shadow-sidebar flex flex-col">
-      <div className="px-5 py-6">
+    <aside className="w-60 shrink-0 h-screen overflow-y-auto bg-surface shadow-sidebar flex flex-col">
+      <Link href="/dashboard" className="block px-5 py-6 cursor-pointer">
         <div className="text-xs font-medium text-accent">(주)디케이메탈</div>
         <div className="text-lg font-semibold text-text mt-1">검사노트 관리</div>
-      </div>
+      </Link>
       <nav className="flex-1 py-2 px-3 min-h-0">
         {NAV.map((item) => (
           <NavLink key={item.href} item={item} active={pathname?.startsWith(item.href)} />
@@ -102,7 +102,7 @@ export default function Sidebar() {
       <div className="px-3 pb-3 shrink-0">
         <div className="border-t border-border pt-3">
           <div className="flex items-center gap-1.5 px-3 pb-2">
-            <span className="rounded-full bg-gradient-to-r from-accent to-[#6366F1] px-1.5 py-0.5 text-[8px] font-bold leading-none text-white">
+            <span className="rounded-full bg-accent px-1.5 py-0.5 text-[8px] font-bold leading-none text-white shadow-sm">
               AI
             </span>
             <span className="text-[10px] font-medium uppercase tracking-wide text-muted">

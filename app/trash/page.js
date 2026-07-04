@@ -33,12 +33,13 @@ function itemTitle(item) {
 }
 
 export default function TrashPage() {
-  const { loading, error, items, refetch } = useTrash();
+  const { loading, error, items, refetch, removeItems } = useTrash();
   const [filter, setFilter] = useState('all');
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [restoreConfirm, setRestoreConfirm] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   const filtered = useMemo(() => {
     if (filter === 'all') return items;
@@ -99,20 +100,50 @@ export default function TrashPage() {
   }
 
   async function handlePermanentDelete() {
+    const groups = groupSelectedByTable();
+    const requestedTotal =
+      groups.defect.length + groups.fives.length + groups.doc.length;
+    const selectedSnapshot = new Set(selectedKeys);
+
     setActionLoading(true);
+    setDeleteError(null);
+    setDeleteConfirm(false);
+
+    // 낙관적 업데이트: 화면 목록에서 먼저 제거 (실패 시 refetch로 복원)
+    removeItems(selectedSnapshot);
+
     try {
-      const groups = groupSelectedByTable();
-      await Promise.all([
+      const results = await Promise.all([
         permanentlyDelete(TRASH_TABLES.defect, groups.defect),
         permanentlyDelete(TRASH_TABLES.fives, groups.fives),
         permanentlyDelete(TRASH_TABLES.doc, groups.doc),
       ]);
+      const deletedTotal = results.reduce((sum, rows) => sum + rows.length, 0);
+
+      // eslint-disable-next-line no-console
+      console.log('[trash delete] 요청', requestedTotal, '건 / 실제 삭제', deletedTotal, '건', {
+        defect: results[0],
+        fives: results[1],
+        doc: results[2],
+      });
+
+      if (deletedTotal < requestedTotal) {
+        // error는 없지만 삭제된 row가 부족 → RLS DELETE 정책 부재로 조용히 실패한 경우
+        const msg = `삭제 실패: RLS 정책 필요 — 요청 ${requestedTotal}건 중 ${deletedTotal}건만 삭제되었습니다. Supabase에서 defect_reports / fives_reports / ocr_results 테이블에 DELETE RLS 정책을 추가해야 합니다.`;
+        // eslint-disable-next-line no-console
+        console.error('[trash delete]', msg);
+        setDeleteError(msg);
+        refetch(); // 실제 서버 상태로 복원
+        return;
+      }
+
       clearSelection();
-      setDeleteConfirm(false);
       refetch();
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[trash delete]', err);
+      setDeleteError(`삭제 실패: ${err?.message || err}`);
+      refetch(); // 낙관적 제거 복원
     } finally {
       setActionLoading(false);
     }
@@ -186,6 +217,12 @@ export default function TrashPage() {
             선택 완전삭제 ({selectedCount})
           </button>
         </div>
+
+        {deleteError ? (
+          <div className="rounded-xl border border-danger/30 bg-dangerSoft px-4 py-3 text-sm text-danger">
+            {deleteError}
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filtered.map((item) => {

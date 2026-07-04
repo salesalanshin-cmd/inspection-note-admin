@@ -40,7 +40,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-bg p-4">
       <div className="w-full max-w-sm rounded-xl bg-surface p-8 shadow-card">
         <div className="mb-6 text-center">
-          <div className="text-xs font-medium text-accent">SOONHAN LABS</div>
+          <div className="text-xs font-medium text-accent">주식회사 디케이메탈</div>
           <h1 className="mt-1 text-xl font-semibold text-text">검사노트 관리자</h1>
           <p className="mt-2 text-sm text-muted">비밀번호를 입력해 주세요</p>
         </div>

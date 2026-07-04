@@ -4,6 +4,8 @@ export default function StatCard({ label, value, sub, tone = 'default' }) {
     accent: 'text-accent',
     danger: 'text-danger',
     good: 'text-good',
+    warn: 'text-warn',
+    muted: 'text-muted',
   }[tone];
 
   return (

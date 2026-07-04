@@ -110,19 +110,16 @@ function MessageBubble({ message }) {
 
 function InsightLabHeader() {
   return (
-    <header className="shrink-0 border-b border-border bg-gradient-to-br from-accent/[0.07] via-[#6366F1]/[0.04] to-transparent px-8 py-7">
-      <div className="flex items-center gap-2.5">
-        <span className="rounded-full bg-gradient-to-r from-accent to-[#6366F1] px-2 py-0.5 text-[9px] font-bold leading-none text-white shadow-sm">
+    <header className="shrink-0 border-b border-border bg-gradient-to-br from-accent/[0.07] via-[#6366F1]/[0.04] to-transparent px-6 py-3.5">
+      <div className="flex items-center gap-2">
+        <span className="rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-bold leading-none text-white shadow-sm">
           AI
         </span>
-        <h1 className="text-2xl font-semibold tracking-tight text-text">인사이트 랩</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-text">인사이트 랩</h1>
       </div>
-      <p className="mt-2 text-sm text-muted">
-        자연어로 물어보면 Supabase 데이터를 조회해서 정리해드립니다
-      </p>
-      <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
-        <Lock className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={2} />
-        조회 전용 · 데이터 수정/삭제 불가
+      <p className="mt-1.5 flex items-center gap-1.5 text-[11px] leading-snug text-muted">
+        <Lock className="h-3 w-3 shrink-0 opacity-70" strokeWidth={2} />
+        DB에 저장된 데이터를 기반으로 답변하는 AI 베타 서비스입니다. 조회만 가능하며 데이터를 수정하거나 지우지는 않습니다.
       </p>
     </header>
   );
@@ -193,18 +190,18 @@ export default function InsightLabPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-screen min-h-0 flex-col overflow-hidden">
       <InsightLabHeader />
 
-      <div className="flex flex-1 flex-col gap-4 p-8 min-h-0">
-        <div className="flex flex-wrap gap-2 shrink-0">
+      <div className="flex flex-1 flex-col gap-3 p-6 min-h-0">
+        <div className="flex flex-nowrap gap-2 shrink-0 overflow-x-auto pb-1">
           {EXAMPLE_PROMPTS.map((prompt) => (
             <button
               key={prompt}
               type="button"
               disabled={loading}
               onClick={() => setInput(prompt)}
-              className="rounded-full border border-accent/35 bg-surface px-3 py-1.5 text-xs text-text transition-colors hover:border-accent/50 hover:bg-accentSoft disabled:opacity-50"
+              className="shrink-0 whitespace-nowrap rounded-full border border-accent/35 bg-surface px-3 py-1.5 text-xs text-text transition-colors hover:border-accent/50 hover:bg-accentSoft disabled:opacity-50"
             >
               {prompt}
             </button>
@@ -217,7 +214,7 @@ export default function InsightLabPage() {
           </div>
         ) : null}
 
-        <div className="flex flex-1 min-h-[320px] flex-col rounded-xl bg-gradient-to-br from-accent via-[#6366F1] to-accent/80 p-[2px] shadow-[0_4px_24px_rgba(61,110,245,0.12)]">
+        <div className="flex flex-1 min-h-0 flex-col rounded-xl bg-gradient-to-br from-accent via-[#6366F1] to-accent/80 p-[2px] shadow-[0_4px_24px_rgba(61,110,245,0.12)]">
           <div className="flex flex-1 min-h-0 flex-col rounded-[10px] bg-surface">
             <div
               ref={listRef}

@@ -1,10 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { useReports } from '../../lib/useReports';
 import { collectAllWorkerNames, getExcludedWorkerNames } from '../../lib/analytics';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 const inputClass =
   'rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
@@ -36,6 +38,7 @@ export default function WorkerManagementPage() {
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(null);
   const [formError, setFormError] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const directoryMap = useMemo(() => {
     const map = new Map();
@@ -93,6 +96,23 @@ export default function WorkerManagementPage() {
       return;
     }
     setNewName('');
+    refetch();
+  }
+
+  async function handleDeleteWorker(name) {
+    if (!name) return;
+    setSaving(name);
+    setFormError(null);
+    const { error: deleteError } = await supabase
+      .from('worker_directory')
+      .delete()
+      .eq('worker_name', name);
+    setSaving(null);
+    setDeleteTarget(null);
+    if (deleteError) {
+      setFormError(deleteError.message);
+      return;
+    }
     refetch();
   }
 
@@ -192,19 +212,31 @@ export default function WorkerManagementPage() {
                       </select>
                     </td>
                     <td className="px-4 py-3">
-                      <input
-                        type="text"
-                        defaultValue={note}
-                        disabled={isSaving}
-                        placeholder="관리자, 퇴사, 야간조…"
-                        className={`${inputClass} w-full max-w-xs`}
-                        onBlur={(e) => {
-                          const next = e.target.value;
-                          if (next !== note) {
-                            upsertWorker(name, { excluded, note: next });
-                          }
-                        }}
-                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          defaultValue={note}
+                          disabled={isSaving}
+                          placeholder="관리자, 퇴사, 야간조…"
+                          className={`${inputClass} w-full max-w-xs`}
+                          onBlur={(e) => {
+                            const next = e.target.value;
+                            if (next !== note) {
+                              upsertWorker(name, { excluded, note: next });
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(name)}
+                          disabled={isSaving}
+                          aria-label={`${name} 삭제`}
+                          title="작업자 관리 목록에서 삭제"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-muted transition-colors hover:border-danger/40 hover:bg-dangerSoft hover:text-danger disabled:opacity-50"
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -225,6 +257,17 @@ export default function WorkerManagementPage() {
           않습니다. 근무조를 주간/야간으로 고정하면 자동 판단보다 우선 적용됩니다.
         </p>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="작업자 삭제"
+        message={`${deleteTarget ?? ''}을 작업자 관리 목록에서 삭제하시겠습니까? 이 작업자의 기존 검사/기록 데이터는 삭제되지 않으며, 목록에서만 제거되고 다음에 새 기록이 들어오면 다시 자동으로 나타납니다.`}
+        confirmLabel="삭제"
+        confirmTone="danger"
+        loading={saving === deleteTarget}
+        onConfirm={() => handleDeleteWorker(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
