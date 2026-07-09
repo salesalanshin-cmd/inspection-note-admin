@@ -43,22 +43,24 @@ function NavLink({ item, active, onNavigate }) {
   );
 }
 
-function InsightLabNavLink({ active, onNavigate }) {
+function InsightLabNavLink({ active, onNavigate, mobile = false }) {
   return (
     <Link
       href={INSIGHT_LAB_NAV.href}
       onClick={onNavigate}
-      className={`group relative flex items-center gap-2.5 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+      className={`group ${mobile ? 'flex' : 'relative flex'} items-center gap-2.5 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
         active
           ? 'bg-gradient-to-r from-accent/20 to-accent/0 text-accent'
           : 'bg-gradient-to-r from-accent/10 to-accent/0 text-text hover:from-accent/20'
       }`}
     >
-      <span
-        className={`absolute bottom-1 left-0 top-1 w-1 rounded-full bg-accent ${
-          active ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'
-        }`}
-      />
+      {!mobile ? (
+        <span
+          className={`absolute bottom-1 left-0 top-1 w-1 rounded-full bg-accent ${
+            active ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'
+          }`}
+        />
+      ) : null}
       <Sparkles
         className={`ml-1 h-4 w-4 shrink-0 ${active ? 'text-accent' : 'text-accent group-hover:text-accent'}`}
         strokeWidth={2}
@@ -131,6 +133,74 @@ function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
         </div>
       </div>
     </>
+  );
+}
+
+function MobileSidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
+  return (
+    <div className="flex min-h-full flex-col">
+      <Link href="/dashboard" onClick={onNavigate} className="block cursor-pointer px-5 py-6">
+        <div className="text-xs font-medium text-accent">(주)디케이메탈</div>
+        <div className="mt-1 text-lg font-semibold text-text">검사노트 관리</div>
+      </Link>
+
+      <nav className="px-3 py-2">
+        {NAV.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            active={pathname?.startsWith(item.href)}
+            onNavigate={onNavigate}
+          />
+        ))}
+        <div className="my-3 border-t border-border" />
+        <div className="px-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
+          운영 설정
+        </div>
+        {SETTINGS_NAV.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            active={pathname?.startsWith(item.href)}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </nav>
+
+      <div className="px-3 pb-3">
+        <div className="border-t border-border pt-3">
+          <div className="flex items-center gap-1.5 px-3 pb-2">
+            <span className="rounded-full bg-accent px-1.5 py-0.5 text-[8px] font-bold leading-none text-white shadow-sm">
+              AI
+            </span>
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
+              인사이트 랩
+            </span>
+          </div>
+          <InsightLabNavLink
+            mobile
+            active={pathname?.startsWith(INSIGHT_LAB_NAV.href)}
+            onNavigate={onNavigate}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3 border-t border-border px-5 py-4">
+        <button
+          type="button"
+          onClick={onLogout}
+          disabled={loggingOut}
+          className="w-full rounded-xl border border-border px-3 py-2 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
+        >
+          {loggingOut ? '로그아웃 중...' : '로그아웃'}
+        </button>
+        <div className="text-xs leading-relaxed text-muted">
+          INSPECTION NOTE
+          <br />
+          ADMIN CONSOLE v0.1
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -211,7 +281,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
             mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          <SidebarPanel
+          <MobileSidebarPanel
             pathname={pathname}
             onNavigate={handleNavigate}
             onLogout={handleLogout}
