@@ -4,11 +4,13 @@ import { Fragment, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import {
   buildFrequentInspectionCompliance,
+  countNonCompliantStages,
   getExcludedWorkerNames,
   groupComplianceByShift,
   sortComplianceByShift,
 } from '../../lib/analytics';
 import { SHIFT_STAGES } from '../../lib/constants';
+import { sortRows, toggleSortKey } from '../../lib/tableSort';
 import { exportToExcel, formatDateRangeForFilename, formatExportDateTime } from '../../lib/exportExcel';
 import {
   countDaysInRange,
@@ -17,7 +19,10 @@ import {
   isDateRangeValid,
 } from '../../lib/dateRange';
 import PageHeader from '../../components/PageHeader';
+import PageTableShell from '../../components/PageTableShell';
+import SortableTh from '../../components/SortableTh';
 import DateRangePicker from '../../components/DateRangePicker';
+import TrafficLightDots from '../../components/TrafficLightDots';
 
 const exportBtnClass =
   'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
@@ -73,32 +78,11 @@ function formatWorkDate(date) {
   });
 }
 
-function formatTime(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function StatusBadge({ done, at, skipped }) {
-  if (skipped) {
-    return <span className="text-xs text-muted">—</span>;
-  }
-  if (done) {
-    return (
-      <span className="inline-flex flex-col items-start gap-0.5">
-        <span className="inline-block rounded-full bg-goodSoft px-2.5 py-0.5 text-xs font-medium text-good">
-          정상
-        </span>
-        {at ? <span className="text-[11px] text-muted">{formatTime(at)}</span> : null}
-      </span>
-    );
-  }
-  return (
-    <span className="inline-block rounded-full bg-dangerSoft px-2.5 py-0.5 text-xs font-medium text-danger">
-      미실시
-    </span>
-  );
+function complianceStagesForDots(row) {
+  return SHIFT_STAGES.map((stage) => ({
+    label: stage,
+    done: row.noData ? false : row[stage]?.done === true,
+  }));
 }
 
 function ShiftBadge({ shift, shiftSource }) {
@@ -148,10 +132,30 @@ function OverallBadge({ row }) {
   );
 }
 
+function getComplianceSortValue(row, key) {
+  switch (key) {
+    case 'worker_name':
+      return row.worker_name;
+    case 'shift':
+      if (row.shift === 'day') return 0;
+      if (row.shift === 'night') return 1;
+      return 2;
+    case 'nonCompliant':
+      return countNonCompliantStages(row);
+    case 'overall':
+      if (row.noData) return 2;
+      return row.allOk ? 0 : 1;
+    default:
+      return row.worker_name;
+  }
+}
+
 export default function FrequentCheckPage() {
   const { loading, error, defects, goods, fives, workerDirectory } = useReports();
   const [date, setDate] = useState(() => startOfDay(new Date()));
   const [exportDateRange, setExportDateRange] = useState(() => getRecentDaysRange(7));
+  const [sortKey, setSortKey] = useState('nonCompliant');
+  const [sortDir, setSortDir] = useState('desc');
 
   const excludedNames = useMemo(
     () => getExcludedWorkerNames(workerDirectory),
@@ -171,10 +175,13 @@ export default function FrequentCheckPage() {
     [defects, goods, fives, date, excludedNames, workerDirectory]
   );
 
-  const groupedCompliance = useMemo(
-    () => groupComplianceByShift(compliance),
-    [compliance]
-  );
+  const groupedCompliance = useMemo(() => {
+    const groups = groupComplianceByShift(compliance);
+    return groups.map((group) => ({
+      ...group,
+      rows: sortRows(group.rows, sortKey, sortDir, getComplianceSortValue),
+    }));
+  }, [compliance, sortKey, sortDir]);
 
   const exportDayCount = countDaysInRange(exportDateRange);
   const exportRangeValid = isDateRangeValid(exportDateRange);
@@ -204,6 +211,12 @@ export default function FrequentCheckPage() {
     );
   }
 
+  function handleSort(column) {
+    const next = toggleSortKey(sortKey, sortDir, column);
+    setSortKey(next.key);
+    setSortDir(next.dir);
+  }
+
   function shiftDay(delta) {
     setDate((prev) => {
       const next = new Date(prev);
@@ -216,112 +229,115 @@ export default function FrequentCheckPage() {
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   return (
-    <div>
+    <div className="flex h-[calc(100vh)] flex-col overflow-hidden">
       <PageHeader
         eyebrow="FREQUENT CHECK"
         title="자주검사 현황"
         description="근무조는 작업자 관리 설정(고정) 또는 당일 기록(자동)으로 결정되며, 초품·중품·종품 검사 준수 여부를 확인합니다."
       />
 
-      <div className="p-8 space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => shiftDay(-1)}
-              className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text"
-              aria-label="이전 날"
-            >
-              ◀ 이전날
-            </button>
-            <span className="text-sm font-medium text-text min-w-[10rem] text-center">
-              {formatWorkDate(date)}
-            </span>
-            <button
-              type="button"
-              onClick={() => shiftDay(1)}
-              className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text"
-              aria-label="다음 날"
-            >
-              다음날 ▶
-            </button>
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              disabled={!canExport}
-              className={exportBtnClass}
-            >
-              엑셀 다운로드
-            </button>
-            <DateRangePicker value={exportDateRange} onChange={setExportDateRange} />
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <p className="text-xs text-muted">
-              근무조가 고정(🔒)된 작업자는 설정값을 우선 적용합니다. 미정인 작업자는 당일 기록
-              시간대로 자동 판단하며, 기록이 없으면 데이터 없음으로 표시됩니다.
-            </p>
-            {exportRangeTooLong ? (
-              <p className="text-xs text-warn">
-                엑셀 다운로드는 최대 {MAX_EXPORT_DAYS}일까지 선택할 수 있습니다. (현재 {exportDayCount}일)
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="bg-surface rounded-xl shadow-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs font-medium text-muted bg-surface2">
-                <th className="px-4 py-3">작업자</th>
-                <th className="px-4 py-3">조</th>
-                {SHIFT_STAGES.map((stage) => (
-                  <th key={stage} className="px-4 py-3">
-                    {stage}
-                  </th>
-                ))}
-                <th className="px-4 py-3">종합판정</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groupedCompliance.map((group) => (
-                <Fragment key={group.shift}>
-                  <tr className="border-b border-border bg-surface2/60">
-                    <td colSpan={6} className="px-4 pt-4 pb-1 text-xs font-medium text-muted">
-                      {group.label} ({group.rows.length}명)
-                    </td>
-                  </tr>
-                  {group.rows.map((row) => (
-                    <tr key={row.worker_name} className="border-b border-border last:border-0">
-                      <td className="px-4 py-3 font-medium text-text">{row.worker_name}</td>
-                      <td className="px-4 py-3">
-                        <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
-                      </td>
-                      {SHIFT_STAGES.map((stage) => (
-                        <td key={stage} className="px-4 py-3">
-                          <StatusBadge
-                            done={row[stage].done}
-                            at={row[stage].at}
-                            skipped={row[stage].skipped}
-                          />
-                        </td>
-                      ))}
-                      <td className="px-4 py-3">
-                        <OverallBadge row={row} />
+      <div className="flex min-h-0 flex-1 flex-col px-8 pb-8 pt-4">
+        <PageTableShell
+          toolbar={
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => shiftDay(-1)}
+                    className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text"
+                    aria-label="이전 날"
+                  >
+                    ◀ 이전날
+                  </button>
+                  <span className="min-w-[10rem] text-center text-sm font-medium text-text">
+                    {formatWorkDate(date)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => shiftDay(1)}
+                    className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text"
+                    aria-label="다음 날"
+                  >
+                    다음날 ▶
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExportExcel}
+                    disabled={!canExport}
+                    className={exportBtnClass}
+                  >
+                    엑셀 다운로드
+                  </button>
+                  <DateRangePicker value={exportDateRange} onChange={setExportDateRange} />
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <p className="text-xs text-muted">
+                    근무조가 고정(🔒)된 작업자는 설정값을 우선 적용합니다. 미정인 작업자는 당일 기록
+                    시간대로 자동 판단하며, 기록이 없으면 데이터 없음으로 표시됩니다.
+                  </p>
+                  {exportRangeTooLong ? (
+                    <p className="text-xs text-warn">
+                      엑셀 다운로드는 최대 {MAX_EXPORT_DAYS}일까지 선택할 수 있습니다. (현재 {exportDayCount}일)
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          }
+          table={
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="sticky top-0 z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
+                  <SortableTh column="worker_name" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
+                    작업자
+                  </SortableTh>
+                  <SortableTh column="shift" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
+                    조
+                  </SortableTh>
+                  <SortableTh column="nonCompliant" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
+                    자주검사
+                  </SortableTh>
+                  <SortableTh column="overall" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
+                    종합판정
+                  </SortableTh>
+                </tr>
+              </thead>
+              <tbody>
+                {groupedCompliance.map((group) => (
+                  <Fragment key={group.shift}>
+                    <tr className="border-b border-border bg-surface2/60">
+                      <td colSpan={4} className="px-4 pb-1 pt-4 text-xs font-medium text-muted">
+                        {group.label} ({group.rows.length}명)
                       </td>
                     </tr>
-                  ))}
-                </Fragment>
-              ))}
-              {compliance.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted text-xs">
-                    기록된 작업자가 없습니다
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                    {group.rows.map((row) => (
+                      <tr key={row.worker_name} className="border-b border-border last:border-0">
+                        <td className="px-4 py-3 font-medium text-text">{row.worker_name}</td>
+                        <td className="px-4 py-3">
+                          <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <TrafficLightDots stages={complianceStagesForDots(row)} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <OverallBadge row={row} />
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+                {compliance.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-12 text-center text-xs text-muted">
+                      기록된 작업자가 없습니다
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          }
+        />
       </div>
     </div>
   );

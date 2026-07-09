@@ -10,12 +10,14 @@ import {
   resolveFileName,
 } from '../../lib/exportExcel';
 import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
+import { sortRows, toggleSortKey } from '../../lib/tableSort';
 import { requestClassifyPhotosBatch } from '../../lib/classifyClient';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
-import SignedImage from '../../components/SignedImage';
+import PageTableShell from '../../components/PageTableShell';
+import SortableTh from '../../components/SortableTh';
 import FivesEditModal from '../../components/FivesEditModal';
 import BatchClassifyReviewModal from '../../components/BatchClassifyReviewModal';
 import BatchClassifyProgress from '../../components/BatchClassifyProgress';
@@ -34,6 +36,23 @@ const SOS_CODE_OPTIONS = Object.entries(SOS_ERROR_CODES).map(([value, label]) =>
   label,
 }));
 
+function getFivesSortValue(record, key) {
+  switch (key) {
+    case 'worker_name':
+      return record.worker_name || '';
+    case 'area_type':
+      return record.area_type || '';
+    case 'sos_code':
+      return fivesErrorCode(record) || '';
+    case 'description':
+      return record.description || '';
+    case 'created_at':
+      return record.created_at ? new Date(record.created_at).getTime() : 0;
+    default:
+      return record.created_at ? new Date(record.created_at).getTime() : 0;
+  }
+}
+
 export default function FivesPage() {
   const { loading, error, fives, refetch } = useReports();
   const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
@@ -43,12 +62,19 @@ export default function FivesPage() {
   const [batchError, setBatchError] = useState(null);
   const [trashConfirm, setTrashConfirm] = useState(false);
   const [trashLoading, setTrashLoading] = useState(false);
+  const [sortKey, setSortKey] = useState('created_at');
+  const [sortDir, setSortDir] = useState('desc');
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
     useGalleryBatchSelect();
 
   const filtered = useMemo(
     () => filterByCreatedAtDateRange(fives, dateRange),
     [fives, dateRange]
+  );
+
+  const sortedRows = useMemo(
+    () => sortRows(filtered, sortKey, sortDir, getFivesSortValue),
+    [filtered, sortKey, sortDir]
   );
 
   const canExport = isDateRangeValid(dateRange) && filtered.length > 0;
@@ -59,6 +85,12 @@ export default function FivesPage() {
   );
 
   const recordsById = useMemo(() => new Map(filtered.map((f) => [f.id, f])), [filtered]);
+
+  function handleSort(column) {
+    const next = toggleSortKey(sortKey, sortDir, column);
+    setSortKey(next.key);
+    setSortDir(next.dir);
+  }
 
   async function handleBatchClassify() {
     const items = selectedRecords
@@ -123,7 +155,7 @@ export default function FivesPage() {
   }
 
   function handleExportExcel() {
-    const rows = filtered.map((f) => ({
+    const rows = sortedRows.map((f) => ({
       작업자: f.worker_name || '',
       구역: f.area_type || '',
       SOS코드: fivesErrorCode(f) || '',
@@ -141,95 +173,106 @@ export default function FivesPage() {
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   return (
-    <div>
+    <div className="flex h-[calc(100vh)] flex-col overflow-hidden">
       <PageHeader eyebrow="WORKPLACE" title="3정5S 기록" description={`총 ${filtered.length}건`} />
 
-      <div className="p-8 space-y-6">
-        <div className="flex flex-wrap items-start gap-3">
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            disabled={!canExport}
-            className={exportBtnClass}
-          >
-            엑셀 다운로드
-          </button>
-          <button
-            type="button"
-            onClick={() => selectAll(filtered)}
-            disabled={filtered.length === 0}
-            className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-          >
-            전체 선택
-          </button>
-          <button
-            type="button"
-            onClick={clearAll}
-            disabled={selectedCount === 0}
-            className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-          >
-            선택 해제
-          </button>
-        </div>
-
-        {batchError ? (
-          <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{batchError}</div>
-        ) : null}
-
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {filtered.map((f) => (
-            <div key={f.id} className="bg-surface rounded-xl shadow-card overflow-hidden group">
-              <div
-                className="relative aspect-square bg-surface2 cursor-pointer"
-                onClick={() => setSelected(f)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setSelected(f);
-                  }
-                }}
-              >
-                <label
-                  className="absolute top-2 left-2 z-30 flex h-6 w-6 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface/90"
-                  onClick={(e) => e.stopPropagation()}
+      <div className="flex min-h-0 flex-1 flex-col px-8 pb-8 pt-4">
+        <PageTableShell
+          toolbar={
+            <>
+              <div className="flex flex-wrap items-start gap-3">
+                <DateRangePicker value={dateRange} onChange={setDateRange} />
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  disabled={!canExport}
+                  className={exportBtnClass}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isSelected(f.id)}
-                    onChange={() => toggle(f.id)}
-                    className="h-3.5 w-3.5 accent-accent"
-                    aria-label={`${f.worker_name || '작업자'} 선택`}
-                  />
-                </label>
-                {f.image_url ? (
-                  <SignedImage url={f.image_url} alt={fivesLabel(f)} />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-muted text-xs">
-                    이미지 없음
-                  </div>
+                  엑셀 다운로드
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectAll(filtered)}
+                  disabled={filtered.length === 0}
+                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
+                >
+                  전체 선택
+                </button>
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  disabled={selectedCount === 0}
+                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
+                >
+                  선택 해제
+                </button>
+              </div>
+
+              {batchError ? (
+                <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{batchError}</div>
+              ) : null}
+            </>
+          }
+          table={
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="sticky top-0 z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
+                  <th className="w-10 px-4 py-3">
+                    <span className="sr-only">선택</span>
+                  </th>
+                  <SortableTh column="worker_name" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
+                    작업자
+                  </SortableTh>
+                  <SortableTh column="area_type" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
+                    구역
+                  </SortableTh>
+                  <SortableTh column="sos_code" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
+                    SOS 코드
+                  </SortableTh>
+                  <SortableTh column="description" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
+                    설명
+                  </SortableTh>
+                  <SortableTh column="created_at" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
+                    촬영시각
+                  </SortableTh>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedRows.map((f) => (
+                  <tr
+                    key={f.id}
+                    className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-surface2/40"
+                    onClick={() => setSelected(f)}
+                  >
+                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected(f.id)}
+                        onChange={() => toggle(f.id)}
+                        className="h-3.5 w-3.5 accent-accent"
+                        aria-label={`${f.worker_name || '작업자'} 선택`}
+                      />
+                    </td>
+                    <td className="px-4 py-3 font-medium text-text">{f.worker_name || '작업자 미상'}</td>
+                    <td className="px-4 py-3 text-text">{fivesLabel(f)}</td>
+                    <td className="px-4 py-3 text-muted">{fivesErrorCode(f) || '-'}</td>
+                    <td className="px-4 py-3 text-muted">{f.description || '-'}</td>
+                    <td className="px-4 py-3 text-muted">
+                      {f.created_at ? new Date(f.created_at).toLocaleString('ko-KR') : '-'}
+                    </td>
+                  </tr>
+                ))}
+                {sortedRows.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-xs text-muted">
+                      조건에 맞는 기록이 없습니다
+                    </td>
+                  </tr>
                 )}
-                <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-accentSoft text-accent text-[10px] font-medium rounded-full">
-                  {fivesLabel(f)}
-                </div>
-              </div>
-              <div className="p-2.5 text-xs">
-                <div className="text-text font-medium">{f.worker_name || '작업자 미상'}</div>
-                {f.description ? <div className="text-muted mt-0.5">{f.description}</div> : null}
-                <div className="text-muted mt-0.5">
-                  {f.created_at ? new Date(f.created_at).toLocaleString('ko-KR') : ''}
-                </div>
-              </div>
-            </div>
-          ))}
-          {filtered.length === 0 && (
-            <div className="col-span-full text-center py-12 text-muted text-xs">
-              조건에 맞는 기록이 없습니다
-            </div>
-          )}
-        </div>
+              </tbody>
+            </table>
+          }
+        />
       </div>
 
       {selected ? (

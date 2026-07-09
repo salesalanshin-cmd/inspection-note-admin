@@ -9,17 +9,21 @@ import AiSuggestionBanner from './AiSuggestionBanner';
 import EditableMarkerOverlay from './EditableMarkerOverlay';
 import SignedImage from './SignedImage';
 
-const OTHER_VALUE = '__other__';
+const DEFECT_CODE_ENTRIES = Object.entries(DEFECT_CODE_LABELS);
+const DEFAULT_DEFECT_CODE = DEFECT_CODE_ENTRIES[0]?.[0] ?? '';
 
 const inputClass =
   'w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
 
+function resolveInitialCode(report) {
+  if (report.defect_code && DEFECT_CODE_LABELS[report.defect_code]) {
+    return report.defect_code;
+  }
+  return DEFAULT_DEFECT_CODE;
+}
+
 export default function DefectEditModal({ report, onClose, onSaved }) {
-  const initialIsKnown = report.defect_code && DEFECT_CODE_LABELS[report.defect_code];
-  const [code, setCode] = useState(initialIsKnown ? report.defect_code : OTHER_VALUE);
-  const [customType, setCustomType] = useState(
-    initialIsKnown ? '' : report.defect_type || report.defect_code || ''
-  );
+  const [code, setCode] = useState(() => resolveInitialCode(report));
   const [markers, setMarkers] = useState(() => cloneMarkingData(report.marking_data));
   const originalMarkers = useRef(cloneMarkingData(report.marking_data));
   const [saving, setSaving] = useState(false);
@@ -28,7 +32,6 @@ export default function DefectEditModal({ report, onClose, onSaved }) {
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const imageContainerRef = useRef(null);
 
-  const isOther = code === OTHER_VALUE;
   const aspectRatio =
     report.image_width > 0 && report.image_height > 0
       ? report.image_width / report.image_height
@@ -52,7 +55,6 @@ export default function DefectEditModal({ report, onClose, onSaved }) {
       setAiSuggestion(result);
       if (result.code && DEFECT_CODE_LABELS[result.code]) {
         setCode(result.code);
-        setCustomType('');
       }
     } catch (err) {
       setError(err.message);
@@ -64,17 +66,9 @@ export default function DefectEditModal({ report, onClose, onSaved }) {
   async function handleSave() {
     setError(null);
 
-    if (isOther && !customType.trim()) {
-      setError('불량 유형을 직접 입력해 주세요.');
-      return;
-    }
-
-    const defectPayload = isOther
-      ? { defect_code: null, defect_type: customType.trim() }
-      : { defect_code: code, defect_type: DEFECT_CODE_LABELS[code] };
-
     const payload = {
-      ...defectPayload,
+      defect_code: code,
+      defect_type: DEFECT_CODE_LABELS[code],
       marking_data: markers,
       marking_count: markers.length,
       ai_suggested_code: aiSuggestion?.code ?? report.ai_suggested_code ?? null,
@@ -208,29 +202,15 @@ export default function DefectEditModal({ report, onClose, onSaved }) {
               ) : null}
 
               <div>
-                <label className="mb-1.5 block text-xs text-muted">불량 코드</label>
+                <label className="mb-1.5 block text-xs text-muted">불량 유형</label>
                 <select value={code} onChange={(e) => setCode(e.target.value)} className={inputClass}>
-                  {Object.entries(DEFECT_CODE_LABELS).map(([value, label]) => (
+                  {DEFECT_CODE_ENTRIES.map(([value, label]) => (
                     <option key={value} value={value}>
-                      {label} ({value})
+                      {value} {label}
                     </option>
                   ))}
-                  <option value={OTHER_VALUE}>기타 (직접 입력)</option>
                 </select>
               </div>
-
-              {isOther && (
-                <div>
-                  <label className="mb-1.5 block text-xs text-muted">불량 유형 (직접 입력)</label>
-                  <input
-                    type="text"
-                    value={customType}
-                    onChange={(e) => setCustomType(e.target.value)}
-                    placeholder="예: 표면 스크래치"
-                    className={inputClass}
-                  />
-                </div>
-              )}
 
               {error && (
                 <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{error}</div>
