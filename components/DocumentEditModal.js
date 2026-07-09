@@ -6,6 +6,7 @@ import { DOC_ERROR_CODES, docLabel } from '../lib/constants';
 import { requestClassifyPhoto } from '../lib/classifyClient';
 import AiSuggestionBanner from './AiSuggestionBanner';
 import SignedImage from './SignedImage';
+import ModalShell, { ModalFooterActions } from './ModalShell';
 
 const inputClass =
   'w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
@@ -72,154 +73,127 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
     onClose?.();
   }
 
+  const footerButtons = (
+    <ModalFooterActions
+      onCancel={onClose}
+      onConfirm={handleSave}
+      cancelLabel="취소"
+      confirmLabel={saving ? '저장 중...' : '저장'}
+      confirmDisabled={saving || classifying}
+    />
+  );
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="문서스캔 수정"
+    <ModalShell
+      title={docLabel(report)}
+      eyebrow="문서스캔 수정"
+      onClose={onClose}
+      ariaLabel="문서스캔 수정"
+      footer={<div className="md:hidden">{footerButtons}</div>}
     >
-      <div
-        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-surface shadow-card"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div>
-            <div className="text-xs font-medium text-accent">문서스캔 수정</div>
-            <h2 className="text-lg font-semibold text-text">{docLabel(report)}</h2>
+      <div className="flex flex-col md:flex-row md:overflow-hidden">
+        <div className="border-b border-border p-4 md:flex-1 md:border-b-0 md:border-r md:p-5 md:overflow-y-auto">
+          <div className="relative mx-auto aspect-[3/4] w-full overflow-hidden bg-surface2 md:max-h-[60vh] md:rounded-xl">
+            {report.image_url ? (
+              <SignedImage
+                url={report.image_url}
+                alt={docLabel(report)}
+                fit="contain"
+                sizes="(max-width: 768px) 100vw, 800px"
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">
+                이미지 없음
+              </div>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface2 hover:text-text"
-            aria-label="닫기"
-          >
-            ✕
-          </button>
         </div>
 
-        <div className="flex flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
-          <div className="border-b border-border p-5 md:flex-1 md:border-b-0 md:border-r md:overflow-y-auto">
-            <div className="relative mx-auto w-full max-h-[50vh] bg-surface2 rounded-xl overflow-hidden md:max-h-[60vh] aspect-[3/4]">
-              {report.image_url ? (
-                <SignedImage
-                  url={report.image_url}
-                  alt={docLabel(report)}
-                  fit="contain"
-                  sizes="800px"
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-muted text-sm">
-                  이미지 없음
-                </div>
-              )}
+        <div className="flex w-full flex-col p-4 md:w-80 md:shrink-0 md:p-5">
+          <div className="flex-1 space-y-4">
+            <button
+              type="button"
+              onClick={handleAiClassify}
+              disabled={classifying || saving || !report.image_url}
+              className="w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {classifying ? 'AI 분석 중...' : 'AI 자동판정'}
+            </button>
+
+            {aiSuggestion ? (
+              <AiSuggestionBanner
+                code={aiSuggestion.code}
+                confidence={aiSuggestion.confidence}
+                reason={aiSuggestion.reason}
+                codeSet="doc"
+              />
+            ) : null}
+
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">작업자</label>
+              <input
+                type="text"
+                value={workerName}
+                onChange={(e) => setWorkerName(e.target.value)}
+                className={inputClass}
+              />
             </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">문서 유형</label>
+              <input
+                type="text"
+                value={docType}
+                onChange={(e) => setDocType(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">문서 제목</label>
+              <input
+                type="text"
+                value={docTitle}
+                onChange={(e) => setDocTitle(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">오류 코드</label>
+              <select
+                value={errorCode}
+                onChange={(e) => setErrorCode(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">없음 (정상)</option>
+                {Object.entries(DOC_ERROR_CODES).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label} ({value})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">오류 메모</label>
+              <input
+                type="text"
+                value={errorNote}
+                onChange={(e) => setErrorNote(e.target.value)}
+                placeholder="추가 메모"
+                className={inputClass}
+              />
+            </div>
+
+            {error && (
+              <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{error}</div>
+            )}
           </div>
 
-          <div className="flex w-full flex-col p-5 md:w-80 md:shrink-0">
-            <div className="space-y-4 flex-1">
-              <button
-                type="button"
-                onClick={handleAiClassify}
-                disabled={classifying || saving || !report.image_url}
-                className="w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {classifying ? 'AI 분석 중...' : 'AI 자동판정'}
-              </button>
-
-              {aiSuggestion ? (
-                <AiSuggestionBanner
-                  code={aiSuggestion.code}
-                  confidence={aiSuggestion.confidence}
-                  reason={aiSuggestion.reason}
-                  codeSet="doc"
-                />
-              ) : null}
-
-              <div>
-                <label className="mb-1.5 block text-xs text-muted">작업자</label>
-                <input
-                  type="text"
-                  value={workerName}
-                  onChange={(e) => setWorkerName(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs text-muted">문서 유형</label>
-                <input
-                  type="text"
-                  value={docType}
-                  onChange={(e) => setDocType(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs text-muted">문서 제목</label>
-                <input
-                  type="text"
-                  value={docTitle}
-                  onChange={(e) => setDocTitle(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs text-muted">오류 코드</label>
-                <select
-                  value={errorCode}
-                  onChange={(e) => setErrorCode(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">없음 (정상)</option>
-                  {Object.entries(DOC_ERROR_CODES).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label} ({value})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs text-muted">오류 메모</label>
-                <input
-                  type="text"
-                  value={errorNote}
-                  onChange={(e) => setErrorNote(e.target.value)}
-                  placeholder="추가 메모"
-                  className={inputClass}
-                />
-              </div>
-
-              {error && (
-                <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{error}</div>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={saving}
-                className="rounded-xl border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving || classifying}
-                className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {saving ? '저장 중...' : '저장'}
-              </button>
-            </div>
-          </div>
+          <div className="mt-6 hidden justify-end gap-2 md:flex">{footerButtons}</div>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

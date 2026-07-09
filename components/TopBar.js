@@ -5,7 +5,7 @@ import { Home } from 'lucide-react';
 
 export default function TopBar() {
   return (
-    <div className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-end border-b border-border bg-surface px-6">
+    <div className="sticky top-0 z-40 hidden h-14 shrink-0 items-center justify-end border-b border-border bg-surface px-6 md:flex">
       <Link
         href="/dashboard"
         aria-label="대시보드로 이동"

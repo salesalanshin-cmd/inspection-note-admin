@@ -14,6 +14,7 @@ import StatCard from '../../components/StatCard';
 import SignedImage from '../../components/SignedImage';
 import DocumentEditModal from '../../components/DocumentEditModal';
 import DateRangePicker from '../../components/DateRangePicker';
+import FilterToolbar from '../../components/FilterToolbar';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import GalleryFloatingBar from '../../components/GalleryFloatingBar';
 import {
@@ -27,7 +28,10 @@ const selectClass =
   'bg-surface border border-border text-sm text-text px-4 py-2 rounded-xl focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
 
 const exportBtnClass =
-  'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
+  'min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0 md:min-h-0';
+
+const actionBtnClass =
+  'min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50 md:min-h-0';
 
 const dangerBtnClass =
   'rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50';
@@ -113,71 +117,72 @@ export default function DocumentsPage() {
     <div>
       <PageHeader eyebrow="DOCUMENTS" title="문서스캔" description={`총 ${filtered.length}건`} />
 
-      <div className="p-8 space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard label="총 스캔 건수" value={filtered.length} />
           <StatCard label="오류 건수" value={errorCount} tone="danger" />
           <StatCard label="정상률" value={normalRate} tone="good" />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <select value={worker} onChange={(e) => setWorker(e.target.value)} className={selectClass}>
-            <option value="all">전체 작업자</option>
-            {workers.map((w) => (
-              <option key={w} value={w}>
-                {w}
-              </option>
-            ))}
-          </select>
-          <select value={docType} onChange={(e) => setDocType(e.target.value)} className={selectClass}>
-            <option value="all">전체 문서유형</option>
-            {docTypes.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <select
-            value={errorCode}
-            onChange={(e) => setErrorCode(e.target.value)}
-            className={selectClass}
-          >
-            <option value="all">전체 오류코드</option>
-            <option value="none">오류 없음</option>
-            {Object.entries(DOC_ERROR_CODES).map(([code, label]) => (
-              <option key={code} value={code}>
-                {label} ({code})
-              </option>
-            ))}
-          </select>
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            disabled={!canExport}
-            className={exportBtnClass}
-          >
-            엑셀 다운로드
-          </button>
-          <button
-            type="button"
-            onClick={() => selectAll(filtered)}
-            disabled={filtered.length === 0}
-            className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-          >
-            전체 선택
-          </button>
-          <button
-            type="button"
-            onClick={clearAll}
-            disabled={selectedCount === 0}
-            className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-          >
-            선택 해제
-          </button>
+        <div className="sticky top-0 z-10 shrink-0 bg-bg pb-4">
+          <FilterToolbar primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}>
+            <select value={worker} onChange={(e) => setWorker(e.target.value)} className={selectClass}>
+              <option value="all">전체 작업자</option>
+              {workers.map((w) => (
+                <option key={w} value={w}>
+                  {w}
+                </option>
+              ))}
+            </select>
+            <select value={docType} onChange={(e) => setDocType(e.target.value)} className={selectClass}>
+              <option value="all">전체 문서유형</option>
+              {docTypes.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <select
+              value={errorCode}
+              onChange={(e) => setErrorCode(e.target.value)}
+              className={selectClass}
+            >
+              <option value="all">전체 오류코드</option>
+              <option value="none">오류 없음</option>
+              {Object.entries(DOC_ERROR_CODES).map(([code, label]) => (
+                <option key={code} value={code}>
+                  {label} ({code})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={!canExport}
+              className={exportBtnClass}
+            >
+              엑셀 다운로드
+            </button>
+            <button
+              type="button"
+              onClick={() => selectAll(filtered)}
+              disabled={filtered.length === 0}
+              className={actionBtnClass}
+            >
+              전체 선택
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              disabled={selectedCount === 0}
+              className={actionBtnClass}
+            >
+              선택 해제
+            </button>
+          </FilterToolbar>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
           {filtered.map((d) => (
             <div key={d.id} className="bg-surface rounded-xl shadow-card overflow-hidden group">
               <div
@@ -193,7 +198,7 @@ export default function DocumentsPage() {
                 }}
               >
                 <label
-                  className="absolute top-2 left-2 z-30 flex h-6 w-6 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface/90"
+                  className="absolute left-2 top-2 z-30 flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center rounded-lg border border-border bg-surface/90"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <input
@@ -217,12 +222,12 @@ export default function DocumentsPage() {
                   </div>
                 ) : null}
               </div>
-              <div className="p-2.5 text-xs">
-                <div className="text-text font-medium truncate">
+              <div className="p-2.5 text-[11px] md:text-xs">
+                <div className="truncate font-medium text-text">
                   {d.doc_title || d.doc_type || '문서'}
                 </div>
-                <div className="text-muted mt-0.5">{d.worker_name || '작업자 미상'}</div>
-                <div className="text-muted mt-0.5">
+                <div className="mt-0.5 text-muted">{d.worker_name || '작업자 미상'}</div>
+                <div className="mt-0.5 text-muted">
                   {d.created_at ? new Date(d.created_at).toLocaleString('ko-KR') : ''}
                 </div>
               </div>

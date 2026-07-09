@@ -19,6 +19,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import GalleryFloatingBar from '../../components/GalleryFloatingBar';
 import { MarkingCountBadge } from '../../components/MarkingCountBadge';
 import DateRangePicker from '../../components/DateRangePicker';
+import FilterToolbar from '../../components/FilterToolbar';
 
 import {
   exportToExcel,
@@ -31,7 +32,10 @@ const selectClass =
   'bg-surface border border-border text-sm text-text px-4 py-2 rounded-xl focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
 
 const exportBtnClass =
-  'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
+  'min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0 md:min-h-0';
+
+const actionBtnClass =
+  'min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50 md:min-h-0';
 
 const dangerBtnClass =
   'rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50';
@@ -174,64 +178,65 @@ export default function DefectsPage() {
     <div>
       <PageHeader eyebrow="RECORDS" title="불량 기록" description={`총 ${filtered.length}건`} />
 
-      <div className="p-8 space-y-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={worker}
-            onChange={(e) => setWorker(e.target.value)}
-            className={selectClass}
-          >
-            <option value="all">전체 작업자</option>
-            {workers.map((w) => (
-              <option key={w} value={w}>
-                {w}
-              </option>
-            ))}
-          </select>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className={selectClass}
-          >
-            <option value="all">전체 유형</option>
-            {types.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            disabled={!canExport}
-            className={exportBtnClass}
-          >
-            엑셀 다운로드
-          </button>
-          <button
-            type="button"
-            onClick={() => selectAll(filtered)}
-            disabled={filtered.length === 0}
-            className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-          >
-            전체 선택
-          </button>
-          <button
-            type="button"
-            onClick={clearAll}
-            disabled={selectedCount === 0}
-            className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-          >
-            선택 해제
-          </button>
+      <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
+        <div className="sticky top-0 z-10 shrink-0 space-y-3 bg-bg pb-4">
+          <FilterToolbar primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}>
+            <select
+              value={worker}
+              onChange={(e) => setWorker(e.target.value)}
+              className={selectClass}
+            >
+              <option value="all">전체 작업자</option>
+              {workers.map((w) => (
+                <option key={w} value={w}>
+                  {w}
+                </option>
+              ))}
+            </select>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className={selectClass}
+            >
+              <option value="all">전체 유형</option>
+              {types.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={!canExport}
+              className={exportBtnClass}
+            >
+              엑셀 다운로드
+            </button>
+            <button
+              type="button"
+              onClick={() => selectAll(filtered)}
+              disabled={filtered.length === 0}
+              className={actionBtnClass}
+            >
+              전체 선택
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              disabled={selectedCount === 0}
+              className={actionBtnClass}
+            >
+              선택 해제
+            </button>
+          </FilterToolbar>
+
+          {batchError ? (
+            <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{batchError}</div>
+          ) : null}
         </div>
 
-        {batchError ? (
-          <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{batchError}</div>
-        ) : null}
-
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
           {filtered.map((d) => {
             const hasMarking = parseMarkingData(d.marking_data).length > 0;
             return (
@@ -250,7 +255,7 @@ export default function DefectsPage() {
                   aria-label={`${defectLabel(d)} 수정`}
                 >
                   <label
-                    className="absolute top-2 left-2 z-30 flex h-6 w-6 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface/90"
+                    className="absolute left-2 top-2 z-30 flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center rounded-lg border border-border bg-surface/90"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <input
@@ -280,7 +285,7 @@ export default function DefectsPage() {
                     }}
                     title="불량 기록 수정"
                     aria-label="불량 기록 수정"
-                    className={`absolute z-20 flex h-7 w-7 items-center justify-center rounded-xl border border-border bg-surface/90 text-muted transition-opacity hover:text-accent group-hover:opacity-100 ${
+                    className={`absolute z-20 flex min-h-[40px] min-w-[40px] items-center justify-center rounded-xl border border-border bg-surface/90 text-muted transition-opacity hover:text-accent group-hover:opacity-100 ${
                       hasMarking ? 'bottom-2 right-2 opacity-0' : 'top-2 right-2 opacity-0'
                     }`}
                   >
@@ -300,9 +305,9 @@ export default function DefectsPage() {
                     </svg>
                   </button>
                 </div>
-                <div className="p-2.5 text-xs">
-                  <div className="text-text font-medium">{d.worker_name || '작업자 미상'}</div>
-                  <div className="text-muted mt-0.5">
+                <div className="p-2.5 text-[11px] md:text-xs">
+                  <div className="font-medium text-text">{d.worker_name || '작업자 미상'}</div>
+                  <div className="mt-0.5 text-muted">
                     {d.created_at ? new Date(d.created_at).toLocaleString('ko-KR') : ''}
                   </div>
                 </div>

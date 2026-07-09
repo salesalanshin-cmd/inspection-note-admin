@@ -1,6 +1,6 @@
 export default function PageHeader({ eyebrow, title, description }) {
   return (
-    <div className="px-8 pt-8 pb-6 border-b border-border bg-surface">
+    <div className="shrink-0 border-b border-border bg-surface px-8 pb-6 pt-8">
       {eyebrow ? (
         <div className="text-xs font-medium text-accent mb-2">{eyebrow}</div>
       ) : null}

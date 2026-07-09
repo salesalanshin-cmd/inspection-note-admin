@@ -21,13 +21,26 @@ import {
 import PageHeader from '../../components/PageHeader';
 import PageTableShell from '../../components/PageTableShell';
 import SortableTh from '../../components/SortableTh';
+import FilterToolbar from '../../components/FilterToolbar';
 import DateRangePicker from '../../components/DateRangePicker';
 import TrafficLightDots from '../../components/TrafficLightDots';
+import MobileSortSelect, { parseSortValue } from '../../components/MobileSortSelect';
+import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
 
 const exportBtnClass =
   'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
 
 const MAX_EXPORT_DAYS = 90;
+
+const FREQUENT_SORT_OPTIONS = [
+  { value: 'nonCompliant:desc', label: '미준수 단계 많은순' },
+  { value: 'worker_name:asc', label: '작업자명순' },
+  { value: 'overall:asc', label: '종합판정 (정상 우선)' },
+  { value: 'shift:asc', label: '조순' },
+];
+
+const dayNavBtnClass =
+  'min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text md:min-h-0';
 
 function startOfDay(date) {
   const d = new Date(date);
@@ -217,6 +230,12 @@ export default function FrequentCheckPage() {
     setSortDir(next.dir);
   }
 
+  function handleMobileSort(combined) {
+    const { key, dir } = parseSortValue(combined);
+    setSortKey(key);
+    setSortDir(dir);
+  }
+
   function shiftDay(delta) {
     setDate((prev) => {
       const next = new Date(prev);
@@ -229,64 +248,100 @@ export default function FrequentCheckPage() {
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   return (
-    <div className="flex h-[calc(100vh)] flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         eyebrow="FREQUENT CHECK"
         title="자주검사 현황"
         description="근무조는 작업자 관리 설정(고정) 또는 당일 기록(자동)으로 결정되며, 초품·중품·종품 검사 준수 여부를 확인합니다."
       />
 
-      <div className="flex min-h-0 flex-1 flex-col px-8 pb-8 pt-4">
+      <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
         <PageTableShell
           toolbar={
-            <>
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-2">
+            <FilterToolbar
+              primary={
+                <div className="flex w-full items-center gap-2 md:w-auto">
                   <button
                     type="button"
                     onClick={() => shiftDay(-1)}
-                    className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text"
+                    className={`${dayNavBtnClass} flex-1 md:flex-none`}
                     aria-label="이전 날"
                   >
                     ◀ 이전날
                   </button>
-                  <span className="min-w-[10rem] text-center text-sm font-medium text-text">
+                  <span className="min-w-0 flex-1 text-center text-sm font-medium text-text md:min-w-[10rem]">
                     {formatWorkDate(date)}
                   </span>
                   <button
                     type="button"
                     onClick={() => shiftDay(1)}
-                    className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text"
+                    className={`${dayNavBtnClass} flex-1 md:flex-none`}
                     aria-label="다음 날"
                   >
                     다음날 ▶
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleExportExcel}
-                    disabled={!canExport}
-                    className={exportBtnClass}
-                  >
-                    엑셀 다운로드
-                  </button>
-                  <DateRangePicker value={exportDateRange} onChange={setExportDateRange} />
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <p className="text-xs text-muted">
+              }
+              aside={
+                <>
+                  <p className="text-xs text-muted md:text-right">
                     근무조가 고정(🔒)된 작업자는 설정값을 우선 적용합니다. 미정인 작업자는 당일 기록
                     시간대로 자동 판단하며, 기록이 없으면 데이터 없음으로 표시됩니다.
                   </p>
                   {exportRangeTooLong ? (
-                    <p className="text-xs text-warn">
-                      엑셀 다운로드는 최대 {MAX_EXPORT_DAYS}일까지 선택할 수 있습니다. (현재 {exportDayCount}일)
+                    <p className="text-xs text-warn md:text-right">
+                      엑셀 다운로드는 최대 {MAX_EXPORT_DAYS}일까지 선택할 수 있습니다. (현재{' '}
+                      {exportDayCount}일)
                     </p>
                   ) : null}
-                </div>
-              </div>
-            </>
+                </>
+              }
+            >
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                disabled={!canExport}
+                className={exportBtnClass}
+              >
+                엑셀 다운로드
+              </button>
+              <DateRangePicker value={exportDateRange} onChange={setExportDateRange} />
+            </FilterToolbar>
           }
           table={
-            <table className="w-full text-sm">
+            <>
+              <MobileSortSelect
+                value={`${sortKey}:${sortDir}`}
+                options={FREQUENT_SORT_OPTIONS}
+                onChange={handleMobileSort}
+              />
+              <div className="md:hidden">
+                {groupedCompliance.map((group) => (
+                  <Fragment key={group.shift}>
+                    <div className="mb-2 mt-1 px-1 text-xs font-medium text-muted">
+                      {group.label} ({group.rows.length}명)
+                    </div>
+                    {group.rows.map((row) => (
+                      <MobileListCard
+                        key={row.worker_name}
+                        header={row.worker_name}
+                        badge={<OverallBadge row={row} />}
+                      >
+                        <MobileCardField label="조">
+                          <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
+                        </MobileCardField>
+                        <MobileCardField label="자주검사" className="col-span-2">
+                          <TrafficLightDots stages={complianceStagesForDots(row)} />
+                        </MobileCardField>
+                      </MobileListCard>
+                    ))}
+                  </Fragment>
+                ))}
+                {compliance.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-muted">기록된 작업자가 없습니다</div>
+                ) : null}
+              </div>
+              <table className="hidden w-full text-sm md:table">
               <thead>
                 <tr className="sticky top-0 z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
                   <SortableTh column="worker_name" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
@@ -335,7 +390,8 @@ export default function FrequentCheckPage() {
                   </tr>
                 )}
               </tbody>
-            </table>
+              </table>
+            </>
           }
         />
       </div>

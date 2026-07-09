@@ -18,6 +18,9 @@ import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 import PageTableShell from '../../components/PageTableShell';
 import SortableTh from '../../components/SortableTh';
+import FilterToolbar from '../../components/FilterToolbar';
+import MobileSortSelect, { parseSortValue } from '../../components/MobileSortSelect';
+import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
 import FivesEditModal from '../../components/FivesEditModal';
 import BatchClassifyReviewModal from '../../components/BatchClassifyReviewModal';
 import BatchClassifyProgress from '../../components/BatchClassifyProgress';
@@ -28,13 +31,23 @@ import DateRangePicker from '../../components/DateRangePicker';
 const exportBtnClass =
   'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
 
+const actionBtnClass =
+  'min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50 md:min-h-0';
+
 const dangerBtnClass =
-  'rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50';
+  'min-h-[44px] rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0';
 
 const SOS_CODE_OPTIONS = Object.entries(SOS_ERROR_CODES).map(([value, label]) => ({
   value,
   label,
 }));
+
+const FIVES_SORT_OPTIONS = [
+  { value: 'created_at:desc', label: '최신순' },
+  { value: 'created_at:asc', label: '오래된순' },
+  { value: 'worker_name:asc', label: '작업자명순' },
+  { value: 'area_type:asc', label: '구역순' },
+];
 
 function getFivesSortValue(record, key) {
   switch (key) {
@@ -90,6 +103,12 @@ export default function FivesPage() {
     const next = toggleSortKey(sortKey, sortDir, column);
     setSortKey(next.key);
     setSortDir(next.dir);
+  }
+
+  function handleMobileSort(combined) {
+    const { key, dir } = parseSortValue(combined);
+    setSortKey(key);
+    setSortDir(dir);
   }
 
   async function handleBatchClassify() {
@@ -173,48 +192,89 @@ export default function FivesPage() {
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   return (
-    <div className="flex h-[calc(100vh)] flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       <PageHeader eyebrow="WORKPLACE" title="3정5S 기록" description={`총 ${filtered.length}건`} />
 
-      <div className="flex min-h-0 flex-1 flex-col px-8 pb-8 pt-4">
+      <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
         <PageTableShell
           toolbar={
-            <>
-              <div className="flex flex-wrap items-start gap-3">
-                <DateRangePicker value={dateRange} onChange={setDateRange} />
-                <button
-                  type="button"
-                  onClick={handleExportExcel}
-                  disabled={!canExport}
-                  className={exportBtnClass}
-                >
-                  엑셀 다운로드
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectAll(filtered)}
-                  disabled={filtered.length === 0}
-                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-                >
-                  전체 선택
-                </button>
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  disabled={selectedCount === 0}
-                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-                >
-                  선택 해제
-                </button>
-              </div>
-
+            <FilterToolbar
+              primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}
+            >
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                disabled={!canExport}
+                className={exportBtnClass}
+              >
+                엑셀 다운로드
+              </button>
+              <button
+                type="button"
+                onClick={() => selectAll(filtered)}
+                disabled={filtered.length === 0}
+                className={actionBtnClass}
+              >
+                전체 선택
+              </button>
+              <button
+                type="button"
+                onClick={clearAll}
+                disabled={selectedCount === 0}
+                className={actionBtnClass}
+              >
+                선택 해제
+              </button>
               {batchError ? (
                 <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{batchError}</div>
               ) : null}
-            </>
+            </FilterToolbar>
           }
           table={
-            <table className="w-full text-sm">
+            <>
+              <MobileSortSelect
+                value={`${sortKey}:${sortDir}`}
+                options={FIVES_SORT_OPTIONS}
+                onChange={handleMobileSort}
+              />
+              <div className="md:hidden">
+                {sortedRows.map((f) => (
+                  <MobileListCard
+                    key={f.id}
+                    header={f.worker_name || '작업자 미상'}
+                    badge={
+                      <span className="inline-block max-w-[8rem] truncate rounded-full bg-surface2 px-2.5 py-0.5 text-xs font-medium text-text">
+                        {fivesLabel(f)}
+                      </span>
+                    }
+                    leading={
+                      <span onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected(f.id)}
+                          onChange={() => toggle(f.id)}
+                          className="h-4 w-4 accent-accent"
+                          aria-label={`${f.worker_name || '작업자'} 선택`}
+                        />
+                      </span>
+                    }
+                    onClick={() => setSelected(f)}
+                  >
+                    <MobileCardField label="구역">{fivesLabel(f)}</MobileCardField>
+                    <MobileCardField label="SOS 코드">{fivesErrorCode(f) || '-'}</MobileCardField>
+                    <MobileCardField label="설명" className="col-span-2">
+                      {f.description || '-'}
+                    </MobileCardField>
+                    <MobileCardField label="촬영시각" className="col-span-2">
+                      {f.created_at ? new Date(f.created_at).toLocaleString('ko-KR') : '-'}
+                    </MobileCardField>
+                  </MobileListCard>
+                ))}
+                {sortedRows.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-muted">조건에 맞는 기록이 없습니다</div>
+                ) : null}
+              </div>
+              <table className="hidden w-full text-sm md:table">
               <thead>
                 <tr className="sticky top-0 z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
                   <th className="w-10 px-4 py-3">
@@ -270,7 +330,8 @@ export default function FivesPage() {
                   </tr>
                 )}
               </tbody>
-            </table>
+              </table>
+            </>
           }
         />
       </div>

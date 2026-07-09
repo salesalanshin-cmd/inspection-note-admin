@@ -8,6 +8,7 @@ import { cloneMarkingData } from '../lib/markingData';
 import AiSuggestionBanner from './AiSuggestionBanner';
 import EditableMarkerOverlay from './EditableMarkerOverlay';
 import SignedImage from './SignedImage';
+import ModalShell, { ModalFooterActions } from './ModalShell';
 
 const DEFECT_CODE_ENTRIES = Object.entries(DEFECT_CODE_LABELS);
 const DEFAULT_DEFECT_CODE = DEFECT_CODE_ENTRIES[0]?.[0] ?? '';
@@ -92,152 +93,122 @@ export default function DefectEditModal({ report, onClose, onSaved }) {
     onClose?.();
   }
 
+  const footerButtons = (
+    <ModalFooterActions
+      onCancel={onClose}
+      onConfirm={handleSave}
+      cancelLabel="취소"
+      confirmLabel={saving ? '저장 중...' : '저장'}
+      confirmDisabled={saving || classifying}
+    />
+  );
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="불량 기록 수정"
+    <ModalShell
+      title={defectLabel(report)}
+      eyebrow="불량 기록 수정"
+      onClose={onClose}
+      ariaLabel="불량 기록 수정"
+      footer={<div className="md:hidden">{footerButtons}</div>}
     >
-      <div
-        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-surface shadow-card"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div>
-            <div className="text-xs font-medium text-accent">불량 기록 수정</div>
-            <h2 className="text-lg font-semibold text-text">{defectLabel(report)}</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface2 hover:text-text"
-            aria-label="닫기"
+      <div className="flex flex-col md:flex-row md:overflow-hidden">
+        <div className="border-b border-border p-4 md:flex-1 md:border-b-0 md:border-r md:p-5 md:overflow-y-auto">
+          <div
+            ref={imageContainerRef}
+            className="relative mx-auto w-full overflow-hidden bg-surface2 md:max-h-[60vh] md:rounded-xl"
+            style={{ aspectRatio }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 6 6 18" />
-              <path d="m6 6 12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="flex flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
-          <div className="border-b border-border p-5 md:flex-1 md:border-b-0 md:border-r md:overflow-y-auto">
-            <div
-              ref={imageContainerRef}
-              className="relative mx-auto w-full max-h-[50vh] bg-surface2 rounded-xl overflow-hidden md:max-h-[60vh]"
-              style={{ aspectRatio }}
-            >
-              {report.image_url ? (
-                <>
-                  <SignedImage
-                    url={report.image_url}
-                    alt={defectLabel(report)}
-                    fit="contain"
-                    sizes="800px"
+            {report.image_url ? (
+              <>
+                <SignedImage
+                  url={report.image_url}
+                  alt={defectLabel(report)}
+                  fit="contain"
+                  sizes="(max-width: 768px) 100vw, 800px"
+                />
+                {markers.length > 0 && (
+                  <EditableMarkerOverlay
+                    markers={markers}
+                    imageWidth={report.image_width}
+                    imageHeight={report.image_height}
+                    containerRef={imageContainerRef}
+                    onChange={setMarkers}
                   />
-                  {markers.length > 0 && (
-                    <EditableMarkerOverlay
-                      markers={markers}
-                      imageWidth={report.image_width}
-                      imageHeight={report.image_height}
-                      containerRef={imageContainerRef}
-                      onChange={setMarkers}
-                    />
-                  )}
-                </>
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-muted text-sm">
-                  이미지 없음
-                </div>
-              )}
-            </div>
-
-            {markers.length > 0 && (
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <p className="text-xs text-muted">
-                  마킹을 드래그해 위치를, 모서리 핸들로 크기를 조정할 수 있습니다.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleResetMarkings}
-                  className="shrink-0 rounded-xl border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text"
-                >
-                  위치 초기화
-                </button>
+                )}
+              </>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">
+                이미지 없음
               </div>
             )}
-
-            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <div className="text-xs text-muted">작업자</div>
-                <div className="text-text font-medium">{report.worker_name || '작업자 미상'}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted">마킹 수</div>
-                <div className="text-text font-medium">{markers.length}개</div>
-              </div>
-            </div>
           </div>
 
-          <div className="flex w-full flex-col p-5 md:w-80 md:shrink-0">
-            <div className="space-y-4 flex-1">
+          {markers.length > 0 && (
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <p className="text-xs text-muted">
+                마킹을 드래그해 위치를, 모서리 핸들로 크기를 조정할 수 있습니다.
+              </p>
               <button
                 type="button"
-                onClick={handleAiClassify}
-                disabled={classifying || saving || !report.image_url}
-                className="w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50"
+                onClick={handleResetMarkings}
+                className="shrink-0 rounded-xl border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text"
               >
-                {classifying ? 'AI 분석 중...' : 'AI 자동판정'}
+                위치 초기화
               </button>
-
-              {aiSuggestion ? (
-                <AiSuggestionBanner
-                  code={aiSuggestion.code}
-                  confidence={aiSuggestion.confidence}
-                  reason={aiSuggestion.reason}
-                  codeSet="defect"
-                />
-              ) : null}
-
-              <div>
-                <label className="mb-1.5 block text-xs text-muted">불량 유형</label>
-                <select value={code} onChange={(e) => setCode(e.target.value)} className={inputClass}>
-                  {DEFECT_CODE_ENTRIES.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {value} {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {error && (
-                <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{error}</div>
-              )}
             </div>
+          )}
 
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={saving}
-                className="rounded-xl border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-              >
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving || classifying}
-                className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {saving ? '저장 중...' : '저장'}
-              </button>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <div className="text-xs text-muted">작업자</div>
+              <div className="font-medium text-text">{report.worker_name || '작업자 미상'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted">마킹 수</div>
+              <div className="font-medium text-text">{markers.length}개</div>
             </div>
           </div>
         </div>
+
+        <div className="flex w-full flex-col p-4 md:w-80 md:shrink-0 md:p-5">
+          <div className="flex-1 space-y-4">
+            <button
+              type="button"
+              onClick={handleAiClassify}
+              disabled={classifying || saving || !report.image_url}
+              className="w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {classifying ? 'AI 분석 중...' : 'AI 자동판정'}
+            </button>
+
+            {aiSuggestion ? (
+              <AiSuggestionBanner
+                code={aiSuggestion.code}
+                confidence={aiSuggestion.confidence}
+                reason={aiSuggestion.reason}
+                codeSet="defect"
+              />
+            ) : null}
+
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">불량 유형</label>
+              <select value={code} onChange={(e) => setCode(e.target.value)} className={inputClass}>
+                {DEFECT_CODE_ENTRIES.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {value} {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {error && (
+              <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{error}</div>
+            )}
+          </div>
+
+          <div className="mt-6 hidden justify-end gap-2 md:flex">{footerButtons}</div>
+        </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

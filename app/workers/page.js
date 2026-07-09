@@ -16,9 +16,23 @@ import { sortRows, toggleSortKey } from '../../lib/tableSort';
 import PageHeader from '../../components/PageHeader';
 import PageTableShell from '../../components/PageTableShell';
 import SortableTh from '../../components/SortableTh';
+import FilterToolbar from '../../components/FilterToolbar';
 import TrafficLightDots from '../../components/TrafficLightDots';
 import StatusDot from '../../components/StatusDot';
+import MobileSortSelect, { parseSortValue } from '../../components/MobileSortSelect';
+import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
 const SUMMARY_DAYS = 7;
+
+const WORKER_SORT_OPTIONS = [
+  { value: 'completionRate:asc', label: '자주검사 완료율 낮은순' },
+  { value: 'fivesCompletionRate:asc', label: '3정5S 완료율 낮은순' },
+  { value: 'worker_name:asc', label: '작업자명순' },
+  { value: 'lastActivity:asc', label: '최근활동 오래된순' },
+  { value: 'defectCount:desc', label: '불량 보고수 많은순' },
+];
+
+const dayNavBtnClass =
+  'min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text md:min-h-0';
 
 const DEFAULT_DAILY_STATUS = {
   frequentStages: SHIFT_STAGES.map((stage) => ({ label: stage, done: false })),
@@ -232,6 +246,24 @@ export default function WorkersPage() {
     setSortDir(next.dir);
   }
 
+  function handleMobileSort(combined) {
+    const { key, dir } = parseSortValue(combined);
+    setSortKey(key);
+    setSortDir(dir);
+  }
+
+  function workerStatusBadge(worker) {
+    if (worker.needsAlert) {
+      return (
+        <span className="inline-block rounded-full bg-dangerSoft px-2.5 py-0.5 text-xs font-medium text-danger">
+          미준수
+        </span>
+      );
+    }
+    const rate = Math.min(worker.completionRate ?? 1, worker.fivesCompletionRate ?? 1);
+    return <ComplianceStatusPill rate={rate} />;
+  }
+
   function shiftDay(delta) {
     setEndDate((prev) => {
       const next = new Date(prev);
@@ -244,39 +276,41 @@ export default function WorkersPage() {
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   return (
-    <div className="flex h-[calc(100vh)] flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         eyebrow="WORKERS"
         title="작업자 현황"
         description={`정기검사 기준 ${INSPECTION_CYCLE_DAYS}일 · 3정5S 기준 ${FIVES_CYCLE_DAYS}일. 기준일 초과 시 미준수로 표시됩니다.`}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col px-8 pb-8 pt-4">
+      <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
         <PageTableShell
           toolbar={
-            <>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => shiftDay(-1)}
-                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text"
-                  aria-label="이전 날"
-                >
-                  ◀ 이전날
-                </button>
-                <span className="min-w-[10rem] text-center text-sm font-medium text-text">
-                  {formatWorkDate(endDate)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => shiftDay(1)}
-                  className="rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text"
-                  aria-label="다음 날"
-                >
-                  다음날 ▶
-                </button>
-              </div>
-
+            <FilterToolbar
+              primary={
+                <div className="flex w-full items-center gap-2 md:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => shiftDay(-1)}
+                    className={`${dayNavBtnClass} flex-1 md:flex-none`}
+                    aria-label="이전 날"
+                  >
+                    ◀ 이전날
+                  </button>
+                  <span className="min-w-0 flex-1 text-center text-sm font-medium text-text md:min-w-[10rem]">
+                    {formatWorkDate(endDate)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => shiftDay(1)}
+                    className={`${dayNavBtnClass} flex-1 md:flex-none`}
+                    aria-label="다음 날"
+                  >
+                    다음날 ▶
+                  </button>
+                </div>
+              }
+            >
               {alertTargets.length > 0 && (
                 <div className="rounded-xl bg-dangerSoft p-4">
                   <div className="mb-1 text-sm font-medium text-danger">
@@ -287,14 +321,59 @@ export default function WorkersPage() {
                   </div>
                 </div>
               )}
-
               <p className="text-xs text-muted">
                 자주검사/3정5S 완료율은 선택한 날짜 기준 최근 {SUMMARY_DAYS}일(평일 기준) 집계입니다.
               </p>
-            </>
+            </FilterToolbar>
           }
           table={
-            <table className="w-full text-sm">
+            <>
+              <MobileSortSelect
+                value={`${sortKey}:${sortDir}`}
+                options={WORKER_SORT_OPTIONS}
+                onChange={handleMobileSort}
+              />
+              <div className="md:hidden">
+                {workers.map((w) => (
+                  <MobileListCard
+                    key={w.worker_name}
+                    header={w.worker_name}
+                    badge={workerStatusBadge(w)}
+                  >
+                    <MobileCardField label="자주검사(오늘)">
+                      <TrafficLightDots stages={w.todayFrequentStages} />
+                    </MobileCardField>
+                    <MobileCardField label="3정5S(오늘)">
+                      <StatusDot done={w.todayFivesDone} />
+                    </MobileCardField>
+                    <MobileCardField label="불량 보고수">
+                      <span className="text-danger">{w.defectCount}</span>
+                    </MobileCardField>
+                    <MobileCardField label="자주검사 횟수(N/15)">
+                      <FrequentCountCell
+                        completedCount={w.completedCount}
+                        expectedCount={w.expectedCount}
+                      />
+                    </MobileCardField>
+                    <MobileCardField label="자주검사 완료율(최근7일)" className="col-span-2">
+                      <CompletionRateCell rate={w.completionRate} />
+                    </MobileCardField>
+                    <MobileCardField label="3정5S 완료율(최근7일)" className="col-span-2">
+                      <CompletionRateCell rate={w.fivesCompletionRate} />
+                    </MobileCardField>
+                    <MobileCardField label="최근 수행 활동" className="col-span-2">
+                      <RecentActivityCell
+                        lastFrequentCheckAt={w.lastFrequentCheckAt}
+                        lastFivesAt={w.lastFivesAt}
+                      />
+                    </MobileCardField>
+                  </MobileListCard>
+                ))}
+                {workers.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-muted">기록된 작업자가 없습니다</div>
+                ) : null}
+              </div>
+              <table className="hidden w-full text-sm md:table">
               <thead>
                 <tr className="sticky top-0 z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
                   <SortableTh column="worker_name" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
@@ -362,7 +441,8 @@ export default function WorkersPage() {
                   </tr>
                 )}
               </tbody>
-            </table>
+              </table>
+            </>
           }
           footer={
             <p className="text-xs text-muted">
