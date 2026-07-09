@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Home, Menu } from 'lucide-react';
+import { Home, Menu, Sparkles } from 'lucide-react';
 
 export default function MobileHeader({ onMenuOpen }) {
   return (
@@ -19,6 +19,16 @@ export default function MobileHeader({ onMenuOpen }) {
         className="min-w-0 flex-1 truncate text-sm font-semibold text-text"
       >
         디케이메탈 검사노트
+      </Link>
+      <Link
+        href="/insight-lab"
+        aria-label="인사이트 랩(AI대화)로 이동"
+        title="인사이트 랩(AI대화)"
+        className="group relative inline-flex h-10 shrink-0 items-center gap-1.5 overflow-hidden rounded-xl border border-accent/30 bg-gradient-to-r from-accent/15 to-accent/0 px-2.5 text-xs font-medium text-text transition-colors hover:from-accent/25 hover:to-accent/5 hover:text-accent"
+      >
+        <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
+        <span className="hidden sm:inline">인사이트 랩(AI대화)</span>
+        <span className="sm:hidden">AI</span>
       </Link>
       <Link
         href="/dashboard"
