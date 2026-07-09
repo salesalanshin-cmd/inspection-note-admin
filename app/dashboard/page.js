@@ -18,6 +18,7 @@ import {
   buildTrend,
   buildDefectBreakdown,
   buildFrequentInspectionCompliance,
+  buildOverallComplianceRate,
   filterByExcludedWorkers,
   getExcludedWorkerNames,
   summarizeTodayFrequentCompliance,
@@ -25,6 +26,19 @@ import {
 } from '../../lib/analytics';
 import PageHeader from '../../components/PageHeader';
 import StatCard from '../../components/StatCard';
+
+/** 이행률 → StatCard tone (90%↑ good, 70~89% warn, 70%↓ danger, null muted) */
+function rateTone(rate) {
+  if (rate == null) return 'muted';
+  if (rate >= 0.9) return 'good';
+  if (rate >= 0.7) return 'warn';
+  return 'danger';
+}
+
+/** 이행률 → 표시 문자열 */
+function rateValue(rate) {
+  return rate == null ? '데이터 없음' : `${Math.round(rate * 100)}%`;
+}
 
 const tooltipStyle = {
   background: '#FFFFFF',
@@ -115,6 +129,17 @@ export default function DashboardPage() {
     [filteredFives, filteredDefects, filteredGoods, excludedNames]
   );
 
+  const overallCompliance = useMemo(
+    () =>
+      buildOverallComplianceRate(
+        filteredDefects,
+        filteredGoods,
+        filteredFives,
+        workerDirectory
+      ),
+    [filteredDefects, filteredGoods, filteredFives, workerDirectory]
+  );
+
   if (loading) {
     return <div className="p-8 text-muted text-sm">데이터 불러오는 중...</div>;
   }
@@ -131,7 +156,6 @@ export default function DashboardPage() {
 
   const overdueCount = workerStats.filter((w) => w.needsAlert).length;
   const total = filteredDefects.length + filteredGoods.length;
-  const defectRate = total > 0 ? ((filteredDefects.length / total) * 100).toFixed(1) : '0.0';
   const fivesPct = (fivesToday.completionRate * 100).toFixed(0);
 
   return (
@@ -145,8 +169,16 @@ export default function DashboardPage() {
       <div className="p-8 space-y-8">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard label="총 검사 건수" value={total} sub={`불량 ${filteredDefects.length} · 양품 ${filteredGoods.length}`} />
-          <StatCard label="불량률" value={`${defectRate}%`} tone={Number(defectRate) > 5 ? 'danger' : 'default'} />
-          <StatCard label="3정5S 기록" value={filteredFives.length} tone="accent" />
+          <StatCard
+            label="자주검사 이행률(최근 7일)"
+            value={rateValue(overallCompliance.overallFrequentRate)}
+            tone={rateTone(overallCompliance.overallFrequentRate)}
+          />
+          <StatCard
+            label="3정5S 이행률(최근 7일)"
+            value={rateValue(overallCompliance.overallFivesRate)}
+            tone={rateTone(overallCompliance.overallFivesRate)}
+          />
           <StatCard label="활동 작업자" value={workerStats.length} />
           <StatCard
             label="주기 미준수"

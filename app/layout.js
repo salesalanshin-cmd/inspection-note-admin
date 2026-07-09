@@ -12,7 +12,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="ko">
-      <body className={`${body.variable} font-body font-normal antialiased`}>
+      <body className={`${body.variable} font-body font-normal antialiased h-screen overflow-hidden`}>
         <AppShell>{children}</AppShell>
       </body>
     </html>

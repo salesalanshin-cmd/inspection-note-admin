@@ -1,10 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Trash2 } from 'lucide-react';
 import { useReports } from '../../lib/useReports';
 import { collectAllWorkerNames, getExcludedWorkerNames } from '../../lib/analytics';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 const inputClass =
   'rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
@@ -31,11 +33,31 @@ function ToggleSwitch({ checked, onChange, disabled, label }) {
   );
 }
 
+function DutyPill({ label, active, disabled, onClick }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        active ? 'bg-accent text-white' : 'bg-surface2 text-muted hover:text-text'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function WorkerManagementPage() {
   const { loading, error, defects, goods, fives, workerDirectory, refetch } = useReports();
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(null);
   const [formError, setFormError] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [hiddenNames, setHiddenNames] = useState(() => new Set());
 
   const directoryMap = useMemo(() => {
     const map = new Map();
@@ -50,10 +72,18 @@ export default function WorkerManagementPage() {
     [defects, goods, fives, workerDirectory]
   );
 
+  // 낙관적 업데이트: 숨김 처리 직후 refetch 전까지 즉시 목록에서 제거
+  const visibleNames = useMemo(
+    () => allNames.filter((name) => !hiddenNames.has(name)),
+    [allNames, hiddenNames]
+  );
+
   async function upsertWorker(worker_name, patch) {
     setSaving(worker_name);
     setFormError(null);
     const existing = directoryMap.get(worker_name);
+    // upsert는 행 전체를 덮어쓰므로 지정하지 않은 컬럼이 초기화되지 않도록
+    // 기존 값(담당 업무, 연락처 포함)을 모두 base에 채워 넣습니다.
     const { error: upsertError } = await supabase.from('worker_directory').upsert({
       worker_name,
       excluded: existing?.excluded ?? false,
@@ -62,6 +92,11 @@ export default function WorkerManagementPage() {
         existing?.default_shift === 'day' || existing?.default_shift === 'night'
           ? existing.default_shift
           : null,
+      handles_frequent_check: existing?.handles_frequent_check ?? true,
+      handles_fives: existing?.handles_fives ?? true,
+      handles_documents: existing?.handles_documents ?? false,
+      phone_number: existing?.phone_number ?? '',
+      removed: existing?.removed ?? false,
       ...patch,
     });
     setSaving(null);
@@ -86,6 +121,10 @@ export default function WorkerManagementPage() {
       excluded: false,
       note: '',
       default_shift: null,
+      handles_frequent_check: true,
+      handles_fives: true,
+      handles_documents: false,
+      phone_number: '',
     });
     setSaving(null);
     if (insertError) {
@@ -93,6 +132,47 @@ export default function WorkerManagementPage() {
       return;
     }
     setNewName('');
+    refetch();
+  }
+
+  async function handleRemoveWorker(name) {
+    if (!name) return;
+    const existing = directoryMap.get(name);
+    setSaving(name);
+    setFormError(null);
+    setDeleteTarget(null);
+
+    // 낙관적 업데이트: 즉시 화면 목록에서 숨김
+    setHiddenNames((prev) => new Set(prev).add(name));
+
+    // 실제 delete가 아니라 removed=true로 숨김 처리 (기록이 있는 작업자는
+    // delete 시 다음 새로고침에 재생성되므로). 기존 설정값은 유지합니다.
+    const { error: removeError } = await supabase.from('worker_directory').upsert({
+      worker_name: name,
+      excluded: existing?.excluded ?? false,
+      note: existing?.note ?? '',
+      default_shift:
+        existing?.default_shift === 'day' || existing?.default_shift === 'night'
+          ? existing.default_shift
+          : null,
+      handles_frequent_check: existing?.handles_frequent_check ?? true,
+      handles_fives: existing?.handles_fives ?? true,
+      handles_documents: existing?.handles_documents ?? false,
+      phone_number: existing?.phone_number ?? '',
+      removed: true,
+    });
+    setSaving(null);
+
+    if (removeError) {
+      // 롤백
+      setHiddenNames((prev) => {
+        const next = new Set(prev);
+        next.delete(name);
+        return next;
+      });
+      setFormError(removeError.message);
+      return;
+    }
     refetch();
   }
 
@@ -104,7 +184,7 @@ export default function WorkerManagementPage() {
       <PageHeader
         eyebrow="SETTINGS"
         title="작업자 관리"
-        description="관리자 제외, 근무조, 메모를 설정합니다. 근무조 미정 시 당일 기록으로 자동 판단합니다."
+        description="관리자 제외, 근무조, 담당 업무, 연락처, 메모를 설정합니다. 근무조 미정 시 당일 기록으로 자동 판단합니다."
       />
 
       <div className="p-8 space-y-6">
@@ -143,14 +223,20 @@ export default function WorkerManagementPage() {
                 <th className="px-4 py-3">작업자</th>
                 <th className="px-4 py-3">제외 (관리자/퇴사자 등)</th>
                 <th className="px-4 py-3">근무조</th>
+                <th className="px-4 py-3">담당 업무</th>
+                <th className="px-4 py-3">연락처</th>
                 <th className="px-4 py-3">메모</th>
               </tr>
             </thead>
             <tbody>
-              {allNames.map((name) => {
+              {visibleNames.map((name) => {
                 const row = directoryMap.get(name);
                 const excluded = row?.excluded ?? false;
                 const note = row?.note ?? '';
+                const phone = row?.phone_number ?? '';
+                const handlesFrequent = row?.handles_frequent_check ?? true;
+                const handlesFives = row?.handles_fives ?? true;
+                const handlesDocuments = row?.handles_documents ?? false;
                 const defaultShift =
                   row?.default_shift === 'day' || row?.default_shift === 'night'
                     ? row.default_shift
@@ -192,26 +278,85 @@ export default function WorkerManagementPage() {
                       </select>
                     </td>
                     <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <DutyPill
+                          label="자주검사"
+                          active={handlesFrequent}
+                          disabled={excluded || isSaving}
+                          onClick={() =>
+                            upsertWorker(name, {
+                              handles_frequent_check: !handlesFrequent,
+                            })
+                          }
+                        />
+                        <DutyPill
+                          label="3정5S"
+                          active={handlesFives}
+                          disabled={excluded || isSaving}
+                          onClick={() =>
+                            upsertWorker(name, { handles_fives: !handlesFives })
+                          }
+                        />
+                        <DutyPill
+                          label="문서스캔"
+                          active={handlesDocuments}
+                          disabled={excluded || isSaving}
+                          onClick={() =>
+                            upsertWorker(name, {
+                              handles_documents: !handlesDocuments,
+                            })
+                          }
+                        />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
                       <input
                         type="text"
-                        defaultValue={note}
+                        defaultValue={phone}
                         disabled={isSaving}
-                        placeholder="관리자, 퇴사, 야간조…"
-                        className={`${inputClass} w-full max-w-xs`}
+                        placeholder="010-0000-0000"
+                        className={`${inputClass} w-36`}
                         onBlur={(e) => {
-                          const next = e.target.value;
-                          if (next !== note) {
-                            upsertWorker(name, { excluded, note: next });
+                          const next = e.target.value.trim();
+                          if (next !== phone) {
+                            upsertWorker(name, { phone_number: next });
                           }
                         }}
                       />
                     </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          defaultValue={note}
+                          disabled={isSaving}
+                          placeholder="관리자, 퇴사, 야간조…"
+                          className={`${inputClass} w-full max-w-xs`}
+                          onBlur={(e) => {
+                            const next = e.target.value;
+                            if (next !== note) {
+                              upsertWorker(name, { excluded, note: next });
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(name)}
+                          disabled={isSaving}
+                          aria-label={`${name} 숨김`}
+                          title="작업자 관리 목록에서 숨김"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-muted transition-colors hover:border-danger/40 hover:bg-dangerSoft hover:text-danger disabled:opacity-50"
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
-              {allNames.length === 0 && (
+              {visibleNames.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-12 text-center text-muted text-xs">
+                  <td colSpan={6} className="px-4 py-12 text-center text-muted text-xs">
                     등록된 작업자가 없습니다
                   </td>
                 </tr>
@@ -225,6 +370,17 @@ export default function WorkerManagementPage() {
           않습니다. 근무조를 주간/야간으로 고정하면 자동 판단보다 우선 적용됩니다.
         </p>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="작업자 숨김"
+        message={`${deleteTarget ?? ''}을 작업자 관리 목록에서 숨김 처리하시겠습니까? 목록에서만 숨김 처리되며, 검사 데이터는 유지됩니다.`}
+        confirmLabel="숨김"
+        confirmTone="danger"
+        loading={saving === deleteTarget}
+        onConfirm={() => handleRemoveWorker(deleteTarget)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

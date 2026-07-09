@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
+import TopBar from './TopBar';
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
@@ -12,9 +13,12 @@ export default function AppShell({ children }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-bg">
+    <div className="flex h-screen overflow-hidden bg-bg">
       <Sidebar />
-      <main className="flex-1 min-w-0 bg-bg">{children}</main>
+      <main className="flex-1 min-w-0 h-screen overflow-y-auto bg-bg">
+        <TopBar />
+        {children}
+      </main>
     </div>
   );
 }
