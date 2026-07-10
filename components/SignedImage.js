@@ -2,13 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { supabase } from '../lib/supabase';
-import { extractStoragePath } from '../lib/storagePath';
+import { getImageUrl } from '../lib/getImageUrl';
 
-// signed URL 재발급 유효 시간 (초) - 화면 보는 동안만 유효하면 되므로 1시간이면 충분
-const SIGNED_URL_TTL = 60 * 60;
-
-export default function SignedImage({ url, alt, fit = 'cover', sizes = '200px' }) {
+export default function SignedImage({ url, alt, fit = 'cover', sizes = '200px', bucket }) {
   const objectFit = fit === 'contain' ? 'object-contain' : 'object-cover';
   const [src, setSrc] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -23,29 +19,23 @@ export default function SignedImage({ url, alt, fit = 'cover', sizes = '200px' }
       return undefined;
     }
 
-    const parsed = extractStoragePath(url);
-    // storage URL 형태가 아니면(이미 완전한 public URL 등) 원본 그대로 사용
-    if (!parsed) {
-      setSrc(url);
-      return undefined;
-    }
-
-    supabase.storage
-      .from(parsed.bucket)
-      .createSignedUrl(parsed.path, SIGNED_URL_TTL)
-      .then(({ data, error }) => {
+    getImageUrl(url, bucket ? { bucket } : undefined)
+      .then((signedUrl) => {
         if (cancelled) return;
-        if (error || !data?.signedUrl) {
+        if (!signedUrl) {
           setFailed(true);
           return;
         }
-        setSrc(data.signedUrl);
+        setSrc(signedUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [url]);
+  }, [url, bucket]);
 
   if (failed) {
     return (

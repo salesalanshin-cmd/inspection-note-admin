@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { defectLabel, DEFECT_CODE_LABELS } from '../../lib/constants';
 import { parseMarkingData } from '../../lib/markingData';
@@ -95,6 +95,11 @@ export default function DefectsPage() {
   );
 
   const recordsById = useMemo(() => new Map(filtered.map((d) => [d.id, d])), [filtered]);
+
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('불량 목록:', defects, error);
+  }, [defects, error]);
 
   async function handleBatchClassify() {
     const items = selectedRecords
@@ -267,7 +272,7 @@ export default function DefectsPage() {
                     />
                   </label>
                   {d.image_url ? (
-                    <SignedImage url={d.image_url} alt={defectLabel(d)} />
+                    <SignedImage url={d.image_url} alt={defectLabel(d)} bucket="defect-images" />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-muted text-xs">
                       이미지 없음

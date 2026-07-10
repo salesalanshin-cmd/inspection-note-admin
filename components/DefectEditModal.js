@@ -125,6 +125,7 @@ export default function DefectEditModal({ report, onClose, onSaved }) {
                   alt={defectLabel(report)}
                   fit="contain"
                   sizes="(max-width: 768px) 100vw, 800px"
+                  bucket="defect-images"
                 />
                 {markers.length > 0 && (
                   <EditableMarkerOverlay
