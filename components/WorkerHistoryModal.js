@@ -11,14 +11,13 @@ import { ResultBadge, StageBadge } from './InspectionHistoryDetailModal';
 
 function formatDateListLabel(dateStr) {
   const d = new Date(`${dateStr}T00:00:00`);
-  const weekday = d.toLocaleDateString('ko-KR', { weekday: 'short' }).replace('요일', '');
   const monthDay = d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
-  return `${monthDay} (${weekday})`;
+  return `${monthDay} 근무일`;
 }
 
-function enrichRecord(record, workerDirectory) {
+function enrichRecord(record, workerDirectory, allWorkerRecords) {
   const recordType = record.recordType === 'good' ? 'good' : 'defect';
-  const { stage, shift } = tagInspectionStage(record, workerDirectory);
+  const { stage, shift } = tagInspectionStage(record, workerDirectory, allWorkerRecords);
   return {
     ...record,
     recordType,
@@ -45,13 +44,20 @@ export default function WorkerHistoryModal({ workerName, defects, goods, workerD
     [combinedRecords, workerName]
   );
 
+  const workerRecords = useMemo(
+    () => combinedRecords.filter((r) => r.worker_name === workerName),
+    [combinedRecords, workerName]
+  );
+
   const dayRecords = useMemo(() => {
     if (!selectedDate) return [];
     const group = dateGroups.find((g) => g.date === selectedDate);
-    return (group?.records || []).map((r) => enrichRecord(r, workerDirectory));
-  }, [dateGroups, selectedDate, workerDirectory]);
+    return (group?.records || []).map((r) => enrichRecord(r, workerDirectory, workerRecords));
+  }, [dateGroups, selectedDate, workerDirectory, workerRecords]);
 
-  const previewItem = previewRecord ? enrichRecord(previewRecord, workerDirectory) : null;
+  const previewItem = previewRecord
+    ? enrichRecord(previewRecord, workerDirectory, workerRecords)
+    : null;
   const isDefectPreview = previewItem?.recordType === 'defect';
 
   function handleBack() {
