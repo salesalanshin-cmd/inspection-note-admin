@@ -50,7 +50,7 @@ export default function DefectsPage() {
   const [worker, setWorker] = useState('all');
   const [type, setType] = useState('all');
   const [selected, setSelected] = useState(null);
-  const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
+  const [dateRange, setDateRange] = useState(() => getRecentDaysRange(90));
   const [batchProgress, setBatchProgress] = useState(null);
   const [batchResults, setBatchResults] = useState(null);
   const [batchError, setBatchError] = useState(null);
@@ -98,8 +98,10 @@ export default function DefectsPage() {
 
   useEffect(() => {
     // eslint-disable-next-line no-console
-    console.log('불량 목록:', defects, error);
-  }, [defects, error]);
+    console.log('전체 데이터:', defects?.length, error);
+    // eslint-disable-next-line no-console
+    console.log('날짜 필터 후:', dateFilteredDefects.length, '표시:', filtered.length);
+  }, [defects, error, dateFilteredDefects.length, filtered.length]);
 
   async function handleBatchClassify() {
     const items = selectedRecords
