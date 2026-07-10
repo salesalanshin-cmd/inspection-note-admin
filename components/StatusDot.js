@@ -6,8 +6,8 @@ export default function StatusDot({ done }) {
   return (
     <span
       className={`inline-block h-2.5 w-2.5 rounded-full ${done ? 'bg-good' : 'bg-danger'}`}
-      title={done ? '완료' : '미완료'}
-      aria-label={done ? '완료' : '미완료'}
+      title={done ? '완료' : '미실시'}
+      aria-label={done ? '완료' : '미실시'}
     />
   );
 }

@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import {
   buildFrequentInspectionCompliance,
+  complianceStagesForDots,
   countNonCompliantStages,
   getExcludedWorkerNames,
   groupComplianceByShift,
@@ -26,6 +27,7 @@ import DateRangePicker from '../../components/DateRangePicker';
 import TrafficLightDots from '../../components/TrafficLightDots';
 import MobileSortSelect, { parseSortValue } from '../../components/MobileSortSelect';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
+import WorkerHistoryModal from '../../components/WorkerHistoryModal';
 
 const exportBtnClass =
   'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
@@ -89,13 +91,6 @@ function formatWorkDate(date) {
     day: 'numeric',
     weekday: 'short',
   });
-}
-
-function complianceStagesForDots(row) {
-  return SHIFT_STAGES.map((stage) => ({
-    label: stage,
-    done: row.noData ? false : row[stage]?.done === true,
-  }));
 }
 
 function ShiftBadge({ shift, shiftSource }) {
@@ -169,6 +164,7 @@ export default function FrequentCheckPage() {
   const [exportDateRange, setExportDateRange] = useState(() => getRecentDaysRange(7));
   const [sortKey, setSortKey] = useState('nonCompliant');
   const [sortDir, setSortDir] = useState('desc');
+  const [modalWorker, setModalWorker] = useState(null);
 
   const excludedNames = useMemo(
     () => getExcludedWorkerNames(workerDirectory),
@@ -246,6 +242,9 @@ export default function FrequentCheckPage() {
 
   if (loading) return <div className="p-8 text-muted text-sm">데이터 불러오는 중...</div>;
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
+
+  const clickableRowClass =
+    'cursor-pointer transition-colors hover:bg-surface2/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30';
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -326,6 +325,8 @@ export default function FrequentCheckPage() {
                         key={row.worker_name}
                         header={row.worker_name}
                         badge={<OverallBadge row={row} />}
+                        className={clickableRowClass}
+                        onClick={() => setModalWorker(row.worker_name)}
                       >
                         <MobileCardField label="조">
                           <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
@@ -367,7 +368,11 @@ export default function FrequentCheckPage() {
                       </td>
                     </tr>
                     {group.rows.map((row) => (
-                      <tr key={row.worker_name} className="border-b border-border last:border-0">
+                      <tr
+                        key={row.worker_name}
+                        className={`border-b border-border last:border-0 ${clickableRowClass}`}
+                        onClick={() => setModalWorker(row.worker_name)}
+                      >
                         <td className="px-4 py-3 font-medium text-text">{row.worker_name}</td>
                         <td className="px-4 py-3">
                           <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
@@ -395,6 +400,16 @@ export default function FrequentCheckPage() {
           }
         />
       </div>
+
+      {modalWorker ? (
+        <WorkerHistoryModal
+          workerName={modalWorker}
+          defects={defects}
+          goods={goods}
+          workerDirectory={workerDirectory}
+          onClose={() => setModalWorker(null)}
+        />
+      ) : null}
     </div>
   );
 }

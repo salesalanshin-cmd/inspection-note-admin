@@ -1,13 +1,14 @@
 'use client';
 
+import Link from 'next/link';
 import { Fragment, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import {
   buildFrequentInspectionCompliance,
+  complianceStagesForDots,
   getExcludedWorkerNames,
   groupComplianceByShift,
 } from '../../lib/analytics';
-import { SHIFT_STAGES } from '../../lib/constants';
 import PageHeader from '../../components/PageHeader';
 import PageTableShell from '../../components/PageTableShell';
 import TrafficLightDots from '../../components/TrafficLightDots';
@@ -30,13 +31,6 @@ function formatWorkDate(date) {
     day: 'numeric',
     weekday: 'short',
   });
-}
-
-function complianceStagesForDots(row) {
-  return SHIFT_STAGES.map((stage) => ({
-    label: stage,
-    done: row.noData ? false : row[stage]?.done === true,
-  }));
 }
 
 function ShiftBadge({ shift, shiftSource }) {
@@ -134,6 +128,14 @@ export default function InspectionHistoryPage() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
+        <div className="mb-4 rounded-xl border border-accent/30 bg-accentSoft px-4 py-3 text-sm text-text">
+          이 화면은{' '}
+          <Link href="/frequent-check" className="font-medium text-accent underline-offset-2 hover:underline">
+            자주검사 현황
+          </Link>
+          에 통합되었습니다. 작업자를 클릭하면 동일한 촬영 이력 팝업이 열립니다. 아래는 참고용입니다.
+        </div>
+
         <PageTableShell
           toolbar={
             <div className="flex w-full items-center gap-2 md:w-auto">

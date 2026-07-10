@@ -10,17 +10,16 @@ import {
   resolveFileName,
 } from '../../lib/exportExcel';
 import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
-import { sortRows, toggleSortKey } from '../../lib/tableSort';
+import { sortRows } from '../../lib/tableSort';
 import { requestClassifyPhotosBatch } from '../../lib/classifyClient';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 import PageTableShell from '../../components/PageTableShell';
-import SortableTh from '../../components/SortableTh';
-import FilterToolbar from '../../components/FilterToolbar';
+import SignedImage from '../../components/SignedImage';
 import MobileSortSelect, { parseSortValue } from '../../components/MobileSortSelect';
-import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
+import FilterToolbar from '../../components/FilterToolbar';
 import FivesEditModal from '../../components/FivesEditModal';
 import BatchClassifyReviewModal from '../../components/BatchClassifyReviewModal';
 import BatchClassifyProgress from '../../components/BatchClassifyProgress';
@@ -36,6 +35,9 @@ const actionBtnClass =
 
 const dangerBtnClass =
   'min-h-[44px] rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0';
+
+const desktopSortClass =
+  'hidden min-h-[44px] shrink-0 rounded-xl border border-border bg-surface px-3 text-sm text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 md:block md:min-h-0';
 
 const SOS_CODE_OPTIONS = Object.entries(SOS_ERROR_CODES).map(([value, label]) => ({
   value,
@@ -55,7 +57,7 @@ function getFivesSortValue(record, key) {
       return record.worker_name || '';
     case 'area_type':
       return record.area_type || '';
-    case 'sos_code':
+    case 'sos_error_code':
       return fivesErrorCode(record) || '';
     case 'description':
       return record.description || '';
@@ -99,12 +101,6 @@ export default function FivesPage() {
 
   const recordsById = useMemo(() => new Map(filtered.map((f) => [f.id, f])), [filtered]);
 
-  function handleSort(column) {
-    const next = toggleSortKey(sortKey, sortDir, column);
-    setSortKey(next.key);
-    setSortDir(next.dir);
-  }
-
   function handleMobileSort(combined) {
     const { key, dir } = parseSortValue(combined);
     setSortKey(key);
@@ -143,7 +139,6 @@ export default function FivesPage() {
           .from('fives_reports')
           .update({
             sos_error_code: u.code,
-            sos_code: u.code,
             area_type: SOS_ERROR_CODES[u.code],
             ai_suggested_code: u.ai_suggested_code,
             ai_confidence: u.ai_confidence,
@@ -201,6 +196,18 @@ export default function FivesPage() {
             <FilterToolbar
               primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}
             >
+              <select
+                className={desktopSortClass}
+                value={`${sortKey}:${sortDir}`}
+                onChange={(e) => handleMobileSort(e.target.value)}
+                aria-label="정렬 기준"
+              >
+                {FIVES_SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 onClick={handleExportExcel}
@@ -237,100 +244,71 @@ export default function FivesPage() {
                 options={FIVES_SORT_OPTIONS}
                 onChange={handleMobileSort}
               />
-              <div className="md:hidden">
-                {sortedRows.map((f) => (
-                  <MobileListCard
-                    key={f.id}
-                    header={f.worker_name || '작업자 미상'}
-                    badge={
-                      <span className="inline-block max-w-[8rem] truncate rounded-full bg-surface2 px-2.5 py-0.5 text-xs font-medium text-text">
-                        {fivesLabel(f)}
-                      </span>
-                    }
-                    leading={
-                      <span onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected(f.id)}
-                          onChange={() => toggle(f.id)}
-                          className="h-4 w-4 accent-accent"
-                          aria-label={`${f.worker_name || '작업자'} 선택`}
-                        />
-                      </span>
-                    }
-                    onClick={() => setSelected(f)}
-                  >
-                    <MobileCardField label="구역">{fivesLabel(f)}</MobileCardField>
-                    <MobileCardField label="SOS 코드">{fivesErrorCode(f) || '-'}</MobileCardField>
-                    <MobileCardField label="설명" className="col-span-2">
-                      {f.description || '-'}
-                    </MobileCardField>
-                    <MobileCardField label="촬영시각" className="col-span-2">
-                      {f.created_at ? new Date(f.created_at).toLocaleString('ko-KR') : '-'}
-                    </MobileCardField>
-                  </MobileListCard>
-                ))}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
+                {sortedRows.map((f) => {
+                  const errorCode = fivesErrorCode(f);
+                  return (
+                    <div key={f.id} className="group overflow-hidden rounded-xl bg-surface shadow-card">
+                      <div
+                        className="relative aspect-square cursor-pointer bg-surface2"
+                        onClick={() => setSelected(f)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelected(f);
+                          }
+                        }}
+                        aria-label={`${f.worker_name || '작업자'} 3정5S 기록 수정`}
+                      >
+                        <label
+                          className="absolute left-2 top-2 z-30 flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center rounded-lg border border-border bg-surface/90"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected(f.id)}
+                            onChange={() => toggle(f.id)}
+                            className="h-3.5 w-3.5 accent-accent"
+                            aria-label={`${f.worker_name || '작업자'} 선택`}
+                          />
+                        </label>
+                        {f.image_url ? (
+                          <SignedImage url={f.image_url} alt={fivesLabel(f)} />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted">
+                            이미지 없음
+                          </div>
+                        )}
+                        <div className="absolute bottom-2 left-2 right-2 z-20 flex flex-wrap gap-1">
+                          {f.area_type ? (
+                            <span className="rounded-full bg-accentSoft px-2 py-0.5 text-[10px] font-medium text-accent">
+                              {f.area_type}
+                            </span>
+                          ) : null}
+                          {errorCode ? (
+                            <span className="rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
+                              {errorCode}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="p-2.5 text-[11px] md:text-xs">
+                        <div className="font-medium text-text">{f.worker_name || '작업자 미상'}</div>
+                        <div className="mt-0.5 text-muted">
+                          {f.created_at ? new Date(f.created_at).toLocaleString('ko-KR') : ''}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
                 {sortedRows.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-muted">조건에 맞는 기록이 없습니다</div>
+                  <div className="col-span-full py-12 text-center text-xs text-muted">
+                    조건에 맞는 기록이 없습니다
+                  </div>
                 ) : null}
               </div>
-              <table className="hidden w-full text-sm md:table">
-              <thead>
-                <tr className="sticky top-0 z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
-                  <th className="w-10 px-4 py-3">
-                    <span className="sr-only">선택</span>
-                  </th>
-                  <SortableTh column="worker_name" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
-                    작업자
-                  </SortableTh>
-                  <SortableTh column="area_type" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
-                    구역
-                  </SortableTh>
-                  <SortableTh column="sos_code" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
-                    SOS 코드
-                  </SortableTh>
-                  <SortableTh column="description" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
-                    설명
-                  </SortableTh>
-                  <SortableTh column="created_at" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
-                    촬영시각
-                  </SortableTh>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map((f) => (
-                  <tr
-                    key={f.id}
-                    className="cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-surface2/40"
-                    onClick={() => setSelected(f)}
-                  >
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected(f.id)}
-                        onChange={() => toggle(f.id)}
-                        className="h-3.5 w-3.5 accent-accent"
-                        aria-label={`${f.worker_name || '작업자'} 선택`}
-                      />
-                    </td>
-                    <td className="px-4 py-3 font-medium text-text">{f.worker_name || '작업자 미상'}</td>
-                    <td className="px-4 py-3 text-text">{fivesLabel(f)}</td>
-                    <td className="px-4 py-3 text-muted">{fivesErrorCode(f) || '-'}</td>
-                    <td className="px-4 py-3 text-muted">{f.description || '-'}</td>
-                    <td className="px-4 py-3 text-muted">
-                      {f.created_at ? new Date(f.created_at).toLocaleString('ko-KR') : '-'}
-                    </td>
-                  </tr>
-                ))}
-                {sortedRows.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-xs text-muted">
-                      조건에 맞는 기록이 없습니다
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              </table>
             </>
           }
         />

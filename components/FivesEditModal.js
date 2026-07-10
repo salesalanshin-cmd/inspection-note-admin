@@ -57,7 +57,6 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
       description: description.trim() || null,
       sos_error_code: errorCode || null,
       sos_error_note: errorNote.trim() || null,
-      sos_code: errorCode || null,
       ai_suggested_code: aiSuggestion?.code ?? report.ai_suggested_code ?? null,
       ai_confidence: aiSuggestion?.confidence ?? report.ai_confidence ?? null,
       ai_reason: aiSuggestion?.reason ?? report.ai_reason ?? null,
