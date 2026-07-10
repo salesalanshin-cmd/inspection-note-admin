@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { defectLabel, DEFECT_CODE_LABELS } from '../../lib/constants';
 import { parseMarkingData } from '../../lib/markingData';
-import { getExcludedWorkerNames, filterByExcludedWorkers } from '../../lib/analytics';
+import { filterDefectsForDisplay } from '../../lib/analytics';
 import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
 import { requestClassifyPhotosBatch } from '../../lib/classifyClient';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
@@ -59,14 +59,9 @@ export default function DefectsPage() {
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
     useGalleryBatchSelect();
 
-  const excludedNames = useMemo(
-    () => getExcludedWorkerNames(workerDirectory),
-    [workerDirectory]
-  );
-
   const visibleDefects = useMemo(
-    () => filterByExcludedWorkers(defects, excludedNames),
-    [defects, excludedNames]
+    () => filterDefectsForDisplay(defects, workerDirectory),
+    [defects, workerDirectory]
   );
 
   const dateFilteredDefects = useMemo(

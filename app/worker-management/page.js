@@ -95,6 +95,7 @@ export default function WorkerManagementPage() {
       handles_frequent_check: existing?.handles_frequent_check ?? true,
       handles_fives: existing?.handles_fives ?? true,
       handles_documents: existing?.handles_documents ?? false,
+      handles_defects: existing?.handles_defects ?? existing?.defect_enabled ?? true,
       phone_number: existing?.phone_number ?? '',
       removed: existing?.removed ?? false,
       ...patch,
@@ -124,6 +125,7 @@ export default function WorkerManagementPage() {
       handles_frequent_check: true,
       handles_fives: true,
       handles_documents: false,
+      handles_defects: true,
       phone_number: '',
     });
     setSaving(null);
@@ -158,6 +160,7 @@ export default function WorkerManagementPage() {
       handles_frequent_check: existing?.handles_frequent_check ?? true,
       handles_fives: existing?.handles_fives ?? true,
       handles_documents: existing?.handles_documents ?? false,
+      handles_defects: existing?.handles_defects ?? existing?.defect_enabled ?? true,
       phone_number: existing?.phone_number ?? '',
       removed: true,
     });
@@ -237,6 +240,7 @@ export default function WorkerManagementPage() {
                 const handlesFrequent = row?.handles_frequent_check ?? true;
                 const handlesFives = row?.handles_fives ?? true;
                 const handlesDocuments = row?.handles_documents ?? false;
+                const handlesDefects = row?.handles_defects ?? row?.defect_enabled ?? true;
                 const defaultShift =
                   row?.default_shift === 'day' || row?.default_shift === 'night'
                     ? row.default_shift
@@ -307,6 +311,16 @@ export default function WorkerManagementPage() {
                             })
                           }
                         />
+                        <DutyPill
+                          label="불량관리"
+                          active={handlesDefects}
+                          disabled={isSaving}
+                          onClick={() =>
+                            upsertWorker(name, {
+                              handles_defects: !handlesDefects,
+                            })
+                          }
+                        />
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -366,8 +380,9 @@ export default function WorkerManagementPage() {
         </div>
 
         <p className="text-xs text-muted">
-          제외된 작업자는 작업자 현황, 자주검사 현황, 대시보드, 불량 기록 등 실적 화면에서 표시되지
-          않습니다. 근무조를 주간/야간으로 고정하면 자동 판단보다 우선 적용됩니다.
+          제외된 작업자는 작업자 현황, 자주검사 현황, 대시보드 등 실적 화면에서 표시되지 않습니다.
+          단, 불량관리가 켜져 있으면 불량 기록 페이지에는 해당 작업자 데이터가 표시됩니다. 근무조를
+          주간/야간으로 고정하면 자동 판단보다 우선 적용됩니다.
         </p>
       </div>
 
