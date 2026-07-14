@@ -4,8 +4,12 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { SOS_ERROR_CODES, fivesErrorCode, fivesLabel } from '../lib/constants';
 import { requestClassifyPhoto } from '../lib/classifyClient';
+import {
+  buildImageDownloadFilename,
+  downloadRecordImage,
+} from '../lib/downloadImages';
 import AiSuggestionBanner from './AiSuggestionBanner';
-import SignedImage from './SignedImage';
+import ImageZoom from './ImageZoom';
 import ModalShell, { ModalFooterActions } from './ModalShell';
 
 const inputClass =
@@ -19,6 +23,7 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
   const [errorNote, setErrorNote] = useState(report.sos_error_note || '');
   const [saving, setSaving] = useState(false);
   const [classifying, setClassifying] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState(null);
   const [aiSuggestion, setAiSuggestion] = useState(null);
 
@@ -45,6 +50,26 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
       setError(err.message);
     } finally {
       setClassifying(false);
+    }
+  }
+
+  async function handleDownloadImage() {
+    if (!report.image_url) {
+      setError('다운로드할 이미지가 없습니다.');
+      return;
+    }
+
+    setDownloading(true);
+    setError(null);
+    try {
+      await downloadRecordImage({
+        imageUrl: report.image_url,
+        filename: buildImageDownloadFilename(report.worker_name, report.created_at),
+      });
+    } catch (err) {
+      setError(err.message || '이미지 다운로드에 실패했습니다.');
+    } finally {
+      setDownloading(false);
     }
   }
 
@@ -103,7 +128,7 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
             style={{ aspectRatio }}
           >
             {report.image_url ? (
-              <SignedImage
+              <ImageZoom
                 url={report.image_url}
                 alt={fivesLabel(report)}
                 fit="contain"
@@ -123,9 +148,18 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
               type="button"
               onClick={handleAiClassify}
               disabled={classifying || saving || !report.image_url}
-              className="w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="min-h-[44px] w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
             >
               {classifying ? 'AI 분석 중...' : 'AI 자동판정'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadImage}
+              disabled={downloading || saving || !report.image_url}
+              className="min-h-[44px] w-full rounded-xl border border-border px-4 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50 md:min-h-0"
+            >
+              {downloading ? '다운로드 중...' : '이미지 다운로드'}
             </button>
 
             {aiSuggestion ? (

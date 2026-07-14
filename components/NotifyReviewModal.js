@@ -2,13 +2,16 @@
 
 import { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
+import { getDisplayName } from '../lib/analytics';
 import ModalShell from './ModalShell';
 
 /**
  * 미완료 담당 업무를 문장으로 조합한 알림 메시지를 생성합니다.
  * 미완료 항목이 없으면(전체 완료자를 선택한 경우) 확인 문구를 반환합니다.
+ * 메시지 본문의 이름은 표시용(display_name)을 사용합니다.
  */
-function buildMessage(row) {
+function buildMessage(row, workerDirectory) {
+  const name = getDisplayName(row.worker_name, workerDirectory);
   const items = [];
   if (row.frequentCheck?.status === 'fail') {
     items.push(`${row.frequentCheck.detail} 검사`);
@@ -17,15 +20,17 @@ function buildMessage(row) {
   if (row.documents?.status === 'fail') items.push('문서스캔 기록');
 
   if (items.length === 0) {
-    return `[검사노트] ${row.worker_name}님, 오늘 담당 업무 기록이 모두 확인되었습니다. 감사합니다.`;
+    return `[검사노트] ${name}님, 오늘 담당 업무 기록이 모두 확인되었습니다. 감사합니다.`;
   }
 
-  return `[검사노트] ${row.worker_name}님, 오늘 ${items.join('/')}이(가) 확인되지 않았습니다. 확인 후 기록해주세요.`;
+  return `[검사노트] ${name}님, 오늘 ${items.join('/')}이(가) 확인되지 않았습니다. 확인 후 기록해주세요.`;
 }
 
-export default function NotifyReviewModal({ rows, onClose }) {
+export default function NotifyReviewModal({ rows, workerDirectory, onClose }) {
   const [messages, setMessages] = useState(() =>
-    Object.fromEntries((rows || []).map((r) => [r.worker_name, buildMessage(r)]))
+    Object.fromEntries(
+      (rows || []).map((r) => [r.worker_name, buildMessage(r, workerDirectory)])
+    )
   );
   const [copiedKey, setCopiedKey] = useState(null);
 
@@ -45,7 +50,10 @@ export default function NotifyReviewModal({ rows, onClose }) {
 
   async function copyAll() {
     const text = (rows || [])
-      .map((r) => `▶ ${r.worker_name}\n${messages[r.worker_name] ?? ''}`)
+      .map((r) => {
+        const label = getDisplayName(r.worker_name, workerDirectory);
+        return `▶ ${label}\n${messages[r.worker_name] ?? ''}`;
+      })
       .join('\n\n');
     try {
       await navigator.clipboard.writeText(text);
@@ -90,11 +98,12 @@ export default function NotifyReviewModal({ rows, onClose }) {
         {(rows || []).map((row) => {
           const hasPhone = !!row.phone_number;
           const copied = copiedKey === row.worker_name;
+          const displayName = getDisplayName(row.worker_name, workerDirectory);
           return (
             <div key={row.worker_name} className="rounded-xl border border-border bg-surface p-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-sm font-semibold text-text">{row.worker_name}</span>
+                  <span className="text-sm font-semibold text-text">{displayName}</span>
                   {hasPhone ? (
                     <span className="text-xs text-muted">{row.phone_number}</span>
                   ) : (

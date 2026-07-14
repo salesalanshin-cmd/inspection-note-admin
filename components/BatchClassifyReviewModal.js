@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import SignedImage from './SignedImage';
 import { CONFIDENCE_LABELS, getCodeLabel } from '../lib/constants';
+import { getDisplayName } from '../lib/analytics';
 import ModalShell, { ModalFooterActions } from './ModalShell';
 
 const inputClass =
@@ -15,6 +16,7 @@ const inputClass =
  * @param {Map<string, object>} props.recordsById
  * @param {Array<{id: string, code?: string, confidence?: string, reason?: string, error?: string}>} props.results
  * @param {Array<{value: string, label: string}>} props.codeOptions
+ * @param {Array} [props.workerDirectory]
  * @param {(updates: Array<{id: string, code: string, ai_suggested_code, ai_confidence, ai_reason}>) => Promise<void>} props.onSave
  * @param {() => void} props.onClose
  */
@@ -24,6 +26,7 @@ export default function BatchClassifyReviewModal({
   recordsById,
   results,
   codeOptions,
+  workerDirectory,
   onSave,
   onClose,
 }) {
@@ -118,6 +121,9 @@ export default function BatchClassifyReviewModal({
       <div className="space-y-3 p-4 md:p-5">
         {results.map((r) => {
           const record = recordsById.get(r.id);
+          const displayName = record?.worker_name
+            ? getDisplayName(record.worker_name, workerDirectory)
+            : null;
           const isLow = r.confidence === 'low';
           const rowClass = isLow
             ? 'border-warn/40 bg-warnSoft/30'
@@ -129,7 +135,7 @@ export default function BatchClassifyReviewModal({
                 key={r.id}
                 className="rounded-xl border border-danger/30 bg-dangerSoft/20 p-3 text-xs"
               >
-                <span className="font-medium text-text">{record?.worker_name || r.id}</span>
+                <span className="font-medium text-text">{displayName || r.id}</span>
                 <span className="ml-2 text-danger">판정 실패: {r.error}</span>
               </div>
             );
@@ -148,7 +154,7 @@ export default function BatchClassifyReviewModal({
               </div>
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="font-medium text-text">{record?.worker_name || '작업자 미상'}</span>
+                  <span className="font-medium text-text">{displayName || '작업자 미상'}</span>
                   {r.code ? (
                     <span className="text-muted">
                       AI: {r.code} ({getCodeLabel(codeSet, r.code)}) · 확신도:{' '}

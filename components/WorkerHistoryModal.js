@@ -3,10 +3,15 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { defectLabel } from '../lib/constants';
-import { groupWorkerRecordsByDate, tagInspectionStage } from '../lib/analytics';
+import { getDisplayName, groupWorkerRecordsByDate, tagInspectionStage } from '../lib/analytics';
+import {
+  buildImageDownloadFilename,
+  downloadRecordImage,
+} from '../lib/downloadImages';
 import DefectMarkerOverlay from './DefectMarkerOverlay';
 import ModalShell from './ModalShell';
 import SignedImage from './SignedImage';
+import ImageZoom from './ImageZoom';
 import { ResultBadge, StageBadge } from './InspectionHistoryDetailModal';
 
 function formatDateListLabel(dateStr) {
@@ -30,6 +35,8 @@ function enrichRecord(record, workerDirectory, allWorkerRecords) {
 export default function WorkerHistoryModal({ workerName, defects, goods, workerDirectory, onClose }) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [previewRecord, setPreviewRecord] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(null);
 
   const combinedRecords = useMemo(
     () => [
@@ -63,13 +70,35 @@ export default function WorkerHistoryModal({ workerName, defects, goods, workerD
   function handleBack() {
     if (previewRecord) {
       setPreviewRecord(null);
+      setDownloadError(null);
       return;
     }
     setSelectedDate(null);
   }
 
+  async function handleDownloadPreview() {
+    if (!previewItem?.image_url) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      await downloadRecordImage({
+        imageUrl: previewItem.image_url,
+        filename: buildImageDownloadFilename(
+          getDisplayName(workerName, workerDirectory),
+          previewItem.created_at
+        ),
+        ...(isDefectPreview ? { bucket: 'defect-images' } : {}),
+      });
+    } catch (err) {
+      setDownloadError(err.message || '이미지 다운로드에 실패했습니다.');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   const showBack = Boolean(selectedDate || previewRecord);
-  const title = `${workerName}님의 자주검사 이력`;
+  const displayName = getDisplayName(workerName, workerDirectory);
+  const title = `${displayName}님의 자주검사 이력`;
 
   return (
     <ModalShell
@@ -141,6 +170,7 @@ export default function WorkerHistoryModal({ workerName, defects, goods, workerD
                           url={r.image_url}
                           alt={r.recordType === 'defect' ? defectLabel(r) : '양품'}
                           sizes="(max-width: 768px) 50vw, 200px"
+                          bucket={r.recordType === 'defect' ? 'defect-images' : undefined}
                         />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center text-[10px] text-muted">
@@ -178,13 +208,13 @@ export default function WorkerHistoryModal({ workerName, defects, goods, workerD
                 }}
               >
                 {previewItem.image_url ? (
-                  <>
-                    <SignedImage
-                      url={previewItem.image_url}
-                      alt={isDefectPreview ? defectLabel(previewItem) : '양품'}
-                      fit="contain"
-                      sizes="(max-width: 768px) 100vw, 640px"
-                    />
+                  <ImageZoom
+                    url={previewItem.image_url}
+                    alt={isDefectPreview ? defectLabel(previewItem) : '양품'}
+                    fit="contain"
+                    sizes="(max-width: 768px) 100vw, 640px"
+                    bucket={isDefectPreview ? 'defect-images' : undefined}
+                  >
                     {isDefectPreview ? (
                       <DefectMarkerOverlay
                         markingData={previewItem.marking_data}
@@ -192,18 +222,35 @@ export default function WorkerHistoryModal({ workerName, defects, goods, workerD
                         imageHeight={previewItem.image_height}
                       />
                     ) : null}
-                  </>
+                  </ImageZoom>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">
                     이미지 없음
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted">
-                {previewItem.created_at
-                  ? new Date(previewItem.created_at).toLocaleString('ko-KR')
-                  : ''}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted">
+                  {previewItem.created_at
+                    ? new Date(previewItem.created_at).toLocaleString('ko-KR')
+                    : ''}
+                </p>
+                {previewItem.image_url ? (
+                  <button
+                    type="button"
+                    onClick={handleDownloadPreview}
+                    disabled={downloading}
+                    className="min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50 md:min-h-0"
+                  >
+                    {downloading ? '다운로드 중...' : '이미지 다운로드'}
+                  </button>
+                ) : null}
+              </div>
+              {downloadError ? (
+                <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">
+                  {downloadError}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

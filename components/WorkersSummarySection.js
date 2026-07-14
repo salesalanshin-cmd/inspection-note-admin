@@ -7,6 +7,7 @@ import {
   buildWorkerFivesSummary,
   buildWorkerLastActivityMap,
   buildWorkerDailyStatusMap,
+  buildWorkerDisplayNameMap,
   getComplianceStatusLabel,
   getExcludedWorkerNames,
 } from '../lib/analytics';
@@ -159,6 +160,11 @@ export default function WorkersSummarySection({
     [workerDirectory]
   );
 
+  const displayMap = useMemo(
+    () => buildWorkerDisplayNameMap(workerDirectory),
+    [workerDirectory]
+  );
+
   const workerRows = useMemo(() => {
     const stats = buildWorkerStats(defects, goods, fives, excludedNames);
     const frequentMap = buildWorkerFrequentSummary(
@@ -265,7 +271,9 @@ export default function WorkersSummarySection({
                 알림 발송 대상 {alertTargets.length}명
               </div>
               <div className="text-xs text-muted">
-                {alertTargets.map((w) => w.worker_name).join(' · ')}
+                {alertTargets
+                  .map((w) => displayMap.get(w.worker_name) || w.worker_name)
+                  .join(' · ')}
               </div>
             </div>
           )}
@@ -284,7 +292,11 @@ export default function WorkersSummarySection({
           />
           <div className="md:hidden">
             {workers.map((w) => (
-              <MobileListCard key={w.worker_name} header={w.worker_name} badge={workerStatusBadge(w)}>
+              <MobileListCard
+                key={w.worker_name}
+                header={displayMap.get(w.worker_name) || w.worker_name}
+                badge={workerStatusBadge(w)}
+              >
                 <MobileCardField label="자주검사(오늘)">
                   <TrafficLightDots stages={w.todayFrequentStages} />
                 </MobileCardField>
@@ -375,7 +387,9 @@ export default function WorkersSummarySection({
             <tbody>
               {workers.map((w) => (
                 <tr key={w.worker_name} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-medium text-text">{w.worker_name}</td>
+                  <td className="px-4 py-3 font-medium text-text">
+                    {displayMap.get(w.worker_name) || w.worker_name}
+                  </td>
                   <td className="px-4 py-3">
                     <TrafficLightDots stages={w.todayFrequentStages} />
                   </td>

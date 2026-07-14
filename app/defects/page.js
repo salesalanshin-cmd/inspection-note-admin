@@ -4,11 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { defectLabel, DEFECT_CODE_LABELS } from '../../lib/constants';
 import { parseMarkingData } from '../../lib/markingData';
-import { filterDefectsForDisplay } from '../../lib/analytics';
+import { buildWorkerDisplayNameMap, filterDefectsForDisplay } from '../../lib/analytics';
 import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
 import { requestClassifyPhotosBatch } from '../../lib/classifyClient';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
+import {
+  buildImageDownloadFilename,
+  downloadImagesAsZip,
+} from '../../lib/downloadImages';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 import SignedImage from '../../components/SignedImage';
@@ -54,6 +58,7 @@ export default function DefectsPage() {
   const [batchProgress, setBatchProgress] = useState(null);
   const [batchResults, setBatchResults] = useState(null);
   const [batchError, setBatchError] = useState(null);
+  const [downloadLoading, setDownloadLoading] = useState(false);
   const [trashConfirm, setTrashConfirm] = useState(false);
   const [trashLoading, setTrashLoading] = useState(false);
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
@@ -62,6 +67,11 @@ export default function DefectsPage() {
   const visibleDefects = useMemo(
     () => filterDefectsForDisplay(defects, workerDirectory),
     [defects, workerDirectory]
+  );
+
+  const displayMap = useMemo(
+    () => buildWorkerDisplayNameMap(workerDirectory),
+    [workerDirectory]
   );
 
   const dateFilteredDefects = useMemo(
@@ -144,6 +154,37 @@ export default function DefectsPage() {
     refetch();
   }
 
+  async function handleDownloadSelected() {
+    const items = selectedRecords
+      .filter((d) => d.image_url)
+      .map((d) => {
+        const w = d.worker_name;
+        return {
+          imageUrl: d.image_url,
+          filename: buildImageDownloadFilename(
+            (w && (displayMap.get(w) || w)) || w,
+            d.created_at
+          ),
+          bucket: 'defect-images',
+        };
+      });
+
+    if (!items.length) {
+      setBatchError('이미지가 있는 항목을 선택해 주세요.');
+      return;
+    }
+
+    setBatchError(null);
+    setDownloadLoading(true);
+    try {
+      await downloadImagesAsZip(items, '불량기록_선택.zip');
+    } catch (err) {
+      setBatchError(err.message || '이미지 다운로드에 실패했습니다.');
+    } finally {
+      setDownloadLoading(false);
+    }
+  }
+
   async function handleMoveToTrash() {
     setTrashLoading(true);
     try {
@@ -161,7 +202,7 @@ export default function DefectsPage() {
 
   function handleExportExcel() {
     const rows = filtered.map((d) => ({
-      작업자: d.worker_name || '',
+      작업자: (d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '',
       유형: d.defect_code || '',
       세부유형: d.defect_type || '',
       촬영시각: formatExportDateTime(d.created_at),
@@ -191,7 +232,7 @@ export default function DefectsPage() {
               <option value="all">전체 작업자</option>
               {workers.map((w) => (
                 <option key={w} value={w}>
-                  {w}
+                  {displayMap.get(w) || w}
                 </option>
               ))}
             </select>
@@ -265,7 +306,7 @@ export default function DefectsPage() {
                       checked={isSelected(d.id)}
                       onChange={() => toggle(d.id)}
                       className="h-3.5 w-3.5 accent-accent"
-                      aria-label={`${d.worker_name || '작업자'} 선택`}
+                      aria-label={`${(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '작업자'} 선택`}
                     />
                   </label>
                   {d.image_url ? (
@@ -308,7 +349,9 @@ export default function DefectsPage() {
                   </button>
                 </div>
                 <div className="p-2.5 text-[11px] md:text-xs">
-                  <div className="font-medium text-text">{d.worker_name || '작업자 미상'}</div>
+                  <div className="font-medium text-text">
+                    {(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '작업자 미상'}
+                  </div>
                   <div className="mt-0.5 text-muted">
                     {d.created_at ? new Date(d.created_at).toLocaleString('ko-KR') : ''}
                   </div>
@@ -327,6 +370,7 @@ export default function DefectsPage() {
       {selected && (
         <DefectEditModal
           report={selected}
+          workerDirectory={workerDirectory}
           onClose={() => setSelected(null)}
           onSaved={() => refetch()}
         />
@@ -347,6 +391,7 @@ export default function DefectsPage() {
           recordsById={recordsById}
           results={batchResults}
           codeOptions={DEFECT_CODE_OPTIONS}
+          workerDirectory={workerDirectory}
           onSave={handleBatchSave}
           onClose={() => setBatchResults(null)}
         />
@@ -371,6 +416,14 @@ export default function DefectsPage() {
             className={exportBtnClass}
           >
             AI 일괄판정
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadSelected}
+            disabled={downloadLoading}
+            className={actionBtnClass}
+          >
+            {downloadLoading ? '다운로드 중...' : `선택 ${selectedCount}개 다운로드`}
           </button>
           <button type="button" onClick={() => setTrashConfirm(true)} className={dangerBtnClass}>
             휴지통으로 이동

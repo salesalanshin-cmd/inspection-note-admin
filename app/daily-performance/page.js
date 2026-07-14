@@ -8,6 +8,7 @@ import {
   buildFrequentInspectionCompliance,
   buildFrequentStageCompletionByShift,
   buildOverdueFrequentMisses,
+  buildWorkerDisplayNameMap,
   complianceStagesForDots,
   getExcludedWorkerNames,
   getStageNonComplianceList,
@@ -120,14 +121,14 @@ function formatWorkDate(date) {
   });
 }
 
-function WorkerNameButton({ name, onClick }) {
+function WorkerNameButton({ name, displayName, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className="text-left font-medium text-text underline-offset-2 transition-colors hover:text-accent hover:underline"
     >
-      {name}
+      {displayName || name}
     </button>
   );
 }
@@ -272,13 +273,14 @@ function FrequentShiftStageSummaryBar({ data, compliance, eligibleNames, onOpenM
   );
 }
 
-function StageMissPopover({ section, onClose }) {
+function StageMissPopover({ section, displayMap, onClose }) {
   if (!section) return null;
 
+  const displayNames = section.names.map((n) => displayMap?.get(n) || n);
   const title =
-    section.names.length === 0
+    displayNames.length === 0
       ? `${section.shiftLabel} ${section.stage}`
-      : `${section.shiftLabel} ${section.stage} 미실시자 (${section.names.length}명)`;
+      : `${section.shiftLabel} ${section.stage} 미실시자 (${displayNames.length}명)`;
 
   return (
     <div
@@ -303,17 +305,17 @@ function StageMissPopover({ section, onClose }) {
         <h3 id="stage-miss-title" className="pr-6 text-sm font-medium text-text">
           {title}
         </h3>
-        {section.names.length === 0 ? (
+        {displayNames.length === 0 ? (
           <p className="mt-2 text-sm font-medium text-good">전원 완료</p>
         ) : (
-          <p className="mt-2 text-sm leading-relaxed text-text">{section.names.join(', ')}</p>
+          <p className="mt-2 text-sm leading-relaxed text-text">{displayNames.join(', ')}</p>
         )}
       </div>
     </div>
   );
 }
 
-function PriorityMissSection({ workers, onSelectWorker, onRefresh }) {
+function PriorityMissSection({ workers, displayMap, onSelectWorker, onRefresh }) {
   return (
     <div className="mb-2 rounded-xl border border-border bg-surface px-3 py-2.5">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -346,7 +348,9 @@ function PriorityMissSection({ workers, onSelectWorker, onRefresh }) {
                 onClick={() => onSelectWorker(worker.worker_name)}
                 className="flex w-full flex-col items-start gap-2 rounded-xl border border-border bg-surface2/40 px-3 py-2.5 text-left transition-colors hover:bg-surface2 sm:flex-row sm:items-center sm:justify-between"
               >
-                <span className="text-sm font-medium text-text">{worker.worker_name}</span>
+                <span className="text-sm font-medium text-text">
+                  {displayMap?.get(worker.worker_name) || worker.worker_name}
+                </span>
                 <span className="flex flex-wrap gap-1.5">
                   {worker.labels.map((label) => (
                     <span
@@ -384,6 +388,11 @@ export default function DailyPerformancePage() {
 
   const excludedNames = useMemo(
     () => getExcludedWorkerNames(workerDirectory),
+    [workerDirectory]
+  );
+
+  const displayMap = useMemo(
+    () => buildWorkerDisplayNameMap(workerDirectory),
     [workerDirectory]
   );
 
@@ -573,6 +582,7 @@ export default function DailyPerformancePage() {
             {isToday ? (
               <PriorityMissSection
                 workers={priorityMisses}
+                displayMap={displayMap}
                 onSelectWorker={scrollToWorker}
                 onRefresh={() => setNow(new Date())}
               />
@@ -614,6 +624,7 @@ export default function DailyPerformancePage() {
                             header={
                               <WorkerNameButton
                                 name={row.worker_name}
+                                displayName={displayMap.get(row.worker_name)}
                                 onClick={() => setDetailWorker(row.worker_name)}
                               />
                             }
@@ -622,7 +633,7 @@ export default function DailyPerformancePage() {
                               <SelectionCheckbox
                                 checked={isSelected}
                                 onChange={() => toggle(row.worker_name)}
-                                label={`${row.worker_name} 선택`}
+                                label={`${displayMap.get(row.worker_name) || row.worker_name} 선택`}
                               />
                             }
                             className={`${isWarning ? 'border-l-2 border-l-danger' : ''} ${
@@ -737,12 +748,13 @@ export default function DailyPerformancePage() {
                             <SelectionCheckbox
                               checked={isSelected}
                               onChange={() => toggle(row.worker_name)}
-                              label={`${row.worker_name} 선택`}
+                              label={`${displayMap.get(row.worker_name) || row.worker_name} 선택`}
                             />
                           </td>
                           <td className="px-4 py-3">
                             <WorkerNameButton
                               name={row.worker_name}
+                              displayName={displayMap.get(row.worker_name)}
                               onClick={() => setDetailWorker(row.worker_name)}
                             />
                           </td>
@@ -824,10 +836,18 @@ export default function DailyPerformancePage() {
       ) : null}
 
       {reviewOpen ? (
-        <NotifyReviewModal rows={selectedRows} onClose={() => setReviewOpen(false)} />
+        <NotifyReviewModal
+          rows={selectedRows}
+          workerDirectory={workerDirectory}
+          onClose={() => setReviewOpen(false)}
+        />
       ) : null}
 
-      <StageMissPopover section={stageMissSection} onClose={() => setStageMissSection(null)} />
+      <StageMissPopover
+        section={stageMissSection}
+        displayMap={displayMap}
+        onClose={() => setStageMissSection(null)}
+      />
 
       {detailWorker ? (
         <WorkerDailyDetailModal

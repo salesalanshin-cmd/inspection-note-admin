@@ -5,6 +5,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import {
   buildFrequentInspectionCompliance,
+  buildWorkerDisplayNameMap,
   complianceStagesForDots,
   getExcludedWorkerNames,
   groupComplianceByShift,
@@ -90,6 +91,11 @@ export default function InspectionHistoryPage() {
     [workerDirectory]
   );
 
+  const displayMap = useMemo(
+    () => buildWorkerDisplayNameMap(workerDirectory),
+    [workerDirectory]
+  );
+
   const compliance = useMemo(
     () =>
       buildFrequentInspectionCompliance(
@@ -171,7 +177,7 @@ export default function InspectionHistoryPage() {
                     {group.rows.map((row) => (
                       <MobileListCard
                         key={row.worker_name}
-                        header={row.worker_name}
+                        header={displayMap.get(row.worker_name) || row.worker_name}
                         badge={<OverallBadge row={row} />}
                         className={clickableRowClass}
                         onClick={() => setModalWorker(row.worker_name)}
@@ -222,7 +228,9 @@ export default function InspectionHistoryPage() {
                           tabIndex={0}
                           role="button"
                         >
-                          <td className="px-4 py-3 font-medium text-text">{row.worker_name}</td>
+                          <td className="px-4 py-3 font-medium text-text">
+                            {displayMap.get(row.worker_name) || row.worker_name}
+                          </td>
                           <td className="px-4 py-3">
                             <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
                           </td>

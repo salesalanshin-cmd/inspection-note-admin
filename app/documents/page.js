@@ -6,8 +6,13 @@ import {
   DOC_ERROR_CODES,
   docLabel,
 } from '../../lib/constants';
+import { buildWorkerDisplayNameMap } from '../../lib/analytics';
 import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
+import {
+  buildImageDownloadFilename,
+  downloadImagesAsZip,
+} from '../../lib/downloadImages';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
 import PageHeader from '../../components/PageHeader';
 import StatCard from '../../components/StatCard';
@@ -37,7 +42,7 @@ const dangerBtnClass =
   'rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50';
 
 export default function DocumentsPage() {
-  const { loading, error, docs, refetch } = useReports();
+  const { loading, error, docs, refetch, workerDirectory } = useReports();
   const [worker, setWorker] = useState('all');
   const [docType, setDocType] = useState('all');
   const [errorCode, setErrorCode] = useState('all');
@@ -45,8 +50,15 @@ export default function DocumentsPage() {
   const [selected, setSelected] = useState(null);
   const [trashConfirm, setTrashConfirm] = useState(false);
   const [trashLoading, setTrashLoading] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [batchError, setBatchError] = useState(null);
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
     useGalleryBatchSelect();
+
+  const displayMap = useMemo(
+    () => buildWorkerDisplayNameMap(workerDirectory),
+    [workerDirectory]
+  );
 
   const dateFiltered = useMemo(
     () => filterByCreatedAtDateRange(docs, dateRange),
@@ -71,6 +83,11 @@ export default function DocumentsPage() {
     return true;
   });
 
+  const selectedRecords = useMemo(
+    () => filtered.filter((d) => selectedIds.has(d.id)),
+    [filtered, selectedIds]
+  );
+
   const errorCount = filtered.filter((d) => d.doc_error_code).length;
   const normalRate =
     filtered.length > 0
@@ -78,6 +95,36 @@ export default function DocumentsPage() {
       : '—';
 
   const canExport = isDateRangeValid(dateRange) && filtered.length > 0;
+
+  async function handleDownloadSelected() {
+    const items = selectedRecords
+      .filter((d) => d.image_url)
+      .map((d) => {
+        const w = d.worker_name;
+        return {
+          imageUrl: d.image_url,
+          filename: buildImageDownloadFilename(
+            (w && (displayMap.get(w) || w)) || w,
+            d.created_at
+          ),
+        };
+      });
+
+    if (!items.length) {
+      setBatchError('이미지가 있는 항목을 선택해 주세요.');
+      return;
+    }
+
+    setBatchError(null);
+    setDownloadLoading(true);
+    try {
+      await downloadImagesAsZip(items, '문서스캔_선택.zip');
+    } catch (err) {
+      setBatchError(err.message || '이미지 다운로드에 실패했습니다.');
+    } finally {
+      setDownloadLoading(false);
+    }
+  }
 
   async function handleMoveToTrash() {
     setTrashLoading(true);
@@ -96,7 +143,7 @@ export default function DocumentsPage() {
 
   function handleExportExcel() {
     const rows = filtered.map((d) => ({
-      작업자: d.worker_name || '',
+      작업자: (d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '',
       문서유형: d.doc_type || '',
       오류코드: d.doc_error_code || '',
       오류내용: d.doc_error_code ? DOC_ERROR_CODES[d.doc_error_code] || '' : '',
@@ -130,7 +177,7 @@ export default function DocumentsPage() {
               <option value="all">전체 작업자</option>
               {workers.map((w) => (
                 <option key={w} value={w}>
-                  {w}
+                  {displayMap.get(w) || w}
                 </option>
               ))}
             </select>
@@ -182,6 +229,10 @@ export default function DocumentsPage() {
           </FilterToolbar>
         </div>
 
+        {batchError ? (
+          <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{batchError}</div>
+        ) : null}
+
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
           {filtered.map((d) => (
             <div key={d.id} className="bg-surface rounded-xl shadow-card overflow-hidden group">
@@ -206,7 +257,7 @@ export default function DocumentsPage() {
                     checked={isSelected(d.id)}
                     onChange={() => toggle(d.id)}
                     className="h-3.5 w-3.5 accent-accent"
-                    aria-label={`${d.worker_name || '작업자'} 선택`}
+                    aria-label={`${(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '작업자'} 선택`}
                   />
                 </label>
                 {d.image_url ? (
@@ -226,7 +277,10 @@ export default function DocumentsPage() {
                 <div className="truncate font-medium text-text">
                   {d.doc_title || d.doc_type || '문서'}
                 </div>
-                <div className="mt-0.5 text-muted">{d.worker_name || '작업자 미상'}</div>
+                <div className="mt-0.5 text-muted">
+                  {(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) ||
+                    '작업자 미상'}
+                </div>
                 <div className="mt-0.5 text-muted">
                   {d.created_at ? new Date(d.created_at).toLocaleString('ko-KR') : ''}
                 </div>
@@ -261,6 +315,14 @@ export default function DocumentsPage() {
       />
 
       <GalleryFloatingBar count={selectedCount}>
+        <button
+          type="button"
+          onClick={handleDownloadSelected}
+          disabled={downloadLoading}
+          className={actionBtnClass}
+        >
+          {downloadLoading ? '다운로드 중...' : `선택 ${selectedCount}개 다운로드`}
+        </button>
         <button type="button" onClick={() => setTrashConfirm(true)} className={dangerBtnClass}>
           선택 {selectedCount}개 휴지통으로 이동
         </button>

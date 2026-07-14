@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { fivesErrorCode } from '../lib/constants';
-import { recordsForWorkerInWorkRange, tagInspectionStage } from '../lib/analytics';
+import { getDisplayName, recordsForWorkerInWorkRange, tagInspectionStage } from '../lib/analytics';
 import ModalShell from './ModalShell';
 import SignedImage from './SignedImage';
 import { ResultBadge, StageBadge } from './InspectionHistoryDetailModal';
@@ -122,7 +122,7 @@ export default function WorkerDailyDetailModal({
     [fives, workerName, date]
   );
 
-  const title = `${workerName}님의 ${formatWorkDateTitle(date)} 실적`;
+  const title = `${getDisplayName(workerName, workerDirectory)}님의 ${formatWorkDateTitle(date)} 실적`;
 
   return (
     <ModalShell

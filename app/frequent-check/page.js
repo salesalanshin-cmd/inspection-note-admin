@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import {
   buildFrequentInspectionCompliance,
+  buildWorkerDisplayNameMap,
   complianceStagesForDots,
   countNonCompliantStages,
   getExcludedWorkerNames,
@@ -38,7 +39,7 @@ const FREQUENT_SORT_OPTIONS = [
   { value: 'nonCompliant:desc', label: '미준수 단계 많은순' },
   { value: 'worker_name:asc', label: '작업자명순' },
   { value: 'overall:asc', label: '종합판정 (정상 우선)' },
-  { value: 'shift:asc', label: '조순' },
+  { value: 'shift:asc', label: '시프트순' },
 ];
 
 const dayNavBtnClass =
@@ -50,12 +51,12 @@ function startOfDay(date) {
   return d;
 }
 
-function complianceToExportRows(dateStr, rows) {
+function complianceToExportRows(dateStr, rows, displayMap) {
   return rows.map((row) => {
     const exportRow = {
       날짜: dateStr,
-      작업자: row.worker_name,
-      조: shiftLabel(row.shift),
+      작업자: displayMap.get(row.worker_name) || row.worker_name,
+      시프트: shiftLabel(row.shift),
     };
     for (const stage of SHIFT_STAGES) {
       exportRow[`${stage} 상태`] = stageStatusText(row[stage]);
@@ -171,6 +172,11 @@ export default function FrequentCheckPage() {
     [workerDirectory]
   );
 
+  const displayMap = useMemo(
+    () => buildWorkerDisplayNameMap(workerDirectory),
+    [workerDirectory]
+  );
+
   const compliance = useMemo(
     () =>
       buildFrequentInspectionCompliance(
@@ -211,7 +217,7 @@ export default function FrequentCheckPage() {
         workerDirectory
       );
       const sorted = sortComplianceByShift(dayCompliance);
-      rows.push(...complianceToExportRows(dateStr, sorted));
+      rows.push(...complianceToExportRows(dateStr, sorted, displayMap));
     }
 
     exportToExcel(
@@ -251,7 +257,7 @@ export default function FrequentCheckPage() {
       <PageHeader
         eyebrow="FREQUENT CHECK"
         title="자주검사 현황"
-        description="근무조는 작업자 관리 설정(고정) 또는 당일 기록(자동)으로 결정되며, 초품·중품·종품 검사 준수 여부를 확인합니다."
+        description="근무 시프트는 작업자 관리 설정(고정) 또는 당일 기록(자동)으로 결정되며, 초품·중품·종품 검사 준수 여부를 확인합니다."
       />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
@@ -284,7 +290,7 @@ export default function FrequentCheckPage() {
               aside={
                 <>
                   <p className="text-xs text-muted md:text-right">
-                    근무조가 고정(🔒)된 작업자는 설정값을 우선 적용합니다. 미정인 작업자는 당일 기록
+                    시프트가 고정(🔒)된 작업자는 설정값을 우선 적용합니다. 미정인 작업자는 당일 기록
                     시간대로 자동 판단하며, 기록이 없으면 데이터 없음으로 표시됩니다.
                   </p>
                   {exportRangeTooLong ? (
@@ -323,12 +329,12 @@ export default function FrequentCheckPage() {
                     {group.rows.map((row) => (
                       <MobileListCard
                         key={row.worker_name}
-                        header={row.worker_name}
+                        header={displayMap.get(row.worker_name) || row.worker_name}
                         badge={<OverallBadge row={row} />}
                         className={clickableRowClass}
                         onClick={() => setModalWorker(row.worker_name)}
                       >
-                        <MobileCardField label="조">
+                        <MobileCardField label="시프트">
                           <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
                         </MobileCardField>
                         <MobileCardField label="자주검사" className="col-span-2">
@@ -349,7 +355,7 @@ export default function FrequentCheckPage() {
                     작업자
                   </SortableTh>
                   <SortableTh column="shift" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
-                    조
+                    시프트
                   </SortableTh>
                   <SortableTh column="nonCompliant" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
                     자주검사
@@ -373,7 +379,9 @@ export default function FrequentCheckPage() {
                         className={`border-b border-border last:border-0 ${clickableRowClass}`}
                         onClick={() => setModalWorker(row.worker_name)}
                       >
-                        <td className="px-4 py-3 font-medium text-text">{row.worker_name}</td>
+                        <td className="px-4 py-3 font-medium text-text">
+                          {displayMap.get(row.worker_name) || row.worker_name}
+                        </td>
                         <td className="px-4 py-3">
                           <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
                         </td>

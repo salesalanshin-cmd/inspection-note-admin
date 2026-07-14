@@ -17,11 +17,11 @@ import {
   buildWorkerStats,
   buildTrend,
   buildDefectBreakdown,
-  buildFrequentInspectionCompliance,
   buildOverallComplianceRate,
+  buildTodayShiftSummary,
+  buildWorkerDisplayNameMap,
   filterByExcludedWorkers,
   getExcludedWorkerNames,
-  summarizeTodayFrequentCompliance,
   summarizeTodayFives,
 } from '../../lib/analytics';
 import PageHeader from '../../components/PageHeader';
@@ -70,11 +70,37 @@ function WorkerPills({ names, tone = 'danger' }) {
   );
 }
 
+function ShiftStageStatCard({ item }) {
+  const label = `${item.shiftLabel} ${item.stage}`;
+
+  if (!item.started) {
+    return <StatCard label={label} value="예정" sub="시간대 시작 전" tone="muted" />;
+  }
+
+  const incomplete =
+    item.ended && item.targetCount > 0 && item.completedCount < item.targetCount;
+  const allDone = item.targetCount > 0 && item.completedCount === item.targetCount;
+
+  return (
+    <StatCard
+      label={label}
+      value={`${item.completedCount} / ${item.targetCount}`}
+      sub="완료 / 대상"
+      tone={incomplete ? 'danger' : allDone ? 'good' : 'default'}
+    />
+  );
+}
+
 export default function DashboardPage() {
   const { loading, error, defects, goods, fives, workerDirectory } = useReports();
 
   const excludedNames = useMemo(
     () => getExcludedWorkerNames(workerDirectory),
+    [workerDirectory]
+  );
+
+  const displayMap = useMemo(
+    () => buildWorkerDisplayNameMap(workerDirectory),
     [workerDirectory]
   );
 
@@ -106,23 +132,26 @@ export default function DashboardPage() {
     [filteredDefects]
   );
 
-  const todayCompliance = useMemo(
+  const shiftSummary = useMemo(
     () =>
-      buildFrequentInspectionCompliance(
+      buildTodayShiftSummary(
         filteredDefects,
         filteredGoods,
-        filteredFives,
+        workerDirectory,
         new Date(),
-        excludedNames,
-        workerDirectory
+        filteredFives
       ),
-    [filteredDefects, filteredGoods, filteredFives, excludedNames, workerDirectory]
+    [filteredDefects, filteredGoods, filteredFives, workerDirectory]
   );
 
-  const frequentToday = useMemo(
-    () => summarizeTodayFrequentCompliance(todayCompliance, new Date()),
-    [todayCompliance]
-  );
+  const overdueMissingWorkers = useMemo(() => {
+    const names = new Set();
+    for (const item of shiftSummary) {
+      if (!item.started || !item.ended) continue;
+      for (const name of item.missingWorkers) names.add(name);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [shiftSummary]);
 
   const fivesToday = useMemo(
     () => summarizeTodayFives(filteredFives, filteredDefects, filteredGoods, excludedNames),
@@ -158,12 +187,15 @@ export default function DashboardPage() {
   const total = filteredDefects.length + filteredGoods.length;
   const fivesPct = (fivesToday.completionRate * 100).toFixed(0);
 
+  const dayCards = shiftSummary.filter((s) => s.shift === 'day');
+  const nightCards = shiftSummary.filter((s) => s.shift === 'night');
+
   return (
     <div>
       <PageHeader
         eyebrow="OVERVIEW"
         title="대시보드"
-        description="전체 검사 현황과 최근 14일 추세"
+        description="전체 검사 현황과 최근 14일 추세 (평일 기준)"
       />
 
       <div className="p-8 space-y-8">
@@ -193,21 +225,25 @@ export default function DashboardPage() {
 
           <div className="bg-surface rounded-xl shadow-card p-5 space-y-4">
             <div className="text-sm font-medium text-text">오늘 자주검사 수행 현황</div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {frequentToday.stages.map((s) => (
-                <StatCard
-                  key={s.stage}
-                  label={s.stage}
-                  value={`${s.completed} / ${s.target}`}
-                  sub="완료 / 대상"
-                  tone={s.target > 0 && s.completed === s.target ? 'good' : 'default'}
-                />
-              ))}
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                {dayCards.map((item) => (
+                  <ShiftStageStatCard key={`${item.shift}-${item.stage}`} item={item} />
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {nightCards.map((item) => (
+                  <ShiftStageStatCard key={`${item.shift}-${item.stage}`} item={item} />
+                ))}
+              </div>
             </div>
             <div>
-              <div className="text-xs text-muted mb-2">미준수 작업자</div>
-              {frequentToday.nonCompliantWorkers.length > 0 ? (
-                <WorkerPills names={frequentToday.nonCompliantWorkers} tone="danger" />
+              <div className="text-xs text-muted mb-2">미준수 작업자 (시간대 종료 후 미실시)</div>
+              {overdueMissingWorkers.length > 0 ? (
+                <WorkerPills
+                  names={overdueMissingWorkers.map((n) => displayMap.get(n) || n)}
+                  tone="danger"
+                />
               ) : (
                 <span className="inline-block rounded-full bg-goodSoft px-2.5 py-0.5 text-xs font-medium text-good">
                   전원 정상 수행중
@@ -230,7 +266,10 @@ export default function DashboardPage() {
             <div>
               <div className="text-xs text-muted mb-2">오늘 미기록 작업자</div>
               {fivesToday.missingWorkers.length > 0 ? (
-                <WorkerPills names={fivesToday.missingWorkers} tone="warn" />
+                <WorkerPills
+                  names={fivesToday.missingWorkers.map((n) => displayMap.get(n) || n)}
+                  tone="warn"
+                />
               ) : (
                 <span className="inline-block rounded-full bg-goodSoft px-2.5 py-0.5 text-xs font-medium text-good">
                   전원 기록 완료
@@ -241,7 +280,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-surface rounded-xl shadow-card p-5">
-          <div className="text-xs font-medium text-muted mb-4">최근 14일 추세</div>
+          <div className="text-xs font-medium text-muted mb-4">최근 14일 추세 (월~금)</div>
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart data={trend}>
               <defs>

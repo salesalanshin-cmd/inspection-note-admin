@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { SOS_ERROR_CODES, fivesErrorCode, fivesLabel } from '../../lib/constants';
+import { buildWorkerDisplayNameMap } from '../../lib/analytics';
 import {
   exportToExcel,
   formatDateRangeForFilename,
@@ -14,6 +15,10 @@ import { sortRows } from '../../lib/tableSort';
 import { requestClassifyPhotosBatch } from '../../lib/classifyClient';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
+import {
+  buildImageDownloadFilename,
+  downloadImagesAsZip,
+} from '../../lib/downloadImages';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 import PageTableShell from '../../components/PageTableShell';
@@ -69,18 +74,24 @@ function getFivesSortValue(record, key) {
 }
 
 export default function FivesPage() {
-  const { loading, error, fives, refetch } = useReports();
+  const { loading, error, fives, refetch, workerDirectory } = useReports();
   const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
   const [selected, setSelected] = useState(null);
   const [batchProgress, setBatchProgress] = useState(null);
   const [batchResults, setBatchResults] = useState(null);
   const [batchError, setBatchError] = useState(null);
+  const [downloadLoading, setDownloadLoading] = useState(false);
   const [trashConfirm, setTrashConfirm] = useState(false);
   const [trashLoading, setTrashLoading] = useState(false);
   const [sortKey, setSortKey] = useState('created_at');
   const [sortDir, setSortDir] = useState('desc');
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
     useGalleryBatchSelect();
+
+  const displayMap = useMemo(
+    () => buildWorkerDisplayNameMap(workerDirectory),
+    [workerDirectory]
+  );
 
   const filtered = useMemo(
     () => filterByCreatedAtDateRange(fives, dateRange),
@@ -153,6 +164,36 @@ export default function FivesPage() {
     refetch();
   }
 
+  async function handleDownloadSelected() {
+    const items = selectedRecords
+      .filter((f) => f.image_url)
+      .map((f) => {
+        const w = f.worker_name;
+        return {
+          imageUrl: f.image_url,
+          filename: buildImageDownloadFilename(
+            (w && (displayMap.get(w) || w)) || w,
+            f.created_at
+          ),
+        };
+      });
+
+    if (!items.length) {
+      setBatchError('이미지가 있는 항목을 선택해 주세요.');
+      return;
+    }
+
+    setBatchError(null);
+    setDownloadLoading(true);
+    try {
+      await downloadImagesAsZip(items, '3정5S기록_선택.zip');
+    } catch (err) {
+      setBatchError(err.message || '이미지 다운로드에 실패했습니다.');
+    } finally {
+      setDownloadLoading(false);
+    }
+  }
+
   async function handleMoveToTrash() {
     setTrashLoading(true);
     try {
@@ -170,7 +211,7 @@ export default function FivesPage() {
 
   function handleExportExcel() {
     const rows = sortedRows.map((f) => ({
-      작업자: f.worker_name || '',
+      작업자: (f.worker_name && (displayMap.get(f.worker_name) || f.worker_name)) || '',
       구역: f.area_type || '',
       SOS코드: fivesErrorCode(f) || '',
       설명: f.description || '',
@@ -247,6 +288,8 @@ export default function FivesPage() {
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
                 {sortedRows.map((f) => {
                   const errorCode = fivesErrorCode(f);
+                  const displayName =
+                    (f.worker_name && (displayMap.get(f.worker_name) || f.worker_name)) || '작업자';
                   return (
                     <div key={f.id} className="group overflow-hidden rounded-xl bg-surface shadow-card">
                       <div
@@ -260,7 +303,7 @@ export default function FivesPage() {
                             setSelected(f);
                           }
                         }}
-                        aria-label={`${f.worker_name || '작업자'} 3정5S 기록 수정`}
+                        aria-label={`${displayName} 3정5S 기록 수정`}
                       >
                         <label
                           className="absolute left-2 top-2 z-30 flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center rounded-lg border border-border bg-surface/90"
@@ -271,7 +314,7 @@ export default function FivesPage() {
                             checked={isSelected(f.id)}
                             onChange={() => toggle(f.id)}
                             className="h-3.5 w-3.5 accent-accent"
-                            aria-label={`${f.worker_name || '작업자'} 선택`}
+                            aria-label={`${displayName} 선택`}
                           />
                         </label>
                         {f.image_url ? (
@@ -295,7 +338,11 @@ export default function FivesPage() {
                         </div>
                       </div>
                       <div className="p-2.5 text-[11px] md:text-xs">
-                        <div className="font-medium text-text">{f.worker_name || '작업자 미상'}</div>
+                        <div className="font-medium text-text">
+                          {f.worker_name
+                            ? displayMap.get(f.worker_name) || f.worker_name
+                            : '작업자 미상'}
+                        </div>
                         <div className="mt-0.5 text-muted">
                           {f.created_at ? new Date(f.created_at).toLocaleString('ko-KR') : ''}
                         </div>
@@ -337,6 +384,7 @@ export default function FivesPage() {
           recordsById={recordsById}
           results={batchResults}
           codeOptions={SOS_CODE_OPTIONS}
+          workerDirectory={workerDirectory}
           onSave={handleBatchSave}
           onClose={() => setBatchResults(null)}
         />
@@ -357,6 +405,14 @@ export default function FivesPage() {
         <GalleryFloatingBar count={selectedCount}>
           <button type="button" onClick={handleBatchClassify} className={exportBtnClass}>
             AI 일괄판정
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadSelected}
+            disabled={downloadLoading}
+            className={actionBtnClass}
+          >
+            {downloadLoading ? '다운로드 중...' : `선택 ${selectedCount}개 다운로드`}
           </button>
           <button type="button" onClick={() => setTrashConfirm(true)} className={dangerBtnClass}>
             휴지통으로 이동
