@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Crosshair } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { DOC_ERROR_CODES, docLabel } from '../lib/constants';
 import { requestClassifyPhoto } from '../lib/classifyClient';
+import { cloneMarkingData } from '../lib/markingData';
 import {
   buildImageDownloadFilename,
   downloadRecordImage,
 } from '../lib/downloadImages';
 import AiSuggestionBanner from './AiSuggestionBanner';
+import DocRegionOverlay from './DocRegionOverlay';
 import ImageZoom from './ImageZoom';
 import ModalShell, { ModalFooterActions } from './ModalShell';
 
@@ -21,11 +24,21 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
   const [docTitle, setDocTitle] = useState(report.doc_title || '');
   const [errorCode, setErrorCode] = useState(report.doc_error_code || '');
   const [errorNote, setErrorNote] = useState(report.doc_error_note || '');
+  const [markers, setMarkers] = useState(() => cloneMarkingData(report.marking_data));
+  const [drawMode, setDrawMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState(null);
   const [aiSuggestion, setAiSuggestion] = useState(null);
+  const imageContentRef = useRef(null);
+  const markersRef = useRef(markers);
+  markersRef.current = markers;
+
+  const aspectRatio =
+    report.image_width > 0 && report.image_height > 0
+      ? report.image_width / report.image_height
+      : 3 / 4;
 
   async function handleAiClassify() {
     if (!report.image_url) {
@@ -71,12 +84,15 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
   async function handleSave() {
     setError(null);
 
+    const nextMarkers = markersRef.current;
+
     const payload = {
       worker_name: workerName.trim() || null,
       doc_type: docType.trim() || null,
       doc_title: docTitle.trim() || null,
       doc_error_code: errorCode || null,
       doc_error_note: errorNote.trim() || null,
+      marking_data: nextMarkers,
       ai_suggested_code: aiSuggestion?.code ?? report.ai_suggested_code ?? null,
       ai_confidence: aiSuggestion?.confidence ?? report.ai_confidence ?? null,
       ai_reason: aiSuggestion?.reason ?? report.ai_reason ?? null,
@@ -90,7 +106,11 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
     setSaving(false);
 
     if (updateError) {
-      setError(updateError.message);
+      setError(
+        updateError.message?.includes('marking_data')
+          ? `${updateError.message} — Supabase에 migration 008(ocr_results.marking_data) 적용이 필요합니다.`
+          : updateError.message
+      );
       return;
     }
 
@@ -118,20 +138,61 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
     >
       <div className="flex flex-col md:flex-row md:overflow-hidden">
         <div className="border-b border-border p-4 md:flex-1 md:border-b-0 md:border-r md:p-5 md:overflow-y-auto">
-          <div className="relative mx-auto aspect-[3/4] w-full overflow-hidden bg-surface2 md:max-h-[60vh] md:rounded-xl">
+          <div
+            className="relative mx-auto w-full overflow-hidden bg-surface2 md:max-h-[60vh] md:rounded-xl"
+            style={{ aspectRatio }}
+          >
             {report.image_url ? (
               <ImageZoom
                 url={report.image_url}
                 alt={docLabel(report)}
                 fit="contain"
                 sizes="(max-width: 768px) 100vw, 800px"
-              />
+                enableScaleControls
+                contentRef={imageContentRef}
+                panDisabled={drawMode}
+              >
+                <DocRegionOverlay
+                  markers={markers}
+                  imageWidth={report.image_width}
+                  imageHeight={report.image_height}
+                  containerRef={imageContentRef}
+                  onChange={setMarkers}
+                  drawMode={drawMode}
+                />
+              </ImageZoom>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">
                 이미지 없음
               </div>
             )}
           </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted">
+              {drawMode
+                ? '이미지 위를 드래그해 오류 영역을 지정하세요.'
+                : '돋보기·확대로 확인한 뒤, 영역 지정으로 오류 칸을 표시할 수 있습니다.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => setDrawMode((v) => !v)}
+              disabled={!report.image_url || saving}
+              aria-pressed={drawMode}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                drawMode
+                  ? 'border-accent bg-accentSoft text-accent'
+                  : 'border-border text-muted hover:bg-surface2 hover:text-text'
+              }`}
+            >
+              <Crosshair className="h-3.5 w-3.5" strokeWidth={2.25} />
+              {drawMode ? '영역 지정 중' : '영역 지정'}
+            </button>
+          </div>
+
+          {markers.length > 0 ? (
+            <p className="mt-2 text-xs text-muted">지정된 영역 {markers.length}개</p>
+          ) : null}
         </div>
 
         <div className="flex w-full flex-col p-4 md:w-80 md:shrink-0 md:p-5">
@@ -194,7 +255,7 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs text-muted">오류 코드</label>
+              <label className="mb-1.5 block text-xs text-muted">오류 코드 (문서 전체)</label>
               <select
                 value={errorCode}
                 onChange={(e) => setErrorCode(e.target.value)}
