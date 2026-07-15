@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   computeMarkerDragBounds,
-  containBounds,
+  containBoundsFromLayout,
+  getContainLayout,
   isCircleMarker,
   markerBounds,
   markerToNormalizedBounds,
@@ -30,16 +31,22 @@ function EditableShape({
   coordHeight,
   mode,
   imageAspect,
-  containerAspect,
+  containLayout,
+  containerWidth,
+  containerHeight,
   containerRef,
   onUpdate,
 }) {
   const imageBounds = markerBounds(marker, coordWidth, coordHeight);
   if (!imageBounds) return null;
 
-  // 표시: 이미지 정규화 bounds → 컨테이너 % (object-contain 레터박스 반영)
+  // 표시: getContainLayout과 동일한 픽셀 레이아웃으로 컨테이너 % 변환
+  // (letterbox / pillarbox 모두 동일 경로)
   const bounds =
-    containBounds(imageBounds, imageAspect, containerAspect) || imageBounds;
+    containLayout && containerWidth > 0 && containerHeight > 0
+      ? containBoundsFromLayout(imageBounds, containLayout, containerWidth, containerHeight) ||
+        imageBounds
+      : imageBounds;
   const isCircle = isCircleMarker(marker);
   const [dragging, setDragging] = useState(null);
 
@@ -53,8 +60,8 @@ function EditableShape({
   /**
    * pointerdown / pointermove — 이동·리사이즈 모두 동일 파이프라인:
    * 1) getBoundingClientRect()로 컨테이너 측정
-   * 2) screenToNormalizedInContain (contain 레터박스 보정)
-   * 3) computeMarkerDragBounds (반대 모서리 고정 / move / circle)
+   * 2) screenToNormalizedInContain (getContainLayout과 동일)
+   * 3) computeMarkerDragBounds
    */
   const handlePointerDown = useCallback(
     (e, dragMode) => {
@@ -92,7 +99,6 @@ function EditableShape({
       const container = containerRef.current?.getBoundingClientRect();
       if (!container || container.width <= 0 || container.height <= 0) return;
 
-      // 이동과 리사이즈가 동일한 contain 보정 좌표 변환을 공유
       const pointerNorm = screenToNormalizedInContain(
         e.clientX,
         e.clientY,
@@ -108,85 +114,12 @@ function EditableShape({
         MIN_SIZE
       );
 
-      // --- RESIZE DEBUG ONLY (임시: 원인 확인용, 동작 수정 없음) ---
-      if (dragging.mode !== 'move') {
-        const start = dragging.startBounds;
-        const right = start.left + start.width;
-        const bottom = start.top + start.height;
-        let fixedCorner = null;
-        if (dragging.mode === 'resize-se') {
-          fixedCorner = { corner: 'nw', x: start.left, y: start.top };
-        } else if (dragging.mode === 'resize-nw') {
-          fixedCorner = { corner: 'se', x: right, y: bottom };
-        } else if (dragging.mode === 'resize-ne') {
-          fixedCorner = { corner: 'sw', x: start.left, y: bottom };
-        } else if (dragging.mode === 'resize-sw') {
-          fixedCorner = { corner: 'ne', x: right, y: start.top };
-        } else if (dragging.mode === 'resize-circle') {
-          fixedCorner = {
-            corner: 'center',
-            x: start.left + start.width / 2,
-            y: start.top + start.height / 2,
-          };
-        }
-
-        const displayStartBounds = containBounds(
-          {
-            left: start.left * 100,
-            top: start.top * 100,
-            width: start.width * 100,
-            height: start.height * 100,
-          },
-          imageAspect,
-          containerAspect
-        );
-        const displayNextBounds = containBounds(
-          {
-            left: next.left * 100,
-            top: next.top * 100,
-            width: next.width * 100,
-            height: next.height * 100,
-          },
-          imageAspect,
-          containerAspect
-        );
-
-        // eslint-disable-next-line no-console
-        console.log('[RESIZE DEBUG]', {
-          dragMode: dragging.mode,
-          containerRect: container,
-          imageAspect,
-          containerAspect,
-          containBoundsStart: displayStartBounds,
-          containBoundsNext: displayNextBounds,
-          mouseClientX: e.clientX,
-          mouseClientY: e.clientY,
-          normalizedXY: pointerNorm,
-          startPointer: dragging.startPointer,
-          startBounds: start,
-          fixedCorner,
-          newMarkerBox: next,
-        });
-      }
-      // --- /RESIZE DEBUG ---
-
       onUpdate(
         index - 1,
         normalizedBoundsToMarker(marker, next, coordWidth, coordHeight, mode)
       );
     },
-    [
-      dragging,
-      containerRef,
-      imageAspect,
-      containerAspect,
-      marker,
-      index,
-      coordWidth,
-      coordHeight,
-      mode,
-      onUpdate,
-    ]
+    [dragging, containerRef, imageAspect, marker, index, coordWidth, coordHeight, mode, onUpdate]
   );
 
   return (
@@ -268,10 +201,11 @@ export default function EditableMarkerOverlay({
   );
   const imageAspect =
     imageWidth > 0 && imageHeight > 0 ? imageWidth / imageHeight : coordWidth / (coordHeight || 1);
-  const containerAspect =
+
+  const containLayout =
     containerSize.w > 0 && containerSize.h > 0
-      ? containerSize.w / containerSize.h
-      : imageAspect;
+      ? getContainLayout(containerSize.w, containerSize.h, imageAspect)
+      : null;
 
   const handleUpdate = useCallback(
     (idx, updated) => {
@@ -294,7 +228,9 @@ export default function EditableMarkerOverlay({
           coordHeight={coordHeight}
           mode={mode}
           imageAspect={imageAspect}
-          containerAspect={containerAspect}
+          containLayout={containLayout}
+          containerWidth={containerSize.w}
+          containerHeight={containerSize.h}
           containerRef={containerRef}
           onUpdate={handleUpdate}
         />
