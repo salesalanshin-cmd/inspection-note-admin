@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
-import { SOS_ERROR_CODES, fivesErrorCode, fivesLabel } from '../../lib/constants';
+import { SOS_ERROR_CODES, ZONE_CODES, fivesErrorCode, fivesLabel, getZoneLabel } from '../../lib/constants';
+import { parseMarkingData } from '../../lib/markingData';
 import { buildWorkerDisplayNameMap } from '../../lib/analytics';
 import {
   exportToExcel,
@@ -53,13 +54,15 @@ const FIVES_SORT_OPTIONS = [
   { value: 'created_at:desc', label: '최신순' },
   { value: 'created_at:asc', label: '오래된순' },
   { value: 'worker_name:asc', label: '작업자명순' },
-  { value: 'area_type:asc', label: '구역순' },
+  { value: 'zone_code:asc', label: '구역순' },
 ];
 
 function getFivesSortValue(record, key) {
   switch (key) {
     case 'worker_name':
       return record.worker_name || '';
+    case 'zone_code':
+      return record.zone_code || record.area_type || '';
     case 'area_type':
       return record.area_type || '';
     case 'sos_error_code':
@@ -150,7 +153,6 @@ export default function FivesPage() {
           .from('fives_reports')
           .update({
             sos_error_code: u.code,
-            area_type: SOS_ERROR_CODES[u.code],
             ai_suggested_code: u.ai_suggested_code,
             ai_confidence: u.ai_confidence,
             ai_reason: u.ai_reason,
@@ -212,7 +214,8 @@ export default function FivesPage() {
   function handleExportExcel() {
     const rows = sortedRows.map((f) => ({
       작업자: (f.worker_name && (displayMap.get(f.worker_name) || f.worker_name)) || '',
-      구역: f.area_type || '',
+      구역: getZoneLabel(f.zone_code) || f.area_type || '',
+      구역코드: f.zone_code || '',
       SOS코드: fivesErrorCode(f) || '',
       설명: f.description || '',
       촬영시각: formatExportDateTime(f.created_at),
@@ -325,11 +328,23 @@ export default function FivesPage() {
                           </div>
                         )}
                         <div className="absolute bottom-2 left-2 right-2 z-20 flex flex-wrap gap-1">
-                          {f.area_type ? (
+                          {f.zone_code && ZONE_CODES[f.zone_code] ? (
+                            <span className="rounded-full bg-accentSoft px-2 py-0.5 text-[10px] font-medium text-accent">
+                              {getZoneLabel(f.zone_code)}
+                            </span>
+                          ) : f.area_type ? (
                             <span className="rounded-full bg-accentSoft px-2 py-0.5 text-[10px] font-medium text-accent">
                               {f.area_type}
                             </span>
                           ) : null}
+                          {(() => {
+                            const markCount = parseMarkingData(f.marking_data).filter((m) => m.code).length;
+                            return markCount > 0 ? (
+                              <span className="rounded-full bg-dangerSoft px-2 py-0.5 text-[10px] font-medium text-danger">
+                                지적 {markCount}건
+                              </span>
+                            ) : null;
+                          })()}
                           {errorCode ? (
                             <span className="rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
                               {errorCode}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import {
   DOC_ERROR_CODES,
@@ -14,6 +14,7 @@ import {
   downloadImagesAsZip,
 } from '../../lib/downloadImages';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
+import { countPendingDocumentNotifications } from '../../lib/documentNotificationQueue';
 import PageHeader from '../../components/PageHeader';
 import StatCard from '../../components/StatCard';
 import SignedImage from '../../components/SignedImage';
@@ -52,8 +53,24 @@ export default function DocumentsPage() {
   const [trashLoading, setTrashLoading] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [batchError, setBatchError] = useState(null);
+  const [pendingNotifyCount, setPendingNotifyCount] = useState(0);
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
     useGalleryBatchSelect();
+
+  useEffect(() => {
+    let cancelled = false;
+    // 발송 대기 건수 — 알림톡 발송 UI는 추후 솔라피 연동 시 별도 구현
+    countPendingDocumentNotifications()
+      .then((n) => {
+        if (!cancelled) setPendingNotifyCount(n);
+      })
+      .catch(() => {
+        if (!cancelled) setPendingNotifyCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [docs, selected]);
 
   const displayMap = useMemo(
     () => buildWorkerDisplayNameMap(workerDirectory),
@@ -162,7 +179,20 @@ export default function DocumentsPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="DOCUMENTS" title="문서스캔" description={`총 ${filtered.length}건`} />
+      <PageHeader
+        eyebrow="DOCUMENTS"
+        title="문서스캔"
+        description={`총 ${filtered.length}건`}
+      />
+
+      {pendingNotifyCount > 0 ? (
+        <div className="px-4 pt-3 md:px-8">
+          {/* 카카오 알림톡 발송 화면은 솔라피 등 준비 후 별도 구현. 지금은 pending 집계만. */}
+          <span className="inline-flex items-center rounded-full bg-warnSoft px-3 py-1 text-xs font-medium text-warn">
+            발송 대기 {pendingNotifyCount}건
+          </span>
+        </div>
+      ) : null}
 
       <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

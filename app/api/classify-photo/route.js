@@ -9,7 +9,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const { imageUrl, codeSet } = body;
+  const { imageUrl, codeSet, regionCrop } = body;
   if (!imageUrl || !['defect', 'sos', 'doc'].includes(codeSet)) {
     return NextResponse.json(
       { error: 'imageUrl and codeSet(defect|sos|doc) are required' },
@@ -18,7 +18,9 @@ export async function POST(request) {
   }
 
   try {
-    const result = await classifyPhoto(imageUrl, codeSet);
+    const result = await classifyPhoto(imageUrl, codeSet, {
+      regionCrop: Boolean(regionCrop),
+    });
     return NextResponse.json(result);
   } catch (err) {
     // eslint-disable-next-line no-console

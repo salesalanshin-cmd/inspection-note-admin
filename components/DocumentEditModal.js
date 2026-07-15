@@ -10,6 +10,7 @@ import {
   buildImageDownloadFilename,
   downloadRecordImage,
 } from '../lib/downloadImages';
+import { syncDocumentNotificationQueue } from '../lib/documentNotificationQueue';
 import AiSuggestionBanner from './AiSuggestionBanner';
 import DocRegionOverlay from './DocRegionOverlay';
 import ImageZoom from './ImageZoom';
@@ -92,7 +93,7 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
       doc_title: docTitle.trim() || null,
       doc_error_code: errorCode || null,
       doc_error_note: errorNote.trim() || null,
-      marking_data: nextMarkers,
+      marking_data: Array.isArray(nextMarkers) ? nextMarkers : [],
       ai_suggested_code: aiSuggestion?.code ?? report.ai_suggested_code ?? null,
       ai_confidence: aiSuggestion?.confidence ?? report.ai_confidence ?? null,
       ai_reason: aiSuggestion?.reason ?? report.ai_reason ?? null,
@@ -103,9 +104,9 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
       .from('ocr_results')
       .update(payload)
       .eq('id', report.id);
-    setSaving(false);
 
     if (updateError) {
+      setSaving(false);
       setError(
         updateError.message?.includes('marking_data')
           ? `${updateError.message} — Supabase에 migration 008(ocr_results.marking_data) 적용이 필요합니다.`
@@ -114,6 +115,25 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
       return;
     }
 
+    // 영역 지적사항 → 알림 대기열 동기화 (카카오 알림톡 발송은 추후 별도 구현)
+    try {
+      await syncDocumentNotificationQueue({
+        ocrResultId: report.id,
+        workerName: workerName.trim() || report.worker_name || null,
+        markers: nextMarkers,
+      });
+    } catch (queueErr) {
+      setSaving(false);
+      setError(
+        queueErr.message?.includes('document_notification_queue') ||
+          queueErr.code === '42P01'
+          ? `${queueErr.message || '알림 대기열 저장 실패'} — migration 009 적용이 필요합니다.`
+          : queueErr.message || '알림 대기열 동기화에 실패했습니다.'
+      );
+      return;
+    }
+
+    setSaving(false);
     onSaved?.();
     onClose?.();
   }
@@ -156,6 +176,7 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
                   markers={markers}
                   imageWidth={report.image_width}
                   imageHeight={report.image_height}
+                  imageUrl={report.image_url}
                   containerRef={imageContentRef}
                   onChange={setMarkers}
                   drawMode={drawMode}

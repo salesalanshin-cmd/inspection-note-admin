@@ -1,7 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DOC_ERROR_CODES } from '../lib/constants';
+import {
+  SOS_ERROR_CATEGORIES,
+  SOS_ERROR_CODES,
+  getSosCategoryForCode,
+} from '../lib/constants';
 import { requestClassifyPhoto, AI_UNAVAILABLE_MESSAGE } from '../lib/classifyClient';
 import { cropImageRegionToDataUrl } from '../lib/cropImageRegion';
 import {
@@ -22,8 +26,8 @@ import RegionDeleteButton from './RegionDeleteButton';
 import UndoToast from './UndoToast';
 
 const MIN_SIZE = 0.02;
-const DOC_CODE_ENTRIES = Object.entries(DOC_ERROR_CODES);
-const DEFAULT_DOC_CODE = DOC_CODE_ENTRIES[0]?.[0] ?? 'DOC-001';
+const SOS_CATEGORIES = Object.keys(SOS_ERROR_CATEGORIES);
+const DEFAULT_SOS_CODE = SOS_ERROR_CATEGORIES[SOS_CATEGORIES[0]]?.[0] ?? 'OS01';
 
 const HANDLE_CLASS =
   'absolute z-20 h-3.5 w-3.5 rounded-sm border-2 border-danger bg-surface shadow-sm touch-none';
@@ -51,7 +55,7 @@ function boundsFromDrag(a, b) {
   });
 }
 
-function CodePopover({
+function SosCodePopover({
   anchor,
   title,
   code,
@@ -65,6 +69,15 @@ function CodePopover({
   aiSuggestion,
   aiError,
 }) {
+  const category = getSosCategoryForCode(code);
+  const codesInCategory = SOS_ERROR_CATEGORIES[category] || [];
+
+  function handleCategoryChange(nextCat) {
+    const nextCodes = SOS_ERROR_CATEGORIES[nextCat] || [];
+    const nextCode = nextCodes.includes(code) ? code : nextCodes[0] || DEFAULT_SOS_CODE;
+    onCodeChange(nextCode);
+  }
+
   if (!anchor) return null;
 
   return (
@@ -76,15 +89,29 @@ function CodePopover({
     >
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-3">
         <div className="mb-2 text-xs font-medium text-text">{title}</div>
+        <label className="mb-1 block text-[10px] text-muted">카테고리</label>
+        <select
+          value={category}
+          onChange={(e) => handleCategoryChange(e.target.value)}
+          className={selectClass}
+          disabled={aiClassifying}
+        >
+          {SOS_CATEGORIES.map((cat) => (
+            <option key={cat} value={cat}>
+              {cat}
+            </option>
+          ))}
+        </select>
+        <label className="mb-1 mt-2 block text-[10px] text-muted">오류 코드</label>
         <select
           value={code}
           onChange={(e) => onCodeChange(e.target.value)}
           className={selectClass}
           disabled={aiClassifying}
         >
-          {DOC_CODE_ENTRIES.map(([value, label]) => (
+          {codesInCategory.map((value) => (
             <option key={value} value={value}>
-              {label} ({value})
+              {SOS_ERROR_CODES[value]} ({value})
             </option>
           ))}
         </select>
@@ -112,7 +139,7 @@ function CodePopover({
               code={aiSuggestion.code}
               confidence={aiSuggestion.confidence}
               reason={aiSuggestion.reason}
-              codeSet="doc"
+              codeSet="sos"
             />
           </div>
         ) : null}
@@ -261,7 +288,7 @@ function RegionShape({
     [finishDrag, onSelect, index]
   );
 
-  const codeLabel = marker.code ? DOC_ERROR_CODES[marker.code] || marker.code : null;
+  const codeLabel = marker.code ? SOS_ERROR_CODES[marker.code] || marker.code : null;
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -313,10 +340,10 @@ function RegionShape({
 }
 
 /**
- * 문서 오류 영역 지정 — 불량기록 EditableMarkerOverlay와 동일 contain 좌표 파이프라인
- * drawMode ON: 드래그로 새 rect 생성 → 오류코드 팝오버
+ * 3정5S 오류 영역 지정 — DocRegionOverlay와 동일 contain 파이프라인
+ * 팝오버: 카테고리 → SOS 코드 2단계 + 영역 crop AI 판정(codeSet:sos)
  */
-export default function DocRegionOverlay({
+export default function SosRegionOverlay({
   markers,
   imageWidth,
   imageHeight,
@@ -328,7 +355,7 @@ export default function DocRegionOverlay({
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const [draft, setDraft] = useState(null);
   const [pending, setPending] = useState(null);
-  const [pendingCode, setPendingCode] = useState(DEFAULT_DOC_CODE);
+  const [pendingCode, setPendingCode] = useState(DEFAULT_SOS_CODE);
   const [pendingNote, setPendingNote] = useState(null);
   const [selectedIdx, setSelectedIdx] = useState(null);
   /** 뷰포트 client 좌표 — Portal 팝오버 fixed 앵커 */
@@ -336,7 +363,6 @@ export default function DocRegionOverlay({
   const [aiClassifying, setAiClassifying] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [aiError, setAiError] = useState(null);
-  /** 'pending' | number(marker index) | null */
   const [aiTarget, setAiTarget] = useState(null);
   const { deleteAt, undoDelete, dismissUndo, undoOpen } = useUndoableMarkerDelete(
     markers,
@@ -380,7 +406,7 @@ export default function DocRegionOverlay({
     imageHeight
   );
   const imageAspect =
-    imageWidth > 0 && imageHeight > 0 ? imageWidth / imageHeight : 3 / 4;
+    imageWidth > 0 && imageHeight > 0 ? imageWidth / imageHeight : 4 / 3;
 
   const containLayout =
     containerSize.w > 0 && containerSize.h > 0
@@ -401,10 +427,10 @@ export default function DocRegionOverlay({
 
       try {
         const dataUrl = await cropImageRegionToDataUrl(imageUrl, bounds);
-        const result = await requestClassifyPhoto(dataUrl, 'doc', { regionCrop: true });
+        const result = await requestClassifyPhoto(dataUrl, 'sos', { regionCrop: true });
         setAiSuggestion(result);
 
-        if (result.code && DOC_ERROR_CODES[result.code]) {
+        if (result.code && SOS_ERROR_CODES[result.code]) {
           if (target === 'pending') {
             setPendingCode(result.code);
             setPendingNote(result.reason || null);
@@ -506,7 +532,7 @@ export default function DocRegionOverlay({
 
       if (bounds.width < MIN_SIZE || bounds.height < MIN_SIZE) return;
 
-      setPendingCode(DEFAULT_DOC_CODE);
+      setPendingCode(DEFAULT_SOS_CODE);
       setPendingNote(null);
       setAiSuggestion(null);
       setAiError(null);
@@ -526,7 +552,7 @@ export default function DocRegionOverlay({
       y: pending.top,
       width: pending.width,
       height: pending.height,
-      code: pendingCode || DEFAULT_DOC_CODE,
+      code: pendingCode || DEFAULT_SOS_CODE,
     };
     if (pendingNote) marker.note = pendingNote;
     onChange((prev) => {
@@ -611,7 +637,7 @@ export default function DocRegionOverlay({
 
       {markers.map((marker, i) => (
         <RegionShape
-          key={`doc-region-${i}`}
+          key={`sos-region-${i}`}
           marker={marker}
           index={i + 1}
           coordWidth={coordWidth}
@@ -656,7 +682,7 @@ export default function DocRegionOverlay({
       ) : null}
 
       {pending && popoverAnchor ? (
-        <CodePopover
+        <SosCodePopover
           anchor={popoverAnchor}
           title="오류 유형 선택"
           code={pendingCode}
@@ -673,10 +699,10 @@ export default function DocRegionOverlay({
       ) : null}
 
       {selectedIdx != null && !pending && popoverAnchor && markers[selectedIdx] ? (
-        <CodePopover
+        <SosCodePopover
           anchor={popoverAnchor}
           title={`영역 ${selectedIdx + 1} 오류`}
-          code={markers[selectedIdx].code || DEFAULT_DOC_CODE}
+          code={markers[selectedIdx].code || DEFAULT_SOS_CODE}
           onCodeChange={(code) => handleChangeCode(selectedIdx, code)}
           onDelete={() => handleDelete(selectedIdx)}
           onCancel={closeSelected}

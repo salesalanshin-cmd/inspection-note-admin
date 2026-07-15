@@ -163,8 +163,8 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
     const payload = {
       defect_code: nextCode,
       defect_type: DEFECT_CODE_LABELS[nextCode],
-      marking_data: nextMarkers,
-      marking_count: nextMarkers.length,
+      marking_data: Array.isArray(nextMarkers) ? nextMarkers : [],
+      marking_count: Array.isArray(nextMarkers) ? nextMarkers.length : 0,
       ai_suggested_code: nextAi?.code ?? report.ai_suggested_code ?? null,
       ai_confidence: nextAi?.confidence ?? report.ai_confidence ?? null,
       ai_reason: nextAi?.reason ?? report.ai_reason ?? null,
@@ -227,15 +227,13 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
                 sizes="(max-width: 768px) 100vw, 800px"
                 bucket="defect-images"
               >
-                {markers.length > 0 && (
-                  <EditableMarkerOverlay
-                    markers={markers}
-                    imageWidth={report.image_width}
-                    imageHeight={report.image_height}
-                    containerRef={imageContainerRef}
-                    onChange={setMarkers}
-                  />
-                )}
+                <EditableMarkerOverlay
+                  markers={markers}
+                  imageWidth={report.image_width}
+                  imageHeight={report.image_height}
+                  containerRef={imageContainerRef}
+                  onChange={setMarkers}
+                />
               </ImageZoom>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">

@@ -1,31 +1,88 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Crosshair } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { SOS_ERROR_CODES, fivesErrorCode, fivesLabel } from '../lib/constants';
+import {
+  SOS_ERROR_CATEGORIES,
+  SOS_ERROR_CODES,
+  ZONE_CODES,
+  fivesErrorCode,
+  fivesLabel,
+  getSosCategoryForCode,
+} from '../lib/constants';
 import { requestClassifyPhoto } from '../lib/classifyClient';
+import { cloneMarkingData, parseMarkingData } from '../lib/markingData';
 import {
   buildImageDownloadFilename,
   downloadRecordImage,
 } from '../lib/downloadImages';
 import AiSuggestionBanner from './AiSuggestionBanner';
+import SosRegionOverlay from './SosRegionOverlay';
 import ImageZoom from './ImageZoom';
 import ModalShell, { ModalFooterActions } from './ModalShell';
 
 const inputClass =
   'w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
 
+const ZONE_ENTRIES = Object.entries(ZONE_CODES);
+const SOS_CATEGORIES = Object.keys(SOS_ERROR_CATEGORIES);
+
+function SosWholeSelect({ value, onChange, disabled }) {
+  const category = getSosCategoryForCode(value || undefined);
+  const codes = SOS_ERROR_CATEGORIES[category] || [];
+
+  return (
+    <div className="space-y-2">
+      <select
+        value={category}
+        onChange={(e) => {
+          const nextCodes = SOS_ERROR_CATEGORIES[e.target.value] || [];
+          onChange(nextCodes[0] || '');
+        }}
+        className={inputClass}
+        disabled={disabled}
+      >
+        {SOS_CATEGORIES.map((cat) => (
+          <option key={cat} value={cat}>
+            {cat}
+          </option>
+        ))}
+      </select>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputClass}
+        disabled={disabled}
+      >
+        <option value="">없음 (정상)</option>
+        {codes.map((code) => (
+          <option key={code} value={code}>
+            {SOS_ERROR_CODES[code]} ({code})
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export default function FivesEditModal({ report, onClose, onSaved }) {
   const [workerName, setWorkerName] = useState(report.worker_name || '');
+  const [zoneCode, setZoneCode] = useState(report.zone_code || '');
   const [areaType, setAreaType] = useState(report.area_type || '');
   const [description, setDescription] = useState(report.description || '');
   const [errorCode, setErrorCode] = useState(fivesErrorCode(report));
   const [errorNote, setErrorNote] = useState(report.sos_error_note || '');
+  const [markers, setMarkers] = useState(() => cloneMarkingData(report.marking_data));
+  const [drawMode, setDrawMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [classifying, setClassifying] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState(null);
   const [aiSuggestion, setAiSuggestion] = useState(null);
+  const imageContentRef = useRef(null);
+  const markersRef = useRef(markers);
+  markersRef.current = markers;
 
   const aspectRatio =
     report.image_width > 0 && report.image_height > 0
@@ -76,12 +133,16 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
   async function handleSave() {
     setError(null);
 
+    const nextMarkers = markersRef.current;
+
     const payload = {
       worker_name: workerName.trim() || null,
+      zone_code: zoneCode || null,
       area_type: areaType.trim() || null,
       description: description.trim() || null,
       sos_error_code: errorCode || null,
       sos_error_note: errorNote.trim() || null,
+      marking_data: Array.isArray(nextMarkers) ? nextMarkers : [],
       ai_suggested_code: aiSuggestion?.code ?? report.ai_suggested_code ?? null,
       ai_confidence: aiSuggestion?.confidence ?? report.ai_confidence ?? null,
       ai_reason: aiSuggestion?.reason ?? report.ai_reason ?? null,
@@ -95,7 +156,12 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
     setSaving(false);
 
     if (updateError) {
-      setError(updateError.message);
+      setError(
+        updateError.message?.includes('zone_code') ||
+          updateError.message?.includes('marking_data')
+          ? `${updateError.message} — migration 010(fives zone_code/marking_data) 적용이 필요합니다.`
+          : updateError.message
+      );
       return;
     }
 
@@ -112,6 +178,8 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
       confirmDisabled={saving || classifying}
     />
   );
+
+  const regionCount = parseMarkingData(markers).length;
 
   return (
     <ModalShell
@@ -133,13 +201,52 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
                 alt={fivesLabel(report)}
                 fit="contain"
                 sizes="(max-width: 768px) 100vw, 800px"
-              />
+                enableScaleControls
+                contentRef={imageContentRef}
+                panDisabled={drawMode}
+              >
+                <SosRegionOverlay
+                  markers={markers}
+                  imageWidth={report.image_width}
+                  imageHeight={report.image_height}
+                  imageUrl={report.image_url}
+                  containerRef={imageContentRef}
+                  onChange={setMarkers}
+                  drawMode={drawMode}
+                />
+              </ImageZoom>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-muted">
                 이미지 없음
               </div>
             )}
           </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted">
+              {drawMode
+                ? '이미지 위를 드래그해 지적 영역을 지정하세요.'
+                : '돋보기·확대로 확인한 뒤, 영역 지정으로 지적 사항을 표시할 수 있습니다.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => setDrawMode((v) => !v)}
+              disabled={!report.image_url || saving}
+              aria-pressed={drawMode}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                drawMode
+                  ? 'border-accent bg-accentSoft text-accent'
+                  : 'border-border text-muted hover:bg-surface2 hover:text-text'
+              }`}
+            >
+              <Crosshair className="h-3.5 w-3.5" strokeWidth={2.25} />
+              {drawMode ? '영역 지정 중' : '영역 지정'}
+            </button>
+          </div>
+
+          {regionCount > 0 ? (
+            <p className="mt-2 text-xs text-muted">지정된 영역 {regionCount}개</p>
+          ) : null}
         </div>
 
         <div className="flex w-full flex-col p-4 md:w-80 md:shrink-0 md:p-5">
@@ -150,7 +257,7 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
               disabled={classifying || saving || !report.image_url}
               className="min-h-[44px] w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
             >
-              {classifying ? 'AI 분석 중...' : 'AI 자동판정'}
+              {classifying ? 'AI 분석 중...' : 'AI 자동판정 (전체)'}
             </button>
 
             <button
@@ -183,10 +290,27 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
 
             <div>
               <label className="mb-1.5 block text-xs text-muted">구역</label>
+              <select
+                value={zoneCode}
+                onChange={(e) => setZoneCode(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">선택</option>
+                {ZONE_ENTRIES.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label} ({value})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">직접 메모 (선택)</label>
               <input
                 type="text"
                 value={areaType}
                 onChange={(e) => setAreaType(e.target.value)}
+                placeholder="구역 보조 메모"
                 className={inputClass}
               />
             </div>
@@ -202,19 +326,8 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs text-muted">SOS 오류 코드</label>
-              <select
-                value={errorCode}
-                onChange={(e) => setErrorCode(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">없음 (정상)</option>
-                {Object.entries(SOS_ERROR_CODES).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label} ({value})
-                  </option>
-                ))}
-              </select>
+              <label className="mb-1.5 block text-xs text-muted">SOS 오류 코드 (기록 전체)</label>
+              <SosWholeSelect value={errorCode} onChange={setErrorCode} />
             </div>
 
             <div>

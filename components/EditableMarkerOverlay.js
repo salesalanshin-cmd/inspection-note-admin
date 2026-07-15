@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useUndoableMarkerDelete } from '../hooks/useUndoableMarkerDelete';
 import {
   computeMarkerDragBounds,
   containBoundsFromLayout,
@@ -12,6 +13,8 @@ import {
   resolveCoordinateDimensions,
   screenToNormalizedInContain,
 } from '../lib/markingData';
+import RegionDeleteButton from './RegionDeleteButton';
+import UndoToast from './UndoToast';
 
 const MIN_SIZE = 0.02;
 const HANDLE_CLASS =
@@ -35,13 +38,14 @@ function EditableShape({
   containerWidth,
   containerHeight,
   containerRef,
+  selected,
+  onSelect,
   onUpdate,
+  onDelete,
 }) {
   const imageBounds = markerBounds(marker, coordWidth, coordHeight);
   if (!imageBounds) return null;
 
-  // 표시: getContainLayout과 동일한 픽셀 레이아웃으로 컨테이너 % 변환
-  // (letterbox / pillarbox 모두 동일 경로)
   const bounds =
     containLayout && containerWidth > 0 && containerHeight > 0
       ? containBoundsFromLayout(imageBounds, containLayout, containerWidth, containerHeight) ||
@@ -49,6 +53,8 @@ function EditableShape({
       : imageBounds;
   const isCircle = isCircleMarker(marker);
   const [dragging, setDragging] = useState(null);
+  const [hovered, setHovered] = useState(false);
+  const movedRef = useRef(false);
 
   const finishDrag = useCallback((e) => {
     if (e?.currentTarget?.hasPointerCapture?.(e.pointerId)) {
@@ -57,17 +63,12 @@ function EditableShape({
     setDragging(null);
   }, []);
 
-  /**
-   * pointerdown / pointermove — 이동·리사이즈 모두 동일 파이프라인:
-   * 1) getBoundingClientRect()로 컨테이너 측정
-   * 2) screenToNormalizedInContain (getContainLayout과 동일)
-   * 3) computeMarkerDragBounds
-   */
   const handlePointerDown = useCallback(
     (e, dragMode) => {
       e.preventDefault();
       e.stopPropagation();
       e.currentTarget.setPointerCapture(e.pointerId);
+      movedRef.current = false;
 
       const container = containerRef.current?.getBoundingClientRect();
       if (!container || container.width <= 0 || container.height <= 0) return;
@@ -106,6 +107,10 @@ function EditableShape({
         imageAspect
       );
 
+      const dx = Math.abs(pointerNorm.x - dragging.startPointer.x);
+      const dy = Math.abs(pointerNorm.y - dragging.startPointer.y);
+      if (dx > 0.004 || dy > 0.004) movedRef.current = true;
+
       const next = computeMarkerDragBounds(
         dragging.mode,
         dragging.startBounds,
@@ -122,9 +127,25 @@ function EditableShape({
     [dragging, containerRef, imageAspect, marker, index, coordWidth, coordHeight, mode, onUpdate]
   );
 
+  const handlePointerUp = useCallback(
+    (e) => {
+      finishDrag(e);
+      if (!movedRef.current && e.button !== 2) {
+        onSelect?.(index - 1);
+      }
+    },
+    [finishDrag, onSelect, index]
+  );
+
   return (
     <div
-      className={`absolute touch-none select-none ${isCircle ? 'rounded-full' : 'rounded-md'} border-2 border-danger bg-danger/25 cursor-move`}
+      className={`absolute touch-none select-none border-2 cursor-move ${
+        isCircle ? 'rounded-full' : 'rounded-md'
+      } ${
+        selected
+          ? 'border-accent bg-accent/20 ring-2 ring-accent/30'
+          : 'border-danger bg-danger/25'
+      }`}
       style={{
         left: `${bounds.left}%`,
         top: `${bounds.top}%`,
@@ -133,19 +154,26 @@ function EditableShape({
       }}
       onPointerDown={(e) => handlePointerDown(e, 'move')}
       onPointerMove={handlePointerMove}
-      onPointerUp={finishDrag}
+      onPointerUp={handlePointerUp}
       onPointerCancel={finishDrag}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
     >
       <span className="pointer-events-none absolute -top-0.5 -left-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-danger text-[10px] text-white shadow-sm">
         {index}
       </span>
+
+      <RegionDeleteButton
+        visible={selected || hovered}
+        onDelete={() => onDelete?.(index - 1)}
+      />
 
       {isCircle ? (
         <div
           className={`${HANDLE_CLASS} -right-1.5 top-1/2 -translate-y-1/2 cursor-e-resize`}
           onPointerDown={(e) => handlePointerDown(e, 'resize-circle')}
           onPointerMove={handlePointerMove}
-          onPointerUp={finishDrag}
+          onPointerUp={handlePointerUp}
           onPointerCancel={finishDrag}
         />
       ) : (
@@ -155,7 +183,7 @@ function EditableShape({
             className={`${HANDLE_CLASS} ${h.className}`}
             onPointerDown={(e) => handlePointerDown(e, h.mode)}
             onPointerMove={handlePointerMove}
-            onPointerUp={finishDrag}
+            onPointerUp={handlePointerUp}
             onPointerCancel={finishDrag}
           />
         ))
@@ -172,6 +200,11 @@ export default function EditableMarkerOverlay({
   onChange,
 }) {
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+  const [selectedIdx, setSelectedIdx] = useState(null);
+  const { deleteAt, undoDelete, dismissUndo, undoOpen } = useUndoableMarkerDelete(
+    markers,
+    onChange
+  );
 
   useEffect(() => {
     const el = containerRef?.current;
@@ -191,8 +224,6 @@ export default function EditableMarkerOverlay({
       window.removeEventListener('resize', sync);
     };
   }, [containerRef]);
-
-  if (!markers.length) return null;
 
   const { width: coordWidth, height: coordHeight, mode } = resolveCoordinateDimensions(
     markers,
@@ -217,24 +248,44 @@ export default function EditableMarkerOverlay({
     [markers, onChange]
   );
 
+  const handleDelete = useCallback(
+    (idx) => {
+      deleteAt(idx);
+      setSelectedIdx(null);
+    },
+    [deleteAt]
+  );
+
+  const handleSelect = useCallback((idx) => {
+    setSelectedIdx(idx);
+  }, []);
+
   return (
-    <div className="absolute inset-0 z-10 overflow-hidden">
-      {markers.map((marker, i) => (
-        <EditableShape
-          key={`edit-${i}`}
-          marker={marker}
-          index={i + 1}
-          coordWidth={coordWidth}
-          coordHeight={coordHeight}
-          mode={mode}
-          imageAspect={imageAspect}
-          containLayout={containLayout}
-          containerWidth={containerSize.w}
-          containerHeight={containerSize.h}
-          containerRef={containerRef}
-          onUpdate={handleUpdate}
-        />
-      ))}
-    </div>
+    <>
+      {markers.length > 0 ? (
+        <div className="absolute inset-0 z-10 overflow-hidden">
+          {markers.map((marker, i) => (
+            <EditableShape
+              key={`edit-${i}`}
+              marker={marker}
+              index={i + 1}
+              coordWidth={coordWidth}
+              coordHeight={coordHeight}
+              mode={mode}
+              imageAspect={imageAspect}
+              containLayout={containLayout}
+              containerWidth={containerSize.w}
+              containerHeight={containerSize.h}
+              containerRef={containerRef}
+              selected={selectedIdx === i}
+              onSelect={handleSelect}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      ) : null}
+      <UndoToast open={undoOpen} onUndo={undoDelete} onDismiss={dismissUndo} />
+    </>
   );
 }
