@@ -1,11 +1,11 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Crosshair } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { DOC_ERROR_CODES, docLabel } from '../lib/constants';
 import { requestClassifyPhoto } from '../lib/classifyClient';
-import { cloneMarkingData } from '../lib/markingData';
+import { cloneMarkingData, parseMarkingData } from '../lib/markingData';
 import {
   buildImageDownloadFilename,
   downloadRecordImage,
@@ -26,6 +26,8 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
   const [errorCode, setErrorCode] = useState(report.doc_error_code || '');
   const [errorNote, setErrorNote] = useState(report.doc_error_note || '');
   const [markers, setMarkers] = useState(() => cloneMarkingData(report.marking_data));
+  const [imageWidth, setImageWidth] = useState(report.image_width || 0);
+  const [imageHeight, setImageHeight] = useState(report.image_height || 0);
   const [drawMode, setDrawMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [classifying, setClassifying] = useState(false);
@@ -36,10 +38,40 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
   const markersRef = useRef(markers);
   markersRef.current = markers;
 
+  // Fives와 동일하게 report.marking_data로 초기화 + DB 재조회로 동기화
+  useEffect(() => {
+    let cancelled = false;
+    setMarkers(cloneMarkingData(report.marking_data));
+    setImageWidth(report.image_width || 0);
+    setImageHeight(report.image_height || 0);
+
+    (async () => {
+      const { data, error: fetchError } = await supabase
+        .from('ocr_results')
+        .select('marking_data')
+        .eq('id', report.id)
+        .maybeSingle();
+      if (cancelled || fetchError || !data) return;
+      setMarkers(cloneMarkingData(data.marking_data));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [report.id, report.marking_data, report.image_width, report.image_height]);
+
   const aspectRatio =
-    report.image_width > 0 && report.image_height > 0
-      ? report.image_width / report.image_height
-      : 3 / 4;
+    imageWidth > 0 && imageHeight > 0
+      ? imageWidth / imageHeight
+      : report.image_width > 0 && report.image_height > 0
+        ? report.image_width / report.image_height
+        : 3 / 4;
+
+  function handleNaturalSize({ width, height }) {
+    if (!(width > 0 && height > 0)) return;
+    setImageWidth((prev) => prev || width);
+    setImageHeight((prev) => prev || height);
+  }
 
   async function handleAiClassify() {
     if (!report.image_url) {
@@ -171,11 +203,12 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
                 enableScaleControls
                 contentRef={imageContentRef}
                 panDisabled={drawMode}
+                onNaturalSize={handleNaturalSize}
               >
                 <DocRegionOverlay
                   markers={markers}
-                  imageWidth={report.image_width}
-                  imageHeight={report.image_height}
+                  imageWidth={imageWidth || report.image_width}
+                  imageHeight={imageHeight || report.image_height}
                   imageUrl={report.image_url}
                   containerRef={imageContentRef}
                   onChange={setMarkers}
@@ -211,8 +244,10 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
             </button>
           </div>
 
-          {markers.length > 0 ? (
-            <p className="mt-2 text-xs text-muted">지정된 영역 {markers.length}개</p>
+          {parseMarkingData(markers).length > 0 ? (
+            <p className="mt-2 text-xs text-muted">
+              지정된 영역 {parseMarkingData(markers).length}개
+            </p>
           ) : null}
         </div>
 

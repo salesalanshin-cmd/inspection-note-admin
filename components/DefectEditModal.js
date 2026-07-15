@@ -10,6 +10,7 @@ import {
   buildImageDownloadFilename,
   downloadRecordImage,
 } from '../lib/downloadImages';
+import { syncDefectNotificationQueue } from '../lib/defectNotificationQueue';
 import AiSuggestionBanner from './AiSuggestionBanner';
 import EditableMarkerOverlay from './EditableMarkerOverlay';
 import ImageZoom from './ImageZoom';
@@ -177,17 +178,37 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
       .eq('id', report.id)
       .select('id, defect_code, defect_type')
       .maybeSingle();
-    setSaving(false);
 
     if (updateError) {
+      setSaving(false);
       setError(updateError.message);
       return;
     }
     if (!data) {
+      setSaving(false);
       setError('저장되지 않았습니다. 권한(RLS) 또는 레코드 상태를 확인해 주세요.');
       return;
     }
 
+    try {
+      await syncDefectNotificationQueue({
+        defectReportId: report.id,
+        workerName: report.worker_name || null,
+        markers: nextMarkers,
+        reportDefectCode: nextCode,
+        reportDefectType: DEFECT_CODE_LABELS[nextCode],
+      });
+    } catch (queueErr) {
+      setSaving(false);
+      setError(
+        queueErr.message?.includes('defect_notification_queue') || queueErr.code === '42P01'
+          ? `${queueErr.message || '알림 대기열 저장 실패'} — migration 012 적용이 필요합니다.`
+          : queueErr.message || '알림 대기열 동기화에 실패했습니다.'
+      );
+      return;
+    }
+
+    setSaving(false);
     onSaved?.(data);
     onClose?.();
   }

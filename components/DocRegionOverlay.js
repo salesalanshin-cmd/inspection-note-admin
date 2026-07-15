@@ -16,6 +16,7 @@ import {
   screenToNormalizedInContain,
 } from '../lib/markingData';
 import { useUndoableMarkerDelete } from '../hooks/useUndoableMarkerDelete';
+import { useContainContainerSize } from '../hooks/useContainContainerSize';
 import AiSuggestionBanner from './AiSuggestionBanner';
 import FloatingPortalPopover from './FloatingPortalPopover';
 import RegionDeleteButton from './RegionDeleteButton';
@@ -325,7 +326,7 @@ export default function DocRegionOverlay({
   onChange,
   drawMode = false,
 }) {
-  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+  const containerSize = useContainContainerSize(containerRef);
   const [draft, setDraft] = useState(null);
   const [pending, setPending] = useState(null);
   const [pendingCode, setPendingCode] = useState(DEFAULT_DOC_CODE);
@@ -342,25 +343,6 @@ export default function DocRegionOverlay({
     markers,
     onChange
   );
-
-  useEffect(() => {
-    const el = containerRef?.current;
-    if (!el) return undefined;
-
-    const sync = () => {
-      const rect = el.getBoundingClientRect();
-      setContainerSize({ w: rect.width, h: rect.height });
-    };
-    sync();
-
-    const ro = new ResizeObserver(() => sync());
-    ro.observe(el);
-    window.addEventListener('resize', sync);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', sync);
-    };
-  }, [containerRef]);
 
   useEffect(() => {
     if (!drawMode) {

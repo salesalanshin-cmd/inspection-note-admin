@@ -37,6 +37,8 @@ export default function ImageZoom({
   contentRef: contentRefProp,
   /** true면 드래그 팬 비활성 (문서 영역 지정 모드 등) */
   panDisabled = false,
+  /** 이미지 로드 후 naturalWidth/Height 전달 (contain 좌표용) */
+  onNaturalSize,
 }) {
   const viewportRef = useRef(null);
   const contentRef = useRef(null);
@@ -288,6 +290,14 @@ export default function ImageZoom({
               sizes={sizes}
               className={`${objectFit} pointer-events-none`}
               draggable={false}
+              onLoadingComplete={(img) => {
+                if (img?.naturalWidth > 0 && img?.naturalHeight > 0) {
+                  onNaturalSize?.({
+                    width: img.naturalWidth,
+                    height: img.naturalHeight,
+                  });
+                }
+              }}
             />
           )}
 

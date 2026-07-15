@@ -17,6 +17,7 @@ import {
   buildImageDownloadFilename,
   downloadRecordImage,
 } from '../lib/downloadImages';
+import { syncFivesNotificationQueue } from '../lib/fivesNotificationQueue';
 import AiSuggestionBanner from './AiSuggestionBanner';
 import SosRegionOverlay from './SosRegionOverlay';
 import ImageZoom from './ImageZoom';
@@ -153,9 +154,9 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
       .from('fives_reports')
       .update(payload)
       .eq('id', report.id);
-    setSaving(false);
 
     if (updateError) {
+      setSaving(false);
       setError(
         updateError.message?.includes('zone_code') ||
           updateError.message?.includes('marking_data')
@@ -165,6 +166,26 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
       return;
     }
 
+    // 영역 지적사항 → 알림 대기열 동기화 (카카오 알림톡 발송은 추후 별도 구현)
+    try {
+      await syncFivesNotificationQueue({
+        fivesReportId: report.id,
+        workerName: workerName.trim() || report.worker_name || null,
+        zoneCode: zoneCode || null,
+        markers: nextMarkers,
+      });
+    } catch (queueErr) {
+      setSaving(false);
+      setError(
+        queueErr.message?.includes('fives_notification_queue') ||
+          queueErr.code === '42P01'
+          ? `${queueErr.message || '알림 대기열 저장 실패'} — migration 011 적용이 필요합니다.`
+          : queueErr.message || '알림 대기열 동기화에 실패했습니다.'
+      );
+      return;
+    }
+
+    setSaving(false);
     onSaved?.();
     onClose?.();
   }

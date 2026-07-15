@@ -151,6 +151,8 @@ export default function WorkersSummarySection({
   goods,
   fives,
   workerDirectory,
+  stickyTop = 0,
+  layoutVariant = 'fill',
 }) {
   const [sortKey, setSortKey] = useState('completionRate');
   const [sortDir, setSortDir] = useState('asc');
@@ -263,6 +265,9 @@ export default function WorkersSummarySection({
 
   return (
     <PageTableShell
+      variant={layoutVariant}
+      stickyToolbar={layoutVariant === 'fill'}
+      stickyTop={stickyTop}
       toolbar={
         <FilterToolbar>
           {alertTargets.length > 0 && (
@@ -332,7 +337,10 @@ export default function WorkersSummarySection({
           </div>
           <table className="hidden w-full text-sm md:table">
             <thead>
-              <tr className="sticky top-0 z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
+              <tr
+                className="sticky z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted"
+                style={{ top: stickyTop }}
+              >
                 <SortableTh column="worker_name" sortKey={sortKey} sortDir={sortDir} onSort={handleSort}>
                   작업자
                 </SortableTh>

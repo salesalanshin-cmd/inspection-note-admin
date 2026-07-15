@@ -12,12 +12,21 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
  *   className?: string,
  * }} props
  */
-export default function SortableTh({ column, sortKey, sortDir, onSort, children, className = '' }) {
+export default function SortableTh({
+  column,
+  sortKey,
+  sortDir,
+  onSort,
+  children,
+  className = '',
+  style,
+}) {
   const active = sortKey === column;
 
   return (
     <th
-      className={`px-4 py-3 cursor-pointer select-none transition-colors hover:text-text ${className}`}
+      className={`cursor-pointer select-none px-4 py-3 transition-colors hover:text-text ${className}`}
+      style={style}
       onClick={() => onSort(column)}
     >
       <span className="inline-flex items-center gap-1">

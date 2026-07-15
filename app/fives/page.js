@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { SOS_ERROR_CODES, ZONE_CODES, fivesErrorCode, fivesLabel, getZoneLabel } from '../../lib/constants';
 import { parseMarkingData } from '../../lib/markingData';
@@ -20,6 +20,7 @@ import {
   buildImageDownloadFilename,
   downloadImagesAsZip,
 } from '../../lib/downloadImages';
+import { countPendingFivesNotifications } from '../../lib/fivesNotificationQueue';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 import PageTableShell from '../../components/PageTableShell';
@@ -88,8 +89,24 @@ export default function FivesPage() {
   const [trashLoading, setTrashLoading] = useState(false);
   const [sortKey, setSortKey] = useState('created_at');
   const [sortDir, setSortDir] = useState('desc');
+  const [pendingNotifyCount, setPendingNotifyCount] = useState(0);
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
     useGalleryBatchSelect();
+
+  useEffect(() => {
+    let cancelled = false;
+    // 발송 대기 건수 — 알림톡 발송 UI는 추후 솔라피 연동 시 별도 구현
+    countPendingFivesNotifications()
+      .then((n) => {
+        if (!cancelled) setPendingNotifyCount(n);
+      })
+      .catch(() => {
+        if (!cancelled) setPendingNotifyCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fives, selected]);
 
   const displayMap = useMemo(
     () => buildWorkerDisplayNameMap(workerDirectory),
@@ -233,6 +250,15 @@ export default function FivesPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader eyebrow="WORKPLACE" title="3정5S 기록" description={`총 ${filtered.length}건`} />
+
+      {pendingNotifyCount > 0 ? (
+        <div className="px-4 pt-3 md:px-8">
+          {/* 카카오 알림톡 발송 화면은 솔라피 등 준비 후 별도 구현. 지금은 pending 집계만. */}
+          <span className="inline-flex items-center rounded-full bg-warnSoft px-3 py-1 text-xs font-medium text-warn">
+            지적사항 알림 대기 {pendingNotifyCount}건
+          </span>
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
         <PageTableShell
@@ -378,6 +404,7 @@ export default function FivesPage() {
 
       {selected ? (
         <FivesEditModal
+          key={selected.id}
           report={selected}
           onClose={() => setSelected(null)}
           onSaved={() => refetch()}

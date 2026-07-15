@@ -13,6 +13,7 @@ import {
   buildImageDownloadFilename,
   downloadImagesAsZip,
 } from '../../lib/downloadImages';
+import { countPendingDefectNotifications } from '../../lib/defectNotificationQueue';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 import SignedImage from '../../components/SignedImage';
@@ -61,8 +62,24 @@ export default function DefectsPage() {
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [trashConfirm, setTrashConfirm] = useState(false);
   const [trashLoading, setTrashLoading] = useState(false);
+  const [pendingNotifyCount, setPendingNotifyCount] = useState(0);
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
     useGalleryBatchSelect();
+
+  useEffect(() => {
+    let cancelled = false;
+    // 발송 대기 건수 — 알림톡 발송 UI는 추후 솔라피 연동 시 별도 구현
+    countPendingDefectNotifications()
+      .then((n) => {
+        if (!cancelled) setPendingNotifyCount(n);
+      })
+      .catch(() => {
+        if (!cancelled) setPendingNotifyCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [defects, selected]);
 
   const visibleDefects = useMemo(
     () => filterDefectsForDisplay(defects, workerDirectory),
@@ -220,6 +237,15 @@ export default function DefectsPage() {
   return (
     <div>
       <PageHeader eyebrow="RECORDS" title="불량 기록" description={`총 ${filtered.length}건`} />
+
+      {pendingNotifyCount > 0 ? (
+        <div className="px-4 pt-3 md:px-8">
+          {/* 카카오 알림톡 발송 화면은 솔라피 등 준비 후 별도 구현. 지금은 pending 집계만. */}
+          <span className="inline-flex items-center rounded-full bg-warnSoft px-3 py-1 text-xs font-medium text-warn">
+            지적사항 알림 대기 {pendingNotifyCount}건
+          </span>
+        </div>
+      ) : null}
 
       <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
         <div className="sticky top-0 z-10 shrink-0 space-y-3 bg-bg pb-4">

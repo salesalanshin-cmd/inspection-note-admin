@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useUndoableMarkerDelete } from '../hooks/useUndoableMarkerDelete';
+import { useContainContainerSize } from '../hooks/useContainContainerSize';
 import {
   computeMarkerDragBounds,
   containBoundsFromLayout,
@@ -199,31 +200,12 @@ export default function EditableMarkerOverlay({
   containerRef,
   onChange,
 }) {
-  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+  const containerSize = useContainContainerSize(containerRef);
   const [selectedIdx, setSelectedIdx] = useState(null);
   const { deleteAt, undoDelete, dismissUndo, undoOpen } = useUndoableMarkerDelete(
     markers,
     onChange
   );
-
-  useEffect(() => {
-    const el = containerRef?.current;
-    if (!el) return undefined;
-
-    const sync = () => {
-      const rect = el.getBoundingClientRect();
-      setContainerSize({ w: rect.width, h: rect.height });
-    };
-    sync();
-
-    const ro = new ResizeObserver(() => sync());
-    ro.observe(el);
-    window.addEventListener('resize', sync);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', sync);
-    };
-  }, [containerRef]);
 
   const { width: coordWidth, height: coordHeight, mode } = resolveCoordinateDimensions(
     markers,

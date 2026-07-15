@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Bell, RefreshCw, X } from 'lucide-react';
 import { useReports } from '../../lib/useReports';
 import {
@@ -17,7 +17,6 @@ import {
 import { SHIFT_STAGES } from '../../lib/constants';
 import { sortRows, toggleSortKey } from '../../lib/tableSort';
 import PageHeader from '../../components/PageHeader';
-import PageTableShell from '../../components/PageTableShell';
 import NotifyReviewModal from '../../components/NotifyReviewModal';
 import WorkersSummarySection from '../../components/WorkersSummarySection';
 import TrafficLightDots from '../../components/TrafficLightDots';
@@ -382,9 +381,29 @@ export default function DailyPerformancePage() {
   const [detailWorker, setDetailWorker] = useState(null);
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
+  const [dayNavHeight, setDayNavHeight] = useState(56);
   const rowRefs = useRef({});
+  const dayNavRef = useRef(null);
 
   const isToday = isSameCalendarDay(date, now);
+
+  useLayoutEffect(() => {
+    const el = dayNavRef.current;
+    if (!el) return undefined;
+
+    const sync = () => {
+      setDayNavHeight(Math.ceil(el.getBoundingClientRect().height));
+    };
+    sync();
+
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    window.addEventListener('resize', sync);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', sync);
+    };
+  }, [activeTab]);
 
   const excludedNames = useMemo(
     () => getExcludedWorkerNames(workerDirectory),
@@ -564,11 +583,16 @@ export default function DailyPerformancePage() {
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 md:px-8">
+        {/* 날짜 네비만 sticky — 요약/우선순위 목록은 문서 흐름으로 스크롤 */}
+        <div
+          ref={dayNavRef}
+          className="sticky top-0 z-10 -mx-4 border-b border-border bg-bg px-4 py-3 md:-mx-8 md:px-8"
+        >
           {dateNav}
-          {tabBar}
         </div>
+
+        <div className="mb-4 mt-4">{tabBar}</div>
 
         {activeTab === 'today' ? (
           <>
@@ -588,228 +612,243 @@ export default function DailyPerformancePage() {
               />
             ) : null}
 
-            <PageTableShell
-              toolbar={
-                <SelectionToolbar
-                  performanceCount={performance.length}
-                  warningCount={warningNames.length}
-                  selectedCount={selected.size}
-                  onSelectAll={selectAll}
-                  onSelectWarning={selectWarningOnly}
-                  onClear={clearSelection}
-                />
-              }
-              table={
-                <>
-                  <div className={`md:hidden ${selected.size > 0 ? 'pb-24' : ''}`}>
-                    <MobileSortSelect
-                      value={sortKey ? `${sortKey}:${sortDir}` : '__default__:asc'}
-                      options={DAILY_SORT_OPTIONS}
-                      onChange={handleMobileSort}
-                    />
-                    {sortedPerformance.map((row) => {
-                      const isWarning = row.overallStatus === 'warning';
-                      const isSelected = selected.has(row.worker_name);
-                      const isHighlighted = highlightedWorker === row.worker_name;
-                      const complianceRow = complianceByWorker.get(row.worker_name);
+            <div className="mb-3">
+              <SelectionToolbar
+                performanceCount={performance.length}
+                warningCount={warningNames.length}
+                selectedCount={selected.size}
+                onSelectAll={selectAll}
+                onSelectWarning={selectWarningOnly}
+                onClear={clearSelection}
+              />
+            </div>
 
-                      return (
-                        <div
-                          key={row.worker_name}
-                          ref={(el) => {
-                            rowRefs.current[row.worker_name] = el;
-                          }}
-                        >
-                          <MobileListCard
-                            header={
-                              <WorkerNameButton
-                                name={row.worker_name}
-                                displayName={displayMap.get(row.worker_name)}
-                                onClick={() => setDetailWorker(row.worker_name)}
-                              />
-                            }
-                            badge={<OverallBadge isWarning={isWarning} />}
-                            leading={
-                              <SelectionCheckbox
-                                checked={isSelected}
-                                onChange={() => toggle(row.worker_name)}
-                                label={`${displayMap.get(row.worker_name) || row.worker_name} 선택`}
-                              />
-                            }
-                            className={`${isWarning ? 'border-l-2 border-l-danger' : ''} ${
-                              isHighlighted ? 'bg-dangerSoft/30' : ''
+            <div
+              className={`rounded-xl bg-surface shadow-card max-md:rounded-none max-md:bg-transparent max-md:shadow-none ${
+                selected.size > 0 ? 'max-md:pb-24' : ''
+              }`}
+            >
+              <div className="md:hidden max-md:px-0 max-md:py-1">
+                <MobileSortSelect
+                  value={sortKey ? `${sortKey}:${sortDir}` : '__default__:asc'}
+                  options={DAILY_SORT_OPTIONS}
+                  onChange={handleMobileSort}
+                />
+                {sortedPerformance.map((row) => {
+                  const isWarning = row.overallStatus === 'warning';
+                  const isSelected = selected.has(row.worker_name);
+                  const isHighlighted = highlightedWorker === row.worker_name;
+                  const complianceRow = complianceByWorker.get(row.worker_name);
+
+                  return (
+                    <div
+                      key={row.worker_name}
+                      ref={(el) => {
+                        rowRefs.current[row.worker_name] = el;
+                      }}
+                    >
+                      <MobileListCard
+                        header={
+                          <WorkerNameButton
+                            name={row.worker_name}
+                            displayName={displayMap.get(row.worker_name)}
+                            onClick={() => setDetailWorker(row.worker_name)}
+                          />
+                        }
+                        badge={<OverallBadge isWarning={isWarning} />}
+                        leading={
+                          <SelectionCheckbox
+                            checked={isSelected}
+                            onChange={() => toggle(row.worker_name)}
+                            label={`${displayMap.get(row.worker_name) || row.worker_name} 선택`}
+                          />
+                        }
+                        className={`${isWarning ? 'border-l-2 border-l-danger' : ''} ${
+                          isHighlighted ? 'bg-dangerSoft/30' : ''
+                        }`}
+                      >
+                        <MobileCardField label="자주검사" className="col-span-2">
+                          <FrequentCheckDots complianceRow={complianceRow} />
+                        </MobileCardField>
+                        <MobileCardField label="3정5S">
+                          <DutyStatusDot cell={row.fives} />
+                        </MobileCardField>
+                        <MobileCardField label="문서스캔">
+                          <DutyStatusDot cell={row.documents} />
+                        </MobileCardField>
+                        <MobileCardField label="불량보고수">
+                          <span
+                            className={`text-sm font-medium ${
+                              row.defectCount > 0 ? 'text-danger' : 'text-muted'
                             }`}
                           >
-                          <MobileCardField label="자주검사" className="col-span-2">
-                            <FrequentCheckDots complianceRow={complianceRow} />
-                          </MobileCardField>
-                          <MobileCardField label="3정5S">
-                            <DutyStatusDot cell={row.fives} />
-                          </MobileCardField>
-                          <MobileCardField label="문서스캔">
-                            <DutyStatusDot cell={row.documents} />
-                          </MobileCardField>
-                          <MobileCardField label="불량보고수">
-                            <span
-                              className={`text-sm font-medium ${
-                                row.defectCount > 0 ? 'text-danger' : 'text-muted'
-                              }`}
-                            >
-                              {row.defectCount}
-                            </span>
-                          </MobileCardField>
-                        </MobileListCard>
-                        </div>
-                      );
-                    })}
-                    {performance.length === 0 ? (
-                      <div className="py-12 text-center text-xs text-muted">
-                        표시할 작업자가 없습니다. 작업자 관리에서 담당 업무를 설정하세요.
-                      </div>
-                    ) : null}
+                            {row.defectCount}
+                          </span>
+                        </MobileCardField>
+                      </MobileListCard>
+                    </div>
+                  );
+                })}
+                {performance.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-muted">
+                    표시할 작업자가 없습니다. 작업자 관리에서 담당 업무를 설정하세요.
                   </div>
+                ) : null}
+              </div>
 
-                  <table className="hidden w-full text-sm md:table">
-                  <thead>
-                    <tr className="sticky top-0 z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
-                      <th className="w-10 px-4 py-3" />
-                      <SortableTh
-                        column="worker_name"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
+              <table className="hidden w-full border-separate border-spacing-0 text-sm md:table">
+                <thead>
+                  <tr className="text-left text-xs font-medium text-muted">
+                    <th
+                      className="sticky z-[1] w-10 border-b border-border bg-surface2 px-4 py-3"
+                      style={{ top: dayNavHeight }}
+                    />
+                    <SortableTh
+                      column="worker_name"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="sticky z-[1] border-b border-border bg-surface2"
+                      style={{ top: dayNavHeight }}
+                    >
+                      작업자
+                    </SortableTh>
+                    <SortableTh
+                      column="frequentCheck"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="sticky z-[1] border-b border-border bg-surface2"
+                      style={{ top: dayNavHeight }}
+                    >
+                      자주검사
+                    </SortableTh>
+                    <SortableTh
+                      column="fives"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="sticky z-[1] border-b border-border bg-surface2"
+                      style={{ top: dayNavHeight }}
+                    >
+                      3정5S
+                    </SortableTh>
+                    <SortableTh
+                      column="documents"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="sticky z-[1] border-b border-border bg-surface2"
+                      style={{ top: dayNavHeight }}
+                    >
+                      문서스캔
+                    </SortableTh>
+                    <SortableTh
+                      column="defectCount"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="sticky z-[1] border-b border-border bg-surface2"
+                      style={{ top: dayNavHeight }}
+                    >
+                      불량보고수
+                    </SortableTh>
+                    <SortableTh
+                      column="overallStatus"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="sticky z-[1] border-b border-border bg-surface2"
+                      style={{ top: dayNavHeight }}
+                    >
+                      종합상태
+                    </SortableTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedPerformance.map((row) => {
+                    const isWarning = row.overallStatus === 'warning';
+                    const isSelected = selected.has(row.worker_name);
+                    const isHighlighted = highlightedWorker === row.worker_name;
+                    return (
+                      <tr
+                        key={row.worker_name}
+                        ref={(el) => {
+                          rowRefs.current[row.worker_name] = el;
+                        }}
+                        className={`border-b border-border transition-colors last:border-0 ${
+                          isHighlighted ? 'bg-dangerSoft/30' : ''
+                        }`}
                       >
-                        작업자
-                      </SortableTh>
-                      <SortableTh
-                        column="frequentCheck"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      >
-                        자주검사
-                      </SortableTh>
-                      <SortableTh
-                        column="fives"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      >
-                        3정5S
-                      </SortableTh>
-                      <SortableTh
-                        column="documents"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      >
-                        문서스캔
-                      </SortableTh>
-                      <SortableTh
-                        column="defectCount"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      >
-                        불량보고수
-                      </SortableTh>
-                      <SortableTh
-                        column="overallStatus"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      >
-                        종합상태
-                      </SortableTh>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedPerformance.map((row) => {
-                      const isWarning = row.overallStatus === 'warning';
-                      const isSelected = selected.has(row.worker_name);
-                      const isHighlighted = highlightedWorker === row.worker_name;
-                      return (
-                        <tr
-                          key={row.worker_name}
-                          ref={(el) => {
-                            rowRefs.current[row.worker_name] = el;
-                          }}
-                          className={`border-b border-border transition-colors last:border-0 ${
-                            isHighlighted ? 'bg-dangerSoft/30' : ''
+                        <td
+                          className={`px-4 py-3 ${
+                            isWarning
+                              ? 'border-l-2 border-danger'
+                              : 'border-l-2 border-transparent'
                           }`}
                         >
-                          <td
-                            className={`px-4 py-3 ${
-                              isWarning
-                                ? 'border-l-2 border-danger'
-                                : 'border-l-2 border-transparent'
+                          <SelectionCheckbox
+                            checked={isSelected}
+                            onChange={() => toggle(row.worker_name)}
+                            label={`${displayMap.get(row.worker_name) || row.worker_name} 선택`}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <WorkerNameButton
+                            name={row.worker_name}
+                            displayName={displayMap.get(row.worker_name)}
+                            onClick={() => setDetailWorker(row.worker_name)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <FrequentCheckDots
+                            complianceRow={complianceByWorker.get(row.worker_name)}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <DutyStatusDot cell={row.fives} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <DutyStatusDot cell={row.documents} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`text-sm font-medium ${
+                              row.defectCount > 0 ? 'text-danger' : 'text-muted'
                             }`}
                           >
-                            <SelectionCheckbox
-                              checked={isSelected}
-                              onChange={() => toggle(row.worker_name)}
-                              label={`${displayMap.get(row.worker_name) || row.worker_name} 선택`}
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <WorkerNameButton
-                              name={row.worker_name}
-                              displayName={displayMap.get(row.worker_name)}
-                              onClick={() => setDetailWorker(row.worker_name)}
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <FrequentCheckDots
-                              complianceRow={complianceByWorker.get(row.worker_name)}
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <DutyStatusDot cell={row.fives} />
-                          </td>
-                          <td className="px-4 py-3">
-                            <DutyStatusDot cell={row.documents} />
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className={`text-sm font-medium ${
-                                row.defectCount > 0 ? 'text-danger' : 'text-muted'
-                              }`}
-                            >
-                              {row.defectCount}
+                            {row.defectCount}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {isWarning ? (
+                            <span className="inline-block rounded-full bg-dangerSoft px-2.5 py-0.5 text-xs font-medium text-danger">
+                              미준수
                             </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            {isWarning ? (
-                              <span className="inline-block rounded-full bg-dangerSoft px-2.5 py-0.5 text-xs font-medium text-danger">
-                                미준수
-                              </span>
-                            ) : (
-                              <span className="inline-block rounded-full bg-goodSoft px-2.5 py-0.5 text-xs font-medium text-good">
-                                정상
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {performance.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-12 text-center text-xs text-muted">
-                          표시할 작업자가 없습니다. 작업자 관리에서 담당 업무를 설정하세요.
+                          ) : (
+                            <span className="inline-block rounded-full bg-goodSoft px-2.5 py-0.5 text-xs font-medium text-good">
+                              정상
+                            </span>
+                          )}
                         </td>
                       </tr>
-                    )}
-                  </tbody>
-                  </table>
-                </>
-              }
-              footer={
-                <p className="text-xs text-muted">
-                  담당 업무는 작업자 관리에서 설정하며, 담당하지 않는 업무는 &quot;해당없음&quot;으로
-                  표시됩니다. 종합상태는 담당 업무 중 하나라도 미완료면 미준수로 판정합니다.
-                </p>
-              }
-            />
+                    );
+                  })}
+                  {performance.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-12 text-center text-xs text-muted">
+                        표시할 작업자가 없습니다. 작업자 관리에서 담당 업무를 설정하세요.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="mt-3 text-xs text-muted">
+              담당 업무는 작업자 관리에서 설정하며, 담당하지 않는 업무는 &quot;해당없음&quot;으로
+              표시됩니다. 종합상태는 담당 업무 중 하나라도 미완료면 미준수로 판정합니다.
+            </p>
           </>
         ) : (
           <WorkersSummarySection
@@ -818,6 +857,8 @@ export default function DailyPerformancePage() {
             goods={goods}
             fives={fives}
             workerDirectory={workerDirectory}
+            stickyTop={dayNavHeight}
+            layoutVariant="flow"
           />
         )}
       </div>

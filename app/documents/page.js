@@ -2,10 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
-import {
-  DOC_ERROR_CODES,
-  docLabel,
-} from '../../lib/constants';
+import { DOC_ERROR_CODES, docLabel } from '../../lib/constants';
 import { buildWorkerDisplayNameMap } from '../../lib/analytics';
 import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
@@ -15,6 +12,7 @@ import {
 } from '../../lib/downloadImages';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
 import { countPendingDocumentNotifications } from '../../lib/documentNotificationQueue';
+import { parseMarkingData } from '../../lib/markingData';
 import PageHeader from '../../components/PageHeader';
 import StatCard from '../../components/StatCard';
 import SignedImage from '../../components/SignedImage';
@@ -297,11 +295,21 @@ export default function DocumentsPage() {
                     이미지 없음
                   </div>
                 )}
-                {d.doc_error_code ? (
-                  <div className="absolute bottom-2 left-2 z-20 px-2 py-0.5 bg-warnSoft text-warn text-[10px] font-medium rounded-full">
-                    {DOC_ERROR_CODES[d.doc_error_code] || d.doc_error_code}
-                  </div>
-                ) : null}
+                <div className="absolute bottom-2 left-2 right-2 z-20 flex flex-wrap gap-1">
+                  {(() => {
+                    const markCount = parseMarkingData(d.marking_data).filter((m) => m.code).length;
+                    return markCount > 0 ? (
+                      <span className="rounded-full bg-dangerSoft px-2 py-0.5 text-[10px] font-medium text-danger">
+                        지적 {markCount}건
+                      </span>
+                    ) : null;
+                  })()}
+                  {d.doc_error_code ? (
+                    <span className="rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
+                      {DOC_ERROR_CODES[d.doc_error_code] || d.doc_error_code}
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div className="p-2.5 text-[11px] md:text-xs">
                 <div className="truncate font-medium text-text">
@@ -327,6 +335,7 @@ export default function DocumentsPage() {
 
       {selected ? (
         <DocumentEditModal
+          key={selected.id}
           report={selected}
           onClose={() => setSelected(null)}
           onSaved={() => refetch()}
