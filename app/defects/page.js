@@ -15,6 +15,10 @@ import {
 } from '../../lib/downloadImages';
 import { countPendingDefectNotifications } from '../../lib/defectNotificationQueue';
 import { supabase } from '../../lib/supabase';
+import {
+  insertAiCorrectionLog,
+  resolveWasAiAccepted,
+} from '../../lib/aiCorrectionLog';
 import PageHeader from '../../components/PageHeader';
 import SignedImage from '../../components/SignedImage';
 import DefectEditModal from '../../components/DefectEditModal';
@@ -167,6 +171,25 @@ export default function DefectsPage() {
     );
     const failed = responses.find((r) => r.error);
     if (failed?.error) throw new Error(failed.error.message);
+
+    await Promise.all(
+      updates.map((u) => {
+        const record = recordsById.get(u.id);
+        return insertAiCorrectionLog({
+          sourceTable: 'defect_reports',
+          sourceId: u.id,
+          codeSet: 'defect',
+          aiSuggestedCode: u.ai_suggested_code ?? null,
+          aiConfidence: u.ai_confidence ?? null,
+          aiReason: u.ai_reason ?? null,
+          finalCode: u.code,
+          finalNote: null,
+          wasAiAccepted: resolveWasAiAccepted(true, u.ai_suggested_code, u.code),
+          workerName: record?.worker_name || null,
+        });
+      })
+    );
+
     clearAll();
     refetch();
   }

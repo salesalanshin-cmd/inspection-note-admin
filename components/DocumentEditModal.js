@@ -11,6 +11,12 @@ import {
   downloadRecordImage,
 } from '../lib/downloadImages';
 import { syncDocumentNotificationQueue } from '../lib/documentNotificationQueue';
+import {
+  insertAiCorrectionLog,
+  resolveWasAiAccepted,
+} from '../lib/aiCorrectionLog';
+import AiClassifyStatus from './AiClassifyStatus';
+import AiMismatchDialog from './AiMismatchDialog';
 import AiSuggestionBanner from './AiSuggestionBanner';
 import DocRegionOverlay from './DocRegionOverlay';
 import ImageZoom from './ImageZoom';
@@ -34,9 +40,16 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState(null);
   const [aiSuggestion, setAiSuggestion] = useState(null);
+  const [pendingAi, setPendingAi] = useState(null);
+  const [correctionReason, setCorrectionReason] = useState(null);
+  const [aiCompletedAt, setAiCompletedAt] = useState(null);
   const imageContentRef = useRef(null);
   const markersRef = useRef(markers);
+  const errorCodeRef = useRef(errorCode);
+  const correctionReasonRef = useRef(correctionReason);
   markersRef.current = markers;
+  errorCodeRef.current = errorCode;
+  correctionReasonRef.current = correctionReason;
 
   // Fives와 동일하게 report.marking_data로 초기화 + DB 재조회로 동기화
   useEffect(() => {
@@ -81,17 +94,41 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
 
     setClassifying(true);
     setError(null);
+    setPendingAi(null);
+    setCorrectionReason(null);
     try {
       const result = await requestClassifyPhoto(report.image_url, 'doc');
-      setAiSuggestion(result);
-      if (result.code && DOC_ERROR_CODES[result.code]) {
-        setErrorCode(result.code);
-      }
+      const suggestion = {
+        code: result.code && DOC_ERROR_CODES[result.code] ? result.code : null,
+        confidence: result.confidence,
+        reason: result.reason,
+      };
+      setAiSuggestion(suggestion);
+      setAiCompletedAt(new Date());
+
+      if (!suggestion.code) return;
+      if (suggestion.code === (errorCodeRef.current || null)) return;
+      setPendingAi(suggestion);
     } catch (err) {
       setError(err.message);
     } finally {
       setClassifying(false);
     }
+  }
+
+  function applyAiSuggestion() {
+    if (!pendingAi?.code) {
+      setPendingAi(null);
+      return;
+    }
+    setErrorCode(pendingAi.code);
+    setCorrectionReason(null);
+    setPendingAi(null);
+  }
+
+  function keepExistingValue(reason) {
+    setCorrectionReason(reason);
+    setPendingAi(null);
   }
 
   async function handleDownloadImage() {
@@ -165,6 +202,23 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
       return;
     }
 
+    const sessionAi = aiSuggestion;
+    const finalCode = errorCode || null;
+    const wasAiAccepted = resolveWasAiAccepted(!!sessionAi, sessionAi?.code, finalCode);
+    await insertAiCorrectionLog({
+      sourceTable: 'ocr_results',
+      sourceId: report.id,
+      codeSet: 'doc',
+      aiSuggestedCode: sessionAi ? sessionAi.code ?? null : null,
+      aiConfidence: sessionAi ? sessionAi.confidence ?? null : null,
+      aiReason: sessionAi ? sessionAi.reason ?? null : null,
+      finalCode,
+      finalNote: errorNote.trim() || null,
+      wasAiAccepted,
+      workerName: workerName.trim() || report.worker_name || null,
+      correctionReason: wasAiAccepted === false ? correctionReasonRef.current : null,
+    });
+
     setSaving(false);
     onSaved?.();
     onClose?.();
@@ -176,7 +230,7 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
       onConfirm={handleSave}
       cancelLabel="취소"
       confirmLabel={saving ? '저장 중...' : '저장'}
-      confirmDisabled={saving || classifying}
+      confirmDisabled={saving || classifying || !!pendingAi}
     />
   );
 
@@ -253,14 +307,17 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
 
         <div className="flex w-full flex-col p-4 md:w-80 md:shrink-0 md:p-5">
           <div className="flex-1 space-y-4">
-            <button
-              type="button"
-              onClick={handleAiClassify}
-              disabled={classifying || saving || !report.image_url}
-              className="min-h-[44px] w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
-            >
-              {classifying ? 'AI 분석 중...' : 'AI 자동판정'}
-            </button>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleAiClassify}
+                disabled={classifying || saving || !report.image_url}
+                className="min-h-[44px] w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
+              >
+                {classifying ? 'AI 분석 중...' : 'AI 자동판정'}
+              </button>
+              <AiClassifyStatus classifying={classifying} completedAt={aiCompletedAt} />
+            </div>
 
             <button
               type="button"
@@ -271,7 +328,18 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
               {downloading ? '다운로드 중...' : '이미지 다운로드'}
             </button>
 
-            {aiSuggestion ? (
+            {pendingAi ? (
+              <AiMismatchDialog
+                key={`doc-${pendingAi.code}-${aiCompletedAt?.getTime?.() || 0}`}
+                codeSet="doc"
+                currentCode={errorCode || null}
+                pendingAi={pendingAi}
+                onApply={applyAiSuggestion}
+                onKeep={keepExistingValue}
+              />
+            ) : null}
+
+            {!pendingAi && aiSuggestion ? (
               <AiSuggestionBanner
                 code={aiSuggestion.code}
                 confidence={aiSuggestion.confidence}

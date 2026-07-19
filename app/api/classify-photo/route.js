@@ -18,6 +18,7 @@ export async function POST(request) {
   }
 
   try {
+    // buildClassifyPrompt → ai_correction_log 과거 사례 조회 포함
     const result = await classifyPhoto(imageUrl, codeSet, {
       regionCrop: Boolean(regionCrop),
     });

@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { DEFECT_CODE_LABELS, CONFIDENCE_LABELS, defectLabel } from '../lib/constants';
+import { DEFECT_CODE_LABELS, defectLabel } from '../lib/constants';
+import { getDefectCodeDefinition } from '../lib/defectCodeDefinitions';
 import { getDisplayName } from '../lib/analytics';
 import { requestClassifyPhoto } from '../lib/classifyClient';
 import { cloneMarkingData } from '../lib/markingData';
@@ -11,6 +12,12 @@ import {
   downloadRecordImage,
 } from '../lib/downloadImages';
 import { syncDefectNotificationQueue } from '../lib/defectNotificationQueue';
+import {
+  insertAiCorrectionLog,
+  resolveWasAiAccepted,
+} from '../lib/aiCorrectionLog';
+import AiClassifyStatus from './AiClassifyStatus';
+import AiMismatchDialog from './AiMismatchDialog';
 import AiSuggestionBanner from './AiSuggestionBanner';
 import EditableMarkerOverlay from './EditableMarkerOverlay';
 import ImageZoom from './ImageZoom';
@@ -42,12 +49,6 @@ function normalizeDefectCode(raw) {
   );
 }
 
-function formatCodeLabel(code) {
-  if (!code) return '(없음)';
-  const label = DEFECT_CODE_LABELS[code];
-  return label ? `${code} (${label})` : code;
-}
-
 export default function DefectEditModal({ report, workerDirectory, onClose, onSaved }) {
   const [code, setCode] = useState(() => resolveInitialCode(report));
   const [markers, setMarkers] = useState(() => cloneMarkingData(report.marking_data));
@@ -58,14 +59,18 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
   const [error, setError] = useState(null);
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [pendingAi, setPendingAi] = useState(null);
+  const [correctionReason, setCorrectionReason] = useState(null);
+  const [aiCompletedAt, setAiCompletedAt] = useState(null);
   const imageContainerRef = useRef(null);
   // 저장 시 stale closure 방지용 — 항상 최신 code/markers 참조
   const codeRef = useRef(code);
   const markersRef = useRef(markers);
   const aiSuggestionRef = useRef(aiSuggestion);
+  const correctionReasonRef = useRef(correctionReason);
   codeRef.current = code;
   markersRef.current = markers;
   aiSuggestionRef.current = aiSuggestion;
+  correctionReasonRef.current = correctionReason;
 
   const aspectRatio =
     report.image_width > 0 && report.image_height > 0
@@ -86,6 +91,7 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
     setClassifying(true);
     setError(null);
     setPendingAi(null);
+    setCorrectionReason(null);
     try {
       const result = await requestClassifyPhoto(report.image_url, 'defect');
       const normalized = normalizeDefectCode(result.code);
@@ -95,6 +101,7 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
         reason: result.reason,
       };
       setAiSuggestion(suggestion);
+      setAiCompletedAt(new Date());
 
       // labels에 없는 코드면 드롭다운에 넣을 수 없음 — 배너만 표시
       if (!normalized) return;
@@ -117,10 +124,12 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
       return;
     }
     setCode(pendingAi.code);
+    setCorrectionReason(null);
     setPendingAi(null);
   }
 
-  function dismissAiSuggestion() {
+  function keepExistingValue(reason) {
+    setCorrectionReason(reason);
     setPendingAi(null);
   }
 
@@ -208,6 +217,23 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
       return;
     }
 
+    // 이번 세션에서 AI 판정을 실행한 경우만 이력에 AI 필드 기록
+    const sessionAi = nextAi;
+    const wasAiAccepted = resolveWasAiAccepted(!!sessionAi, sessionAi?.code, nextCode);
+    await insertAiCorrectionLog({
+      sourceTable: 'defect_reports',
+      sourceId: report.id,
+      codeSet: 'defect',
+      aiSuggestedCode: sessionAi ? sessionAi.code ?? null : null,
+      aiConfidence: sessionAi ? sessionAi.confidence ?? null : null,
+      aiReason: sessionAi ? sessionAi.reason ?? null : null,
+      finalCode: nextCode,
+      finalNote: null,
+      wasAiAccepted,
+      workerName: report.worker_name || null,
+      correctionReason: wasAiAccepted === false ? correctionReasonRef.current : null,
+    });
+
     setSaving(false);
     onSaved?.(data);
     onClose?.();
@@ -224,6 +250,7 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
   );
 
   const titleLabel = DEFECT_CODE_LABELS[code] || defectLabel(report);
+  const selectedDefinition = getDefectCodeDefinition(code);
 
   return (
     <ModalShell
@@ -296,14 +323,17 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
 
         <div className="flex w-full flex-col p-4 md:w-80 md:shrink-0 md:p-5">
           <div className="flex-1 space-y-4">
-            <button
-              type="button"
-              onClick={handleAiClassify}
-              disabled={classifying || saving || !report.image_url}
-              className="min-h-[44px] w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
-            >
-              {classifying ? 'AI 분석 중...' : 'AI 자동판정'}
-            </button>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleAiClassify}
+                disabled={classifying || saving || !report.image_url}
+                className="min-h-[44px] w-full rounded-xl border border-accent/30 bg-accentSoft px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
+              >
+                {classifying ? 'AI 분석 중...' : 'AI 자동판정'}
+              </button>
+              <AiClassifyStatus classifying={classifying} completedAt={aiCompletedAt} />
+            </div>
 
             <button
               type="button"
@@ -315,43 +345,14 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
             </button>
 
             {pendingAi ? (
-              <div
-                className="rounded-xl border border-accent/30 bg-surface p-3 shadow-card"
-                role="dialog"
-                aria-label="AI 판정 결과 확인"
-              >
-                <p className="text-sm font-medium text-text">AI 판정 결과가 다릅니다</p>
-                <p className="mt-2 text-xs leading-relaxed text-muted">
-                  기존: <span className="text-text">{formatCodeLabel(code)}</span>
-                  <br />
-                  → AI 제안:{' '}
-                  <span className="font-medium text-accent">{formatCodeLabel(pendingAi.code)}</span>
-                  <br />
-                  확신도: {CONFIDENCE_LABELS[pendingAi.confidence] || pendingAi.confidence || '-'}
-                  {pendingAi.reason ? (
-                    <>
-                      <br />
-                      이유: {pendingAi.reason}
-                    </>
-                  ) : null}
-                </p>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={applyAiSuggestion}
-                    className="min-h-[44px] flex-1 rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 md:min-h-0"
-                  >
-                    AI 제안 적용
-                  </button>
-                  <button
-                    type="button"
-                    onClick={dismissAiSuggestion}
-                    className="min-h-[44px] flex-1 rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text md:min-h-0"
-                  >
-                    기존 값 유지
-                  </button>
-                </div>
-              </div>
+              <AiMismatchDialog
+                key={`defect-${pendingAi.code}-${aiCompletedAt?.getTime?.() || 0}`}
+                codeSet="defect"
+                currentCode={code}
+                pendingAi={pendingAi}
+                onApply={applyAiSuggestion}
+                onKeep={keepExistingValue}
+              />
             ) : null}
 
             {!pendingAi && aiSuggestion ? (
@@ -368,10 +369,15 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
               <select value={code} onChange={(e) => setCode(e.target.value)} className={inputClass}>
                 {DEFECT_CODE_ENTRIES.map(([value, label]) => (
                   <option key={value} value={value}>
-                    {value} {label}
+                    {value} - {label}
                   </option>
                 ))}
               </select>
+              {selectedDefinition?.definition ? (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                  {selectedDefinition.definition}
+                </p>
+              ) : null}
             </div>
 
             {error && (

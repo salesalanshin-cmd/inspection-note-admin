@@ -178,7 +178,7 @@ export default function BatchClassifyReviewModal({
                   <option value="">코드 선택</option>
                   {codeOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
-                      {opt.label} ({opt.value})
+                      {opt.value} - {opt.label}
                     </option>
                   ))}
                 </select>

@@ -14,6 +14,10 @@ import {
 import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
 import { sortRows } from '../../lib/tableSort';
 import { requestClassifyPhotosBatch } from '../../lib/classifyClient';
+import {
+  insertAiCorrectionLog,
+  resolveWasAiAccepted,
+} from '../../lib/aiCorrectionLog';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
 import {
@@ -179,6 +183,25 @@ export default function FivesPage() {
     );
     const failed = responses.find((r) => r.error);
     if (failed?.error) throw new Error(failed.error.message);
+
+    await Promise.all(
+      updates.map((u) => {
+        const record = recordsById.get(u.id);
+        return insertAiCorrectionLog({
+          sourceTable: 'fives_reports',
+          sourceId: u.id,
+          codeSet: 'sos',
+          aiSuggestedCode: u.ai_suggested_code ?? null,
+          aiConfidence: u.ai_confidence ?? null,
+          aiReason: u.ai_reason ?? null,
+          finalCode: u.code,
+          finalNote: record?.sos_error_note || null,
+          wasAiAccepted: resolveWasAiAccepted(true, u.ai_suggested_code, u.code),
+          workerName: record?.worker_name || null,
+        });
+      })
+    );
+
     clearAll();
     refetch();
   }

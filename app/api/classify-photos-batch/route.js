@@ -32,6 +32,7 @@ export async function POST(request) {
   }
 
   try {
+    // 배치 내 ai_correction_log 조회 1회 → 프롬프트 재사용
     const results = await classifyPhotosBatch(items, codeSet);
     return NextResponse.json({ results });
   } catch (err) {
