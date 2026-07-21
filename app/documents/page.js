@@ -199,7 +199,7 @@ export default function DocumentsPage() {
           <StatCard label="정상률" value={normalRate} tone="good" />
         </div>
 
-        <div className="sticky top-0 z-10 shrink-0 bg-bg pb-4">
+        <div className="shrink-0 bg-bg pb-4">
           <FilterToolbar primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}>
             <select value={worker} onChange={(e) => setWorker(e.target.value)} className={selectClass}>
               <option value="all">전체 작업자</option>

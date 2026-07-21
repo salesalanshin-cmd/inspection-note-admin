@@ -271,7 +271,7 @@ export default function FivesPage() {
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div>
       <PageHeader eyebrow="WORKPLACE" title="3정5S 기록" description={`총 ${filtered.length}건`} />
 
       {pendingNotifyCount > 0 ? (
@@ -283,8 +283,10 @@ export default function FivesPage() {
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
+      <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
         <PageTableShell
+          variant="flow"
+          stickyToolbar={false}
           toolbar={
             <FilterToolbar
               primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}

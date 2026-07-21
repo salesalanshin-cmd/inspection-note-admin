@@ -59,7 +59,7 @@ export default function DefectsPage() {
   const [worker, setWorker] = useState('all');
   const [type, setType] = useState('all');
   const [selected, setSelected] = useState(null);
-  const [dateRange, setDateRange] = useState(() => getRecentDaysRange(90));
+  const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
   const [batchProgress, setBatchProgress] = useState(null);
   const [batchResults, setBatchResults] = useState(null);
   const [batchError, setBatchError] = useState(null);
@@ -271,7 +271,7 @@ export default function DefectsPage() {
       ) : null}
 
       <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
-        <div className="sticky top-0 z-10 shrink-0 space-y-3 bg-bg pb-4">
+        <div className="shrink-0 space-y-3 bg-bg pb-4">
           <FilterToolbar primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}>
             <select
               value={worker}
