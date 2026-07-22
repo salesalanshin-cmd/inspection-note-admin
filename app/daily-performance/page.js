@@ -880,6 +880,7 @@ export default function DailyPerformancePage() {
         <NotifyReviewModal
           rows={selectedRows}
           workerDirectory={workerDirectory}
+          date={`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`}
           onClose={() => setReviewOpen(false)}
         />
       ) : null}
