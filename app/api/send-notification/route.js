@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '../../../lib/supabase';
-import { sendAlimtalk, TEMPLATE_IDS } from '../../../lib/solapiClient';
+import { sendAlimtalk } from '../../../lib/solapiClient';
 
 /**
  * POST /api/send-notification
- * body: { targets: [{ workerName, phoneNumber, templateType, variables }] }
+ * body: { targets: [{ workerName, phoneNumber, templateType, variables, autoKey? }] }
+ *
+ * notification_send_log 컬럼(라이브): worker_name, phone_number, template_type,
+ * status, error_message, created_at, sent_at, auto_key
  */
 export async function POST(request) {
   let body;
@@ -27,6 +30,7 @@ export async function POST(request) {
     const templateType = String(target?.templateType || '');
     const variables =
       target?.variables && typeof target.variables === 'object' ? target.variables : {};
+    const autoKey = target?.autoKey ? String(target.autoKey) : null;
 
     if (!workerName) {
       results.push({ workerName: '', success: false, error: '작업자명이 없습니다.' });
@@ -45,7 +49,7 @@ export async function POST(request) {
         templateType,
         status: 'failed',
         errorMessage: '연락처가 없습니다.',
-        variables,
+        autoKey,
       });
       continue;
     }
@@ -68,11 +72,10 @@ export async function POST(request) {
       workerName,
       phoneNumber,
       templateType,
-      templateId: sendResult.templateId || TEMPLATE_IDS[templateType] || null,
       status: success ? 'sent' : 'failed',
-      messageId: sendResult.messageId || null,
       errorMessage: success ? null : sendResult.error || '발송 실패',
-      variables,
+      autoKey,
+      sentAt: success ? new Date().toISOString() : null,
     });
   }
 
@@ -83,23 +86,22 @@ async function insertLog({
   workerName,
   phoneNumber,
   templateType,
-  templateId = null,
   status,
-  messageId = null,
   errorMessage = null,
-  variables = {},
+  autoKey = null,
+  sentAt = null,
 }) {
   try {
-    const { error } = await supabase.from('notification_send_log').insert({
+    const row = {
       worker_name: workerName,
       phone_number: phoneNumber,
       template_type: templateType || null,
-      template_id: templateId,
       status,
-      message_id: messageId,
       error_message: errorMessage,
-      variables,
-    });
+      auto_key: autoKey,
+      sent_at: sentAt,
+    };
+    const { error } = await supabase.from('notification_send_log').insert(row);
     if (error) {
       console.error('[send-notification] log insert failed', error.message);
     }

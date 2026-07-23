@@ -16,7 +16,8 @@ const NAV = [
 
 const SETTINGS_NAV = [
   { href: '/worker-management', label: '작업자 관리', code: '07' },
-  { href: '/trash', label: '휴지통', code: '08' },
+  { href: '/settings/messages', label: '메시지 관리', code: '08' },
+  { href: '/trash', label: '휴지통', code: '09' },
 ];
 
 const INSIGHT_LAB_NAV = {

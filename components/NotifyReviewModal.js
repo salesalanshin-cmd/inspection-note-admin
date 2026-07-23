@@ -11,7 +11,7 @@ import {
 import ModalShell from './ModalShell';
 
 /**
- * 복사/수동 전송용 자유 문구 (알림톡 템플릿과 별개 — 실패 시 대안)
+ * 실패 시 수동 전송용 자유 문구 (알림톡 템플릿과 별개)
  */
 function buildCopyMessage(row, workerDirectory) {
   const name = getDisplayName(row.worker_name, workerDirectory);
@@ -39,11 +39,6 @@ const TEMPLATE_TYPE_LABELS = {
 };
 
 export default function NotifyReviewModal({ rows, workerDirectory, date, onClose }) {
-  const [messages, setMessages] = useState(() =>
-    Object.fromEntries(
-      (rows || []).map((r) => [r.worker_name, buildCopyMessage(r, workerDirectory)])
-    )
-  );
   const [copiedKey, setCopiedKey] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendResults, setSendResults] = useState({});
@@ -64,33 +59,25 @@ export default function NotifyReviewModal({ rows, workerDirectory, date, onClose
           templateType,
           variables,
           preview: renderTemplatePreview(templateType, variables),
+          copyText: buildCopyMessage(row, workerDirectory),
         };
       }),
     [rows, workerDirectory, date]
   );
 
   const sendableCount = targets.filter((t) => t.phoneNumber).length;
+  const hasAnyResult = Object.keys(sendResults).length > 0;
+  const hasFailures =
+    hasAnyResult && Object.values(sendResults).some((r) => r && !r.success);
 
   function flashCopied(key) {
     setCopiedKey(key);
     setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
   }
 
-  async function copyOne(name) {
-    try {
-      await navigator.clipboard.writeText(messages[name] ?? '');
-      flashCopied(name);
-    } catch {
-      // 클립보드 접근 실패 시 조용히 무시
-    }
-  }
-
   async function copyAll() {
-    const text = (rows || [])
-      .map((r) => {
-        const label = getDisplayName(r.worker_name, workerDirectory);
-        return `▶ ${label}\n${messages[r.worker_name] ?? ''}`;
-      })
+    const text = targets
+      .map((t) => `▶ ${t.displayName}\n${t.copyText}`)
       .join('\n\n');
     try {
       await navigator.clipboard.writeText(text);
@@ -145,7 +132,6 @@ export default function NotifyReviewModal({ rows, workerDirectory, date, onClose
           error: r.error || null,
         };
       }
-      // 연락처 없는 대상도 UI에 표시
       for (const t of targets) {
         if (!t.phoneNumber && !next[t.workerName]) {
           next[t.workerName] = { success: false, error: '연락처 미등록' };
@@ -169,22 +155,12 @@ export default function NotifyReviewModal({ rows, workerDirectory, date, onClose
       footer={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[11px] text-muted md:text-xs">
-            카카오 알림톡으로 발송합니다. 실패 시 아래 복사 문구를 대안으로 사용하세요.
+            카카오 알림톡으로 발송합니다.
+            {hasFailures
+              ? ' 실패 건이 있으면 아래 복사로 수동 전송할 수 있습니다.'
+              : ''}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <button
-              type="button"
-              onClick={copyAll}
-              disabled={sending}
-              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-surface2 disabled:opacity-50 md:min-h-0"
-            >
-              {copiedKey === '__all__' ? (
-                <Check className="h-4 w-4" strokeWidth={2.25} />
-              ) : (
-                <Copy className="h-4 w-4" strokeWidth={2} />
-              )}
-              {copiedKey === '__all__' ? '전체 복사됨' : '전체 메시지 복사'}
-            </button>
             <button
               type="button"
               onClick={handleSendAlimtalk}
@@ -198,6 +174,21 @@ export default function NotifyReviewModal({ rows, workerDirectory, date, onClose
               )}
               {sending ? '발송 중...' : `카카오 알림톡 발송 (${sendableCount}명)`}
             </button>
+            {hasFailures ? (
+              <button
+                type="button"
+                onClick={copyAll}
+                disabled={sending}
+                className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50 md:min-h-0"
+              >
+                {copiedKey === '__all__' ? (
+                  <Check className="h-3.5 w-3.5" strokeWidth={2.25} />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" strokeWidth={2} />
+                )}
+                {copiedKey === '__all__' ? '복사됨' : '전체 메시지 복사'}
+              </button>
+            ) : null}
           </div>
         </div>
       }
@@ -211,7 +202,6 @@ export default function NotifyReviewModal({ rows, workerDirectory, date, onClose
         {targets.map((target) => {
           const result = sendResults[target.workerName];
           const hasPhone = !!target.phoneNumber;
-          const copied = copiedKey === target.workerName;
           return (
             <div
               key={target.workerName}
@@ -242,46 +232,19 @@ export default function NotifyReviewModal({ rows, workerDirectory, date, onClose
                   ) : (
                     <span className="inline-flex max-w-[55%] shrink-0 items-start gap-1 text-xs font-medium text-danger">
                       <X className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.5} />
-                      <span>{result.error || '발송 실패'}</span>
+                      <span className="break-words">{result.error || '발송 실패'}</span>
                     </span>
                   )
                 ) : null}
               </div>
 
-              <pre className="mt-2.5 whitespace-pre-wrap rounded-xl border border-border bg-surface2 px-3 py-2 text-sm leading-relaxed text-text">
+              <pre className="mt-2.5 max-w-full overflow-hidden whitespace-pre-wrap break-words rounded-xl border border-border bg-surface2 px-3 py-2 text-sm leading-relaxed text-text [overflow-wrap:anywhere]">
                 {target.preview}
               </pre>
 
-              <p className="mt-3 text-[11px] text-muted">수동 전송용 복사 문구</p>
-              <textarea
-                value={messages[target.workerName] ?? ''}
-                onChange={(e) =>
-                  setMessages((prev) => ({
-                    ...prev,
-                    [target.workerName]: e.target.value,
-                  }))
-                }
-                rows={2}
-                className="mt-1 w-full resize-y rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
-              />
-
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => copyOne(target.workerName)}
-                  className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-medium text-text transition-colors hover:bg-surface2"
-                >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5 text-good" strokeWidth={2.25} />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" strokeWidth={2} />
-                  )}
-                  {copied ? '복사됨' : '복사'}
-                </button>
-                {!hasPhone ? (
-                  <span className="text-[11px] text-warn">연락처 먼저 등록하세요</span>
-                ) : null}
-              </div>
+              {!hasPhone ? (
+                <p className="mt-2 text-[11px] text-warn">연락처 먼저 등록하세요</p>
+              ) : null}
             </div>
           );
         })}
