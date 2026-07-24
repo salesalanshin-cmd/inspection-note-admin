@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Bell, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import {
+  buildTodayRealtimePerformance,
   getDisplayName,
   getWorkDateForRecord,
 } from '../../../lib/analytics';
@@ -11,6 +12,7 @@ import { getRecentDaysRange, formatISODate } from '../../../lib/dateRange';
 import { useReports } from '../../../lib/useReports';
 import PageHeader from '../../../components/PageHeader';
 import DateRangePicker from '../../../components/DateRangePicker';
+import NotifyReviewModal from '../../../components/NotifyReviewModal';
 
 const TEMPLATE_LABELS = {
   frequent_check: '자주검사',
@@ -99,7 +101,16 @@ function ToggleSwitch({ checked, onChange, disabled, label }) {
 }
 
 export default function MessagesSettingsPage() {
-  const { workerDirectory } = useReports();
+  const {
+    workerDirectory,
+    defects,
+    goods,
+    fives,
+    docs,
+    loading: reportsLoading,
+    error: reportsError,
+    refetch: refetchReports,
+  } = useReports();
   const [logs, setLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [logsError, setLogsError] = useState(null);
@@ -110,6 +121,10 @@ export default function MessagesSettingsPage() {
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [togglingKey, setTogglingKey] = useState(null);
   const [resendingId, setResendingId] = useState(null);
+  const [now, setNow] = useState(() => new Date());
+  const [selectedWarning, setSelectedWarning] = useState(() => new Set());
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadLogs = useCallback(async () => {
     setLoadingLogs(true);
@@ -141,13 +156,64 @@ export default function MessagesSettingsPage() {
     setSettingsLoading(false);
   }, []);
 
+  const refreshAll = useCallback(async () => {
+    setRefreshing(true);
+    setNow(new Date());
+    await Promise.all([loadLogs(), refetchReports()]);
+    setRefreshing(false);
+  }, [loadLogs, refetchReports]);
+
   useEffect(() => {
     loadLogs();
     loadSettings();
   }, [loadLogs, loadSettings]);
 
+  const realtimeRows = useMemo(
+    () =>
+      buildTodayRealtimePerformance(
+        defects,
+        goods,
+        fives,
+        docs,
+        workerDirectory,
+        now
+      ),
+    [defects, goods, fives, docs, workerDirectory, now]
+  );
+
+  const okRows = useMemo(
+    () => realtimeRows.filter((r) => r.overallStatus === 'ok'),
+    [realtimeRows]
+  );
+  const warningRows = useMemo(
+    () => realtimeRows.filter((r) => r.overallStatus === 'warning'),
+    [realtimeRows]
+  );
+
+  const warningNameSet = useMemo(
+    () => new Set(warningRows.map((r) => r.worker_name)),
+    [warningRows]
+  );
+
+  useEffect(() => {
+    setSelectedWarning((prev) => {
+      const next = new Set();
+      for (const name of prev) {
+        if (warningNameSet.has(name)) next.add(name);
+      }
+      return next;
+    });
+  }, [warningNameSet]);
+
+  const selectedWarningRows = useMemo(
+    () => warningRows.filter((r) => selectedWarning.has(r.worker_name)),
+    [warningRows, selectedWarning]
+  );
+
+  const workDateLabel = useMemo(() => getWorkDateForRecord(now), [now]);
+
   const todaySummary = useMemo(() => {
-    const { start, end } = workDayBounds();
+    const { start, end } = workDayBounds(now);
     const todayLogs = logs.filter((row) => {
       const ts = logTimestamp(row);
       if (!ts) return false;
@@ -160,7 +226,7 @@ export default function MessagesSettingsPage() {
       .sort((a, b) => new Date(logTimestamp(b)) - new Date(logTimestamp(a)))
       .slice(0, 10);
     return { total: todayLogs.length, sent, failed, recent };
-  }, [logs]);
+  }, [logs, now]);
 
   const filteredLogs = useMemo(() => {
     const q = workerQuery.trim().toLowerCase();
@@ -180,6 +246,23 @@ export default function MessagesSettingsPage() {
       return true;
     });
   }, [logs, dateRange, statusFilter, workerQuery, workerDirectory]);
+
+  function toggleWarning(name) {
+    setSelectedWarning((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  function selectAllWarning() {
+    setSelectedWarning(new Set(warningRows.map((r) => r.worker_name)));
+  }
+
+  function clearWarningSelection() {
+    setSelectedWarning(new Set());
+  }
 
   async function handleToggle(key, nextEnabled) {
     if (togglingKey) return;
@@ -257,6 +340,8 @@ export default function MessagesSettingsPage() {
     }
   }
 
+  const isBusy = loadingLogs || refreshing || reportsLoading;
+
   return (
     <div className="flex h-full flex-col overflow-auto">
       <PageHeader
@@ -266,17 +351,144 @@ export default function MessagesSettingsPage() {
       />
 
       <div className="space-y-8 px-4 py-6 md:px-8">
+        {/* 오늘 실시간 현황 */}
+        <section>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-text">오늘 실시간 현황</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                근무일 {workDateLabel} · 시간 지난 미실시만 미흡으로 집계
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={refreshAll}
+              disabled={isBusy}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
+            >
+              {isBusy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              새로고침
+            </button>
+          </div>
+
+          {reportsError ? (
+            <p className="text-sm text-danger">실적 데이터 오류: {reportsError}</p>
+          ) : reportsLoading && realtimeRows.length === 0 ? (
+            <p className="text-sm text-muted">실시간 현황 불러오는 중…</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-border bg-surface p-4">
+                <h3 className="text-xs font-semibold text-good">
+                  오늘 양호 ({okRows.length}명)
+                </h3>
+                {okRows.length === 0 ? (
+                  <p className="mt-2 text-sm text-muted">해당 작업자가 없습니다.</p>
+                ) : (
+                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
+                    {okRows.map((row) => (
+                      <span
+                        key={row.worker_name}
+                        className="inline-flex shrink-0 items-center rounded-full bg-goodSoft px-2.5 py-1 text-xs font-medium text-good"
+                      >
+                        {getDisplayName(row.worker_name, workerDirectory)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-border bg-surface p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold text-danger">
+                    오늘 미흡 ({warningRows.length}명)
+                  </h3>
+                  {warningRows.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={selectAllWarning}
+                        className="text-xs text-muted transition-colors hover:text-text"
+                      >
+                        전체선택
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearWarningSelection}
+                        disabled={selectedWarning.size === 0}
+                        className="text-xs text-muted transition-colors hover:text-text disabled:opacity-40"
+                      >
+                        선택해제
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+
+                {warningRows.length === 0 ? (
+                  <p className="mt-2 text-sm font-medium text-good">전원 양호합니다.</p>
+                ) : (
+                  <>
+                    <ul className="mt-3 space-y-2">
+                      {warningRows.map((row) => {
+                        const checked = selectedWarning.has(row.worker_name);
+                        const display = getDisplayName(row.worker_name, workerDirectory);
+                        const issueText = row.issueLabels.join(', ');
+                        return (
+                          <li key={row.worker_name}>
+                            <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border bg-surface2/40 px-3 py-2.5 transition-colors hover:border-danger/30">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleWarning(row.worker_name)}
+                                className="mt-0.5 h-4 w-4 shrink-0 rounded border-border text-accent focus:ring-accent/30"
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                  <span className="inline-flex items-center rounded-full bg-dangerSoft px-2.5 py-0.5 text-xs font-medium text-danger">
+                                    {display}
+                                  </span>
+                                  <span className="text-[11px] text-muted">
+                                    {issueText}
+                                  </span>
+                                </span>
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    {selectedWarning.size > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setReviewOpen(true)}
+                        className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 md:w-auto md:min-h-0"
+                      >
+                        <Bell className="h-4 w-4" strokeWidth={2} />
+                        선택 {selectedWarning.size}명 알림 발송 검토
+                      </button>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+
         {/* 오늘 발송 현황 */}
         <section>
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-text">오늘 발송 현황</h2>
             <button
               type="button"
-              onClick={loadLogs}
-              disabled={loadingLogs}
+              onClick={refreshAll}
+              disabled={isBusy}
               className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
             >
-              {loadingLogs ? (
+              {isBusy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <RefreshCw className="h-3.5 w-3.5" />
@@ -510,6 +722,21 @@ export default function MessagesSettingsPage() {
           )}
         </section>
       </div>
+
+      {reviewOpen ? (
+        <NotifyReviewModal
+          rows={selectedWarningRows}
+          workerDirectory={workerDirectory}
+          date={workDateLabel}
+          onClose={() => setReviewOpen(false)}
+          onSendComplete={() => {
+            setNow(new Date());
+            refetchReports();
+            loadLogs();
+            setSelectedWarning(new Set());
+          }}
+        />
+      ) : null}
     </div>
   );
 }

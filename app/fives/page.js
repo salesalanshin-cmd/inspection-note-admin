@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { SOS_ERROR_CODES, ZONE_CODES, fivesErrorCode, fivesLabel, getZoneLabel } from '../../lib/constants';
 import { parseMarkingData } from '../../lib/markingData';
-import { buildWorkerDisplayNameMap } from '../../lib/analytics';
+import {
+  buildWorkerDisplayNameMap,
+} from '../../lib/analytics';
 import {
   exportToExcel,
   formatDateRangeForFilename,
@@ -37,6 +39,7 @@ import BatchClassifyProgress from '../../components/BatchClassifyProgress';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import GalleryFloatingBar from '../../components/GalleryFloatingBar';
 import DateRangePicker from '../../components/DateRangePicker';
+import ClockInOutSection from '../../components/ClockInOutSection';
 
 const exportBtnClass =
   'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
@@ -283,7 +286,10 @@ export default function FivesPage() {
         </div>
       ) : null}
 
-      <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
+      <div className="space-y-6 px-4 pb-8 pt-0 md:px-8">
+        <ClockInOutSection fives={fives} workerDirectory={workerDirectory} />
+
+        <div className="pt-2">
         <PageTableShell
           variant="flow"
           stickyToolbar={false}
@@ -425,6 +431,7 @@ export default function FivesPage() {
             </>
           }
         />
+        </div>
       </div>
 
       {selected ? (

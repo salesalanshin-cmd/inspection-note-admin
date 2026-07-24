@@ -38,7 +38,7 @@ const TEMPLATE_TYPE_LABELS = {
   correction: '기록정정',
 };
 
-export default function NotifyReviewModal({ rows, workerDirectory, date, onClose }) {
+export default function NotifyReviewModal({ rows, workerDirectory, date, onClose, onSendComplete }) {
   const [copiedKey, setCopiedKey] = useState(null);
   const [sending, setSending] = useState(false);
   const [sendResults, setSendResults] = useState({});
@@ -138,6 +138,9 @@ export default function NotifyReviewModal({ rows, workerDirectory, date, onClose
         }
       }
       setSendResults(next);
+      if (typeof onSendComplete === 'function') {
+        onSendComplete(next);
+      }
     } catch (err) {
       window.alert(err?.message || '발송 중 오류가 발생했습니다.');
     } finally {
