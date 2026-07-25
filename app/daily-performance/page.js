@@ -371,7 +371,7 @@ function PriorityMissSection({ workers, displayMap, onSelectWorker, onRefresh })
 }
 
 export default function DailyPerformancePage() {
-  const { loading, error, defects, goods, fives, docs, workerDirectory } = useReports();
+  const { loading, error, defects, goods, fives, docs, workerDirectory, refetch } = useReports();
   const [activeTab, setActiveTab] = useState('today');
   const [date, setDate] = useState(() => toPreviousWeekday(startOfDay(new Date())));
   const [includeHolidays, setIncludeHolidays] = useState(false);
@@ -908,7 +908,14 @@ export default function DailyPerformancePage() {
           rows={selectedRows}
           workerDirectory={workerDirectory}
           date={`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`}
-          onClose={() => setReviewOpen(false)}
+          onClose={() => {
+            setReviewOpen(false);
+            setSelected(new Set());
+            refetch();
+          }}
+          onSendComplete={() => {
+            refetch();
+          }}
         />
       ) : null}
 

@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '../../../lib/supabase';
 import { sendAlimtalk } from '../../../lib/solapiClient';
+import { renderTemplatePreview } from '../../../lib/notifyTemplates';
 
 /**
  * POST /api/send-notification
  * body: { targets: [{ workerName, phoneNumber, templateType, variables, autoKey? }] }
  *
  * notification_send_log 컬럼(라이브): worker_name, phone_number, template_type,
- * status, error_message, created_at, sent_at, auto_key
+ * status, error_message, created_at, sent_at, auto_key, message_content
  */
 export async function POST(request) {
   let body;
@@ -31,6 +32,9 @@ export async function POST(request) {
     const variables =
       target?.variables && typeof target.variables === 'object' ? target.variables : {};
     const autoKey = target?.autoKey ? String(target.autoKey) : null;
+    const messageContent =
+      renderTemplatePreview(templateType, variables) ||
+      `[검사노트] ${workerName}님 알림`;
 
     if (!workerName) {
       results.push({ workerName: '', success: false, error: '작업자명이 없습니다.' });
@@ -50,6 +54,7 @@ export async function POST(request) {
         status: 'failed',
         errorMessage: '연락처가 없습니다.',
         autoKey,
+        messageContent,
       });
       continue;
     }
@@ -76,6 +81,7 @@ export async function POST(request) {
       errorMessage: success ? null : sendResult.error || '발송 실패',
       autoKey,
       sentAt: success ? new Date().toISOString() : null,
+      messageContent,
     });
   }
 
@@ -90,6 +96,7 @@ async function insertLog({
   errorMessage = null,
   autoKey = null,
   sentAt = null,
+  messageContent = '',
 }) {
   try {
     const row = {
@@ -100,6 +107,7 @@ async function insertLog({
       error_message: errorMessage,
       auto_key: autoKey,
       sent_at: sentAt,
+      message_content: messageContent || '',
     };
     const { error } = await supabase.from('notification_send_log').insert(row);
     if (error) {

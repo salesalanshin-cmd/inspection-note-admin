@@ -902,12 +902,18 @@ export default function MessagesSettingsPage() {
           rows={selectedWarningRows}
           workerDirectory={workerDirectory}
           date={selectedWorkDateStr}
-          onClose={() => setReviewOpen(false)}
-          onSendComplete={() => {
-            setNow(new Date());
-            refetchReports();
-            loadLogs();
+          onClose={() => {
+            // 닫을 때 선택 초기화 + 오늘 발송 현황·실적 목록 갱신
+            setReviewOpen(false);
             setSelectedWarning(new Set());
+            setNow(new Date());
+            loadLogs();
+            refetchReports();
+          }}
+          onSendComplete={() => {
+            // 발송 직후 로그는 백그라운드 갱신 (선택은 모달이 스냅샷하므로 유지)
+            setNow(new Date());
+            loadLogs();
           }}
         />
       ) : null}

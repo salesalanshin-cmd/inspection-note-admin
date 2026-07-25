@@ -58,6 +58,7 @@ export default function DefectsPage() {
   const { loading, error, defects, refetch, workerDirectory } = useReports();
   const [worker, setWorker] = useState('all');
   const [type, setType] = useState('all');
+  const [product, setProduct] = useState('all');
   const [selected, setSelected] = useState(null);
   const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
   const [batchProgress, setBatchProgress] = useState(null);
@@ -108,10 +109,42 @@ export default function DefectsPage() {
     () => Array.from(new Set(dateFilteredDefects.map((d) => defectLabel(d)))).sort(),
     [dateFilteredDefects]
   );
+  const products = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          dateFilteredDefects
+            .map((d) => (d.product_name ? String(d.product_name).trim() : ''))
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b, 'ko')),
+    [dateFilteredDefects]
+  );
+  // 모달 자동완성: 날짜 필터와 무관하게 전체 표시 목록의 distinct 제품명
+  const productNameOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          visibleDefects
+            .map((d) => (d.product_name ? String(d.product_name).trim() : ''))
+            .filter(Boolean)
+        )
+      ).sort((a, b) => a.localeCompare(b, 'ko')),
+    [visibleDefects]
+  );
 
   const filtered = dateFilteredDefects.filter(
-    (d) => (worker === 'all' || d.worker_name === worker) && (type === 'all' || defectLabel(d) === type)
+    (d) =>
+      (worker === 'all' || d.worker_name === worker) &&
+      (type === 'all' || defectLabel(d) === type) &&
+      (product === 'all' || (d.product_name || '') === product)
   );
+
+  useEffect(() => {
+    if (product !== 'all' && !products.includes(product)) {
+      setProduct('all');
+    }
+  }, [product, products]);
 
   const canExport = isDateRangeValid(dateRange) && filtered.length > 0;
 
@@ -243,6 +276,7 @@ export default function DefectsPage() {
   function handleExportExcel() {
     const rows = filtered.map((d) => ({
       작업자: (d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '',
+      제품명: d.product_name || '',
       유형: d.defect_code || '',
       세부유형: d.defect_type || '',
       촬영시각: formatExportDateTime(d.created_at),
@@ -294,6 +328,18 @@ export default function DefectsPage() {
               {types.map((t) => (
                 <option key={t} value={t}>
                   {t}
+                </option>
+              ))}
+            </select>
+            <select
+              value={product}
+              onChange={(e) => setProduct(e.target.value)}
+              className={selectClass}
+            >
+              <option value="all">전체 제품</option>
+              {products.map((p) => (
+                <option key={p} value={p}>
+                  {p}
                 </option>
               ))}
             </select>
@@ -401,6 +447,11 @@ export default function DefectsPage() {
                   <div className="font-medium text-text">
                     {(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '작업자 미상'}
                   </div>
+                  {d.product_name ? (
+                    <div className="mt-0.5 truncate text-muted" title={d.product_name}>
+                      {d.product_name}
+                    </div>
+                  ) : null}
                   <div className="mt-0.5 text-muted">
                     {d.created_at ? new Date(d.created_at).toLocaleString('ko-KR') : ''}
                   </div>
@@ -420,6 +471,7 @@ export default function DefectsPage() {
         <DefectEditModal
           report={selected}
           workerDirectory={workerDirectory}
+          productNameOptions={productNameOptions}
           onClose={() => setSelected(null)}
           onSaved={() => refetch()}
         />
