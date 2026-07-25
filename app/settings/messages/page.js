@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, Loader2, RefreshCw } from 'lucide-react';
+import { Bell, ChevronDown, ChevronUp, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import {
   buildTodayRealtimePerformance,
@@ -13,6 +13,8 @@ import { useReports } from '../../../lib/useReports';
 import PageHeader from '../../../components/PageHeader';
 import DateRangePicker from '../../../components/DateRangePicker';
 import NotifyReviewModal from '../../../components/NotifyReviewModal';
+
+const PREVIEW_LIMIT = 4;
 
 const TEMPLATE_LABELS = {
   frequent_check: '자주검사',
@@ -70,6 +72,16 @@ function logTimestamp(row) {
   return row.sent_at || row.created_at;
 }
 
+/** 미실시 항목 개수 많은 순 → 가나다순 (daily-performance 미준수 정렬과 동일 취지) */
+function sortByMissCountThenName(rows) {
+  return [...rows].sort((a, b) => {
+    const missA = a.issueLabels?.length ?? 0;
+    const missB = b.issueLabels?.length ?? 0;
+    if (missA !== missB) return missB - missA;
+    return a.worker_name.localeCompare(b.worker_name, 'ko');
+  });
+}
+
 function workDayBounds(now = new Date()) {
   const workDateStr = getWorkDateForRecord(now);
   const start = new Date(`${workDateStr}T08:00:00`);
@@ -125,6 +137,8 @@ export default function MessagesSettingsPage() {
   const [selectedWarning, setSelectedWarning] = useState(() => new Set());
   const [reviewOpen, setReviewOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [okExpanded, setOkExpanded] = useState(false);
+  const [warningExpanded, setWarningExpanded] = useState(false);
 
   const loadLogs = useCallback(async () => {
     setLoadingLogs(true);
@@ -182,13 +196,24 @@ export default function MessagesSettingsPage() {
   );
 
   const okRows = useMemo(
-    () => realtimeRows.filter((r) => r.overallStatus === 'ok'),
+    () =>
+      sortByMissCountThenName(
+        realtimeRows.filter((r) => r.overallStatus === 'ok')
+      ),
     [realtimeRows]
   );
   const warningRows = useMemo(
-    () => realtimeRows.filter((r) => r.overallStatus === 'warning'),
+    () =>
+      sortByMissCountThenName(
+        realtimeRows.filter((r) => r.overallStatus === 'warning')
+      ),
     [realtimeRows]
   );
+
+  const visibleOkRows = okExpanded ? okRows : okRows.slice(0, PREVIEW_LIMIT);
+  const visibleWarningRows = warningExpanded
+    ? warningRows
+    : warningRows.slice(0, PREVIEW_LIMIT);
 
   const warningNameSet = useMemo(
     () => new Set(warningRows.map((r) => r.worker_name)),
@@ -388,16 +413,37 @@ export default function MessagesSettingsPage() {
                 {okRows.length === 0 ? (
                   <p className="mt-2 text-sm text-muted">해당 작업자가 없습니다.</p>
                 ) : (
-                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
-                    {okRows.map((row) => (
-                      <span
-                        key={row.worker_name}
-                        className="inline-flex shrink-0 items-center rounded-full bg-goodSoft px-2.5 py-1 text-xs font-medium text-good"
+                  <>
+                    <div className="mt-2 flex gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
+                      {visibleOkRows.map((row) => (
+                        <span
+                          key={row.worker_name}
+                          className="inline-flex shrink-0 items-center rounded-full bg-goodSoft px-2.5 py-1 text-xs font-medium text-good"
+                        >
+                          {getDisplayName(row.worker_name, workerDirectory)}
+                        </span>
+                      ))}
+                    </div>
+                    {okRows.length > PREVIEW_LIMIT ? (
+                      <button
+                        type="button"
+                        onClick={() => setOkExpanded((v) => !v)}
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-text"
                       >
-                        {getDisplayName(row.worker_name, workerDirectory)}
-                      </span>
-                    ))}
-                  </div>
+                        {okExpanded ? (
+                          <>
+                            접기
+                            <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
+                          </>
+                        ) : (
+                          <>
+                            펼치기 (전체 {okRows.length}명)
+                            <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                          </>
+                        )}
+                      </button>
+                    ) : null}
+                  </>
                 )}
               </div>
 
@@ -432,7 +478,7 @@ export default function MessagesSettingsPage() {
                 ) : (
                   <>
                     <ul className="mt-3 space-y-2">
-                      {warningRows.map((row) => {
+                      {visibleWarningRows.map((row) => {
                         const checked = selectedWarning.has(row.worker_name);
                         const display = getDisplayName(row.worker_name, workerDirectory);
                         const issueText = row.issueLabels.join(', ');
@@ -460,6 +506,26 @@ export default function MessagesSettingsPage() {
                         );
                       })}
                     </ul>
+
+                    {warningRows.length > PREVIEW_LIMIT ? (
+                      <button
+                        type="button"
+                        onClick={() => setWarningExpanded((v) => !v)}
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-text"
+                      >
+                        {warningExpanded ? (
+                          <>
+                            접기
+                            <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
+                          </>
+                        ) : (
+                          <>
+                            펼치기 (전체 {warningRows.length}명)
+                            <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                          </>
+                        )}
+                      </button>
+                    ) : null}
 
                     {selectedWarning.size > 0 ? (
                       <button

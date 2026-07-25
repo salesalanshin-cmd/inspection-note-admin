@@ -34,6 +34,16 @@ const STATUS_BADGE_CLASS = {
   muted: 'bg-surface2 text-muted',
 };
 
+/** 활성(excluded=false) 가나다 → 제외(excluded=true) 가나다 */
+function sortWorkersActiveFirst(names, directoryMap) {
+  return [...names].sort((a, b) => {
+    const aExcluded = Boolean(directoryMap.get(a)?.excluded);
+    const bExcluded = Boolean(directoryMap.get(b)?.excluded);
+    if (aExcluded !== bExcluded) return aExcluded ? 1 : -1;
+    return a.localeCompare(b, 'ko');
+  });
+}
+
 function WorkerStatusBadge({ row }) {
   const { label, tone } = getWorkerListStatus(row);
   return (
@@ -234,7 +244,7 @@ function WorkerRow({
           <DutyPill
             label="자주검사"
             active={handlesFrequent}
-            disabled={excluded || isSaving}
+            disabled={isSaving}
             onClick={() =>
               onUpsert(name, {
                 handles_frequent_check: !handlesFrequent,
@@ -244,13 +254,13 @@ function WorkerRow({
           <DutyPill
             label="3정5S"
             active={handlesFives}
-            disabled={excluded || isSaving}
+            disabled={isSaving}
             onClick={() => onUpsert(name, { handles_fives: !handlesFives })}
           />
           <DutyPill
             label="문서스캔"
             active={handlesDocuments}
-            disabled={excluded || isSaving}
+            disabled={isSaving}
             onClick={() =>
               onUpsert(name, {
                 handles_documents: !handlesDocuments,
@@ -344,16 +354,19 @@ export default function WorkerManagementPage() {
 
   // 낙관적 업데이트: 숨김 처리 직후 refetch 전까지 즉시 목록에서 제거
   // 퇴사 메모가 있는 작업자도 기본 목록에서 제외
-  const visibleNames = useMemo(
-    () =>
-      allNames.filter(
-        (name) =>
-          !hiddenNames.has(name) && !hasResignedNote(directoryMap.get(name)?.note)
-      ),
-    [allNames, hiddenNames, directoryMap]
-  );
+  // 정렬: 활성(excluded=false) 가나다 → 제외(excluded=true) 가나다
+  const visibleNames = useMemo(() => {
+    const names = allNames.filter(
+      (name) =>
+        !hiddenNames.has(name) && !hasResignedNote(directoryMap.get(name)?.note)
+    );
+    return sortWorkersActiveFirst(names, directoryMap);
+  }, [allNames, hiddenNames, directoryMap]);
 
-  const tableNames = showAllWorkers ? everyNames : visibleNames;
+  const tableNames = useMemo(() => {
+    const names = showAllWorkers ? everyNames : visibleNames;
+    return showAllWorkers ? sortWorkersActiveFirst(names, directoryMap) : names;
+  }, [showAllWorkers, everyNames, visibleNames, directoryMap]);
   const colCount = showAllWorkers ? 9 : 8;
 
   async function upsertWorker(worker_name, patch) {

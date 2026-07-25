@@ -81,7 +81,10 @@ export default function ImageZoom({
       return undefined;
     }
 
-    getImageUrl(url, bucket ? { bucket } : undefined)
+    getImageUrl(url, {
+      size: 'full',
+      ...(bucket ? { bucket } : {}),
+    })
       .then((signed) => {
         if (cancelled) return;
         if (!signed) {
