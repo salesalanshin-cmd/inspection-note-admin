@@ -12,8 +12,9 @@ import ModalShell from './ModalShell';
 
 /**
  * 실패 시 수동 전송용 자유 문구 (알림톡 템플릿과 별개)
+ * @param {string} [date] YYYY-MM-DD 근무일
  */
-function buildCopyMessage(row, workerDirectory) {
+function buildCopyMessage(row, workerDirectory, date) {
   const name = getDisplayName(row.worker_name, workerDirectory);
   const items = [];
   if (row.frequentCheck?.status === 'fail') {
@@ -22,11 +23,30 @@ function buildCopyMessage(row, workerDirectory) {
   if (row.fives?.status === 'fail') items.push('3정5S 기록');
   if (row.documents?.status === 'fail') items.push('문서스캔 기록');
 
+  const todayLocal = (() => {
+    const d = new Date();
+    if (d.getHours() < 8) d.setDate(d.getDate() - 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  })();
+
+  const dateStr = date || todayLocal;
+  const isToday = dateStr === todayLocal;
+  const datePhrase = isToday
+    ? '오늘'
+    : (() => {
+        const [, m, d] = dateStr.split('-').map(Number);
+        if (!m || !d) return dateStr;
+        return `${m}월 ${d}일`;
+      })();
+
   if (items.length === 0) {
-    return `[검사노트] ${name}님, 오늘 담당 업무 기록이 모두 확인되었습니다. 감사합니다.`;
+    return `[검사노트] ${name}님, ${datePhrase} 담당 업무 기록이 모두 확인되었습니다. 감사합니다.`;
   }
 
-  return `[검사노트] ${name}님, 오늘 ${items.join('/')}이(가) 확인되지 않았습니다. 확인 후 기록해주세요.`;
+  return `[검사노트] ${name}님, ${datePhrase}에 ${items.join('/')}이(가) 확인되지 않았습니다. 확인 후 기록해주세요.`;
 }
 
 const TEMPLATE_TYPE_LABELS = {
@@ -59,7 +79,7 @@ export default function NotifyReviewModal({ rows, workerDirectory, date, onClose
           templateType,
           variables,
           preview: renderTemplatePreview(templateType, variables),
-          copyText: buildCopyMessage(row, workerDirectory),
+          copyText: buildCopyMessage(row, workerDirectory, date),
         };
       }),
     [rows, workerDirectory, date]
