@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, Loader2, RefreshCw } from 'lucide-react';
+import { Bell, ChevronDown, ChevronUp, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import {
   buildTodayRealtimePerformance,
@@ -13,6 +13,11 @@ import { useReports } from '../../../lib/useReports';
 import PageHeader from '../../../components/PageHeader';
 import DateRangePicker from '../../../components/DateRangePicker';
 import NotifyReviewModal from '../../../components/NotifyReviewModal';
+
+const PREVIEW_LIMIT = 4;
+
+const dayNavBtnClass =
+  'min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-40 md:min-h-0';
 
 const TEMPLATE_LABELS = {
   frequent_check: '자주검사',
@@ -70,12 +75,44 @@ function logTimestamp(row) {
   return row.sent_at || row.created_at;
 }
 
+/** 미실시 항목 개수 많은 순 → 가나다순 (daily-performance 미준수 정렬과 동일 취지) */
+function sortByMissCountThenName(rows) {
+  return [...rows].sort((a, b) => {
+    const missA = a.issueLabels?.length ?? 0;
+    const missB = b.issueLabels?.length ?? 0;
+    if (missA !== missB) return missB - missA;
+    return a.worker_name.localeCompare(b.worker_name, 'ko');
+  });
+}
+
 function workDayBounds(now = new Date()) {
   const workDateStr = getWorkDateForRecord(now);
   const start = new Date(`${workDateStr}T08:00:00`);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
   return { start, end, workDateStr };
+}
+
+function startOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function formatNavDate(date) {
+  return date.toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  });
+}
+
+function formatSectionDateTitle(date) {
+  return date.toLocaleDateString('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 function ToggleSwitch({ checked, onChange, disabled, label }) {
@@ -122,9 +159,15 @@ export default function MessagesSettingsPage() {
   const [togglingKey, setTogglingKey] = useState(null);
   const [resendingId, setResendingId] = useState(null);
   const [now, setNow] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const work = getWorkDateForRecord(new Date());
+    return startOfDay(new Date(`${work}T00:00:00`));
+  });
   const [selectedWarning, setSelectedWarning] = useState(() => new Set());
   const [reviewOpen, setReviewOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [okExpanded, setOkExpanded] = useState(false);
+  const [warningExpanded, setWarningExpanded] = useState(false);
 
   const loadLogs = useCallback(async () => {
     setLoadingLogs(true);
@@ -168,7 +211,14 @@ export default function MessagesSettingsPage() {
     loadSettings();
   }, [loadLogs, loadSettings]);
 
-  const realtimeRows = useMemo(
+  const todayWorkDateStr = useMemo(() => getWorkDateForRecord(now), [now]);
+  const selectedWorkDateStr = useMemo(
+    () => formatISODate(selectedDate),
+    [selectedDate]
+  );
+  const isSelectedToday = selectedWorkDateStr === todayWorkDateStr;
+
+  const statusRows = useMemo(
     () =>
       buildTodayRealtimePerformance(
         defects,
@@ -176,19 +226,31 @@ export default function MessagesSettingsPage() {
         fives,
         docs,
         workerDirectory,
-        now
+        now,
+        selectedDate
       ),
-    [defects, goods, fives, docs, workerDirectory, now]
+    [defects, goods, fives, docs, workerDirectory, now, selectedDate]
   );
 
   const okRows = useMemo(
-    () => realtimeRows.filter((r) => r.overallStatus === 'ok'),
-    [realtimeRows]
+    () =>
+      sortByMissCountThenName(
+        statusRows.filter((r) => r.overallStatus === 'ok')
+      ),
+    [statusRows]
   );
   const warningRows = useMemo(
-    () => realtimeRows.filter((r) => r.overallStatus === 'warning'),
-    [realtimeRows]
+    () =>
+      sortByMissCountThenName(
+        statusRows.filter((r) => r.overallStatus === 'warning')
+      ),
+    [statusRows]
   );
+
+  const visibleOkRows = okExpanded ? okRows : okRows.slice(0, PREVIEW_LIMIT);
+  const visibleWarningRows = warningExpanded
+    ? warningRows
+    : warningRows.slice(0, PREVIEW_LIMIT);
 
   const warningNameSet = useMemo(
     () => new Set(warningRows.map((r) => r.worker_name)),
@@ -209,8 +271,6 @@ export default function MessagesSettingsPage() {
     () => warningRows.filter((r) => selectedWarning.has(r.worker_name)),
     [warningRows, selectedWarning]
   );
-
-  const workDateLabel = useMemo(() => getWorkDateForRecord(now), [now]);
 
   const todaySummary = useMemo(() => {
     const { start, end } = workDayBounds(now);
@@ -262,6 +322,26 @@ export default function MessagesSettingsPage() {
 
   function clearWarningSelection() {
     setSelectedWarning(new Set());
+  }
+
+  function shiftDay(delta) {
+    setSelectedDate((prev) => {
+      const next = new Date(prev);
+      next.setDate(next.getDate() + delta);
+      return startOfDay(next);
+    });
+    setSelectedWarning(new Set());
+    setOkExpanded(false);
+    setWarningExpanded(false);
+  }
+
+  function goToToday() {
+    const work = getWorkDateForRecord(new Date());
+    setSelectedDate(startOfDay(new Date(`${work}T00:00:00`)));
+    setSelectedWarning(new Set());
+    setOkExpanded(false);
+    setWarningExpanded(false);
+    setNow(new Date());
   }
 
   async function handleToggle(key, nextEnabled) {
@@ -341,6 +421,12 @@ export default function MessagesSettingsPage() {
   }
 
   const isBusy = loadingLogs || refreshing || reportsLoading;
+  const canGoNext = selectedWorkDateStr < todayWorkDateStr;
+  const statusSectionTitle = isSelectedToday
+    ? '오늘 실시간 현황'
+    : `${formatSectionDateTitle(selectedDate)} 현황`;
+  const okTitle = isSelectedToday ? '오늘 양호' : '양호';
+  const warningTitle = isSelectedToday ? '오늘 미흡' : '미흡';
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -351,60 +437,123 @@ export default function MessagesSettingsPage() {
       />
 
       <div className="space-y-8 px-4 py-6 md:px-8">
-        {/* 오늘 실시간 현황 */}
+        {/* 날짜별 양호/미흡 현황 */}
         <section>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-semibold text-text">오늘 실시간 현황</h2>
-              <p className="mt-0.5 text-xs text-muted">
-                근무일 {workDateLabel} · 시간 지난 미실시만 미흡으로 집계
-              </p>
+          <div className="mb-3 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-text">{statusSectionTitle}</h2>
+                <p className="mt-0.5 text-xs text-muted">
+                  근무일 {selectedWorkDateStr}
+                  {isSelectedToday
+                    ? ' · 시간 지난 미실시만 미흡으로 집계'
+                    : ' · 확정된 완료/미실시 기준 (예정·진행중 완화 없음)'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={refreshAll}
+                disabled={isBusy}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
+              >
+                {isBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                새로고침
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={refreshAll}
-              disabled={isBusy}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-            >
-              {isBusy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              새로고침
-            </button>
+
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex w-full items-center gap-2 md:w-auto">
+                <button
+                  type="button"
+                  onClick={() => shiftDay(-1)}
+                  className={`${dayNavBtnClass} flex-1 md:flex-none`}
+                  aria-label="이전 날"
+                >
+                  ◀ 이전날
+                </button>
+                <span className="min-w-0 flex-1 text-center text-sm font-medium text-text md:min-w-[11rem]">
+                  {formatNavDate(selectedDate)}
+                  {isSelectedToday ? (
+                    <span className="ml-1 text-xs font-normal text-muted">(오늘)</span>
+                  ) : null}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => shiftDay(1)}
+                  disabled={!canGoNext}
+                  className={`${dayNavBtnClass} flex-1 md:flex-none`}
+                  aria-label="다음 날"
+                >
+                  다음날 ▶
+                </button>
+              </div>
+              {!isSelectedToday ? (
+                <button
+                  type="button"
+                  onClick={goToToday}
+                  className="self-center text-xs font-medium text-accent transition-opacity hover:opacity-80"
+                >
+                  오늘로 이동
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {reportsError ? (
             <p className="text-sm text-danger">실적 데이터 오류: {reportsError}</p>
-          ) : reportsLoading && realtimeRows.length === 0 ? (
-            <p className="text-sm text-muted">실시간 현황 불러오는 중…</p>
+          ) : reportsLoading && statusRows.length === 0 ? (
+            <p className="text-sm text-muted">현황 불러오는 중…</p>
           ) : (
             <div className="space-y-3">
               <div className="rounded-xl border border-border bg-surface p-4">
                 <h3 className="text-xs font-semibold text-good">
-                  오늘 양호 ({okRows.length}명)
+                  {okTitle} ({okRows.length}명)
                 </h3>
                 {okRows.length === 0 ? (
                   <p className="mt-2 text-sm text-muted">해당 작업자가 없습니다.</p>
                 ) : (
-                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
-                    {okRows.map((row) => (
-                      <span
-                        key={row.worker_name}
-                        className="inline-flex shrink-0 items-center rounded-full bg-goodSoft px-2.5 py-1 text-xs font-medium text-good"
+                  <>
+                    <div className="mt-2 flex gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible">
+                      {visibleOkRows.map((row) => (
+                        <span
+                          key={row.worker_name}
+                          className="inline-flex shrink-0 items-center rounded-full bg-goodSoft px-2.5 py-1 text-xs font-medium text-good"
+                        >
+                          {getDisplayName(row.worker_name, workerDirectory)}
+                        </span>
+                      ))}
+                    </div>
+                    {okRows.length > PREVIEW_LIMIT ? (
+                      <button
+                        type="button"
+                        onClick={() => setOkExpanded((v) => !v)}
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-text"
                       >
-                        {getDisplayName(row.worker_name, workerDirectory)}
-                      </span>
-                    ))}
-                  </div>
+                        {okExpanded ? (
+                          <>
+                            접기
+                            <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
+                          </>
+                        ) : (
+                          <>
+                            펼치기 (전체 {okRows.length}명)
+                            <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                          </>
+                        )}
+                      </button>
+                    ) : null}
+                  </>
                 )}
               </div>
 
               <div className="rounded-xl border border-border bg-surface p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-xs font-semibold text-danger">
-                    오늘 미흡 ({warningRows.length}명)
+                    {warningTitle} ({warningRows.length}명)
                   </h3>
                   {warningRows.length > 0 ? (
                     <div className="flex flex-wrap items-center gap-2">
@@ -432,7 +581,7 @@ export default function MessagesSettingsPage() {
                 ) : (
                   <>
                     <ul className="mt-3 space-y-2">
-                      {warningRows.map((row) => {
+                      {visibleWarningRows.map((row) => {
                         const checked = selectedWarning.has(row.worker_name);
                         const display = getDisplayName(row.worker_name, workerDirectory);
                         const issueText = row.issueLabels.join(', ');
@@ -461,6 +610,26 @@ export default function MessagesSettingsPage() {
                       })}
                     </ul>
 
+                    {warningRows.length > PREVIEW_LIMIT ? (
+                      <button
+                        type="button"
+                        onClick={() => setWarningExpanded((v) => !v)}
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-text"
+                      >
+                        {warningExpanded ? (
+                          <>
+                            접기
+                            <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
+                          </>
+                        ) : (
+                          <>
+                            펼치기 (전체 {warningRows.length}명)
+                            <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+                          </>
+                        )}
+                      </button>
+                    ) : null}
+
                     {selectedWarning.size > 0 ? (
                       <button
                         type="button"
@@ -478,10 +647,15 @@ export default function MessagesSettingsPage() {
           )}
         </section>
 
-        {/* 오늘 발송 현황 */}
+        {/* 오늘 발송 현황 — 실제 발송 기록(선택 근무일과 무관, 항상 오늘 근무일 기준) */}
         <section>
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-text">오늘 발송 현황</h2>
+            <div>
+              <h2 className="text-sm font-semibold text-text">오늘 발송 현황</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                실제 알림톡 발송 기록 · 근무일 {todayWorkDateStr} (위 날짜 선택과 별개)
+              </p>
+            </div>
             <button
               type="button"
               onClick={refreshAll}
@@ -727,13 +901,19 @@ export default function MessagesSettingsPage() {
         <NotifyReviewModal
           rows={selectedWarningRows}
           workerDirectory={workerDirectory}
-          date={workDateLabel}
-          onClose={() => setReviewOpen(false)}
-          onSendComplete={() => {
-            setNow(new Date());
-            refetchReports();
-            loadLogs();
+          date={selectedWorkDateStr}
+          onClose={() => {
+            // 닫을 때 선택 초기화 + 오늘 발송 현황·실적 목록 갱신
+            setReviewOpen(false);
             setSelectedWarning(new Set());
+            setNow(new Date());
+            loadLogs();
+            refetchReports();
+          }}
+          onSendComplete={() => {
+            // 발송 직후 로그는 백그라운드 갱신 (선택은 모달이 스냅샷하므로 유지)
+            setNow(new Date());
+            loadLogs();
           }}
         />
       ) : null}

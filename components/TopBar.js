@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Home, Sparkles } from 'lucide-react';
+import { Home, MessageCircle, Sparkles } from 'lucide-react';
 
 export default function TopBar() {
   return (
@@ -14,6 +14,14 @@ export default function TopBar() {
       >
         <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
         <span>인사이트 랩(AI대화)</span>
+      </Link>
+      <Link
+        href="/settings/messages"
+        aria-label="메시지 관리로 이동"
+        title="메시지 관리"
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FEE500] text-[#191919] shadow-sm transition-opacity hover:opacity-90"
+      >
+        <MessageCircle className="h-[18px] w-[18px]" strokeWidth={2.25} fill="currentColor" />
       </Link>
       <Link
         href="/dashboard"

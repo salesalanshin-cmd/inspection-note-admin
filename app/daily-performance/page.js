@@ -15,6 +15,7 @@ import {
   isSameCalendarDay,
 } from '../../lib/analytics';
 import { SHIFT_STAGES } from '../../lib/constants';
+import { isWeekend, shiftWorkDate, toPreviousWeekday } from '../../lib/dateRange';
 import { sortRows, toggleSortKey } from '../../lib/tableSort';
 import PageHeader from '../../components/PageHeader';
 import NotifyReviewModal from '../../components/NotifyReviewModal';
@@ -370,9 +371,10 @@ function PriorityMissSection({ workers, displayMap, onSelectWorker, onRefresh })
 }
 
 export default function DailyPerformancePage() {
-  const { loading, error, defects, goods, fives, docs, workerDirectory } = useReports();
+  const { loading, error, defects, goods, fives, docs, workerDirectory, refetch } = useReports();
   const [activeTab, setActiveTab] = useState('today');
-  const [date, setDate] = useState(() => startOfDay(new Date()));
+  const [date, setDate] = useState(() => toPreviousWeekday(startOfDay(new Date())));
+  const [includeHolidays, setIncludeHolidays] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [selected, setSelected] = useState(new Set());
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -386,6 +388,7 @@ export default function DailyPerformancePage() {
   const dayNavRef = useRef(null);
 
   const isToday = isSameCalendarDay(date, now);
+  const dateIsWeekend = isWeekend(date);
 
   useLayoutEffect(() => {
     const el = dayNavRef.current;
@@ -471,11 +474,9 @@ export default function DailyPerformancePage() {
   );
 
   function shiftDay(delta) {
-    setDate((prev) => {
-      const next = new Date(prev);
-      next.setDate(next.getDate() + delta);
-      return startOfDay(next);
-    });
+    setDate((prev) =>
+      shiftWorkDate(prev, delta, { skipWeekends: !includeHolidays })
+    );
     setSelected(new Set());
   }
 
@@ -529,26 +530,52 @@ export default function DailyPerformancePage() {
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   const dateNav = (
-    <div className="flex w-full items-center gap-2 md:w-auto">
-      <button
-        type="button"
-        onClick={() => shiftDay(-1)}
-        className={`${dayNavBtnClass} flex-1 md:flex-none`}
-        aria-label="이전 날"
-      >
-        ◀ 이전날
-      </button>
-      <span className="min-w-0 flex-1 text-center text-sm font-medium text-text md:min-w-[10rem]">
-        {formatWorkDate(date)}
-      </span>
-      <button
-        type="button"
-        onClick={() => shiftDay(1)}
-        className={`${dayNavBtnClass} flex-1 md:flex-none`}
-        aria-label="다음 날"
-      >
-        다음날 ▶
-      </button>
+    <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 md:w-auto">
+      <div className="flex w-full items-center gap-2 md:w-auto">
+        <button
+          type="button"
+          onClick={() => shiftDay(-1)}
+          className={`${dayNavBtnClass} flex-1 md:flex-none`}
+          aria-label="이전 날"
+        >
+          ◀ 이전날
+        </button>
+        <span className="min-w-0 flex-1 text-center text-sm font-medium text-text md:min-w-[10rem]">
+          {formatWorkDate(date)}
+          {includeHolidays && dateIsWeekend ? (
+            <span className="ml-1.5 inline-flex align-middle rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+              주말/휴일
+            </span>
+          ) : null}
+        </span>
+        <button
+          type="button"
+          onClick={() => shiftDay(1)}
+          className={`${dayNavBtnClass} flex-1 md:flex-none`}
+          aria-label="다음 날"
+        >
+          다음날 ▶
+        </button>
+      </div>
+      <label className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 self-center text-xs text-muted">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={includeHolidays}
+          aria-label="휴일 포함"
+          onClick={() => setIncludeHolidays((v) => !v)}
+          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+            includeHolidays ? 'bg-accent' : 'bg-border'
+          }`}
+        >
+          <span
+            className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+              includeHolidays ? 'translate-x-4' : 'translate-x-0'
+            }`}
+          />
+        </button>
+        <span className={includeHolidays ? 'font-medium text-text' : ''}>휴일 포함</span>
+      </label>
     </div>
   );
 
@@ -881,7 +908,14 @@ export default function DailyPerformancePage() {
           rows={selectedRows}
           workerDirectory={workerDirectory}
           date={`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`}
-          onClose={() => setReviewOpen(false)}
+          onClose={() => {
+            setReviewOpen(false);
+            setSelected(new Set());
+            refetch();
+          }}
+          onSendComplete={() => {
+            refetch();
+          }}
         />
       ) : null}
 

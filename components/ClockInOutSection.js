@@ -8,6 +8,7 @@ import {
   buildWorkerDisplayNameMap,
   isSameCalendarDay,
 } from '../lib/analytics';
+import { isWeekend, shiftWorkDate, toPreviousWeekday } from '../lib/dateRange';
 import StatusDot from './StatusDot';
 import MobileListCard, { MobileCardField } from './MobileListCard';
 
@@ -251,7 +252,8 @@ function ExpandToggle({ expanded, total, onToggle }) {
  */
 export default function ClockInOutSection({ fives, workerDirectory }) {
   const [activeTab, setActiveTab] = useState('today');
-  const [date, setDate] = useState(() => startOfDay(new Date()));
+  const [date, setDate] = useState(() => toPreviousWeekday(startOfDay(new Date())));
+  const [includeHolidays, setIncludeHolidays] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [selected, setSelected] = useState(new Set());
   const [listExpanded, setListExpanded] = useState(false);
@@ -263,6 +265,7 @@ export default function ClockInOutSection({ fives, workerDirectory }) {
   );
 
   const isToday = isSameCalendarDay(date, now);
+  const dateIsWeekend = isWeekend(date);
 
   const todayRows = useMemo(
     () => buildClockInOutStatus(fives, workerDirectory, date, now),
@@ -369,11 +372,9 @@ export default function ClockInOutSection({ fives, workerDirectory }) {
   }
 
   function shiftDay(delta) {
-    setDate((prev) => {
-      const next = new Date(prev);
-      next.setDate(next.getDate() + delta);
-      return startOfDay(next);
-    });
+    setDate((prev) =>
+      shiftWorkDate(prev, delta, { skipWeekends: !includeHolidays })
+    );
     setSelected(new Set());
     setListExpanded(false);
     setNow(new Date());
@@ -401,29 +402,55 @@ export default function ClockInOutSection({ fives, workerDirectory }) {
   }
 
   const dateNav = (
-    <div className="flex w-full items-center gap-2">
-      <button
-        type="button"
-        onClick={() => shiftDay(-1)}
-        className={`${dayNavBtnClass} flex-1 md:flex-none`}
-        aria-label="이전 날"
-      >
-        ◀ 이전날
-      </button>
-      <span className="min-w-0 flex-1 text-center text-sm font-medium text-text md:min-w-[10rem]">
-        {formatWorkDate(date)}
-        {isToday ? (
-          <span className="ml-1 text-xs font-normal text-muted">(오늘)</span>
-        ) : null}
-      </span>
-      <button
-        type="button"
-        onClick={() => shiftDay(1)}
-        className={`${dayNavBtnClass} flex-1 md:flex-none`}
-        aria-label="다음 날"
-      >
-        다음날 ▶
-      </button>
+    <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+      <div className="flex w-full items-center gap-2">
+        <button
+          type="button"
+          onClick={() => shiftDay(-1)}
+          className={`${dayNavBtnClass} flex-1 md:flex-none`}
+          aria-label="이전 날"
+        >
+          ◀ 이전날
+        </button>
+        <span className="min-w-0 flex-1 text-center text-sm font-medium text-text md:min-w-[10rem]">
+          {formatWorkDate(date)}
+          {isToday ? (
+            <span className="ml-1 text-xs font-normal text-muted">(오늘)</span>
+          ) : null}
+          {includeHolidays && dateIsWeekend ? (
+            <span className="ml-1.5 inline-flex align-middle rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+              주말/휴일
+            </span>
+          ) : null}
+        </span>
+        <button
+          type="button"
+          onClick={() => shiftDay(1)}
+          className={`${dayNavBtnClass} flex-1 md:flex-none`}
+          aria-label="다음 날"
+        >
+          다음날 ▶
+        </button>
+      </div>
+      <label className="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 self-center text-xs text-muted">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={includeHolidays}
+          aria-label="휴일 포함"
+          onClick={() => setIncludeHolidays((v) => !v)}
+          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+            includeHolidays ? 'bg-accent' : 'bg-border'
+          }`}
+        >
+          <span
+            className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+              includeHolidays ? 'translate-x-4' : 'translate-x-0'
+            }`}
+          />
+        </button>
+        <span className={includeHolidays ? 'font-medium text-text' : ''}>휴일 포함</span>
+      </label>
     </div>
   );
 

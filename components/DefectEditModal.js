@@ -49,8 +49,17 @@ function normalizeDefectCode(raw) {
   );
 }
 
-export default function DefectEditModal({ report, workerDirectory, onClose, onSaved }) {
+export default function DefectEditModal({
+  report,
+  workerDirectory,
+  productNameOptions = [],
+  onClose,
+  onSaved,
+}) {
   const [code, setCode] = useState(() => resolveInitialCode(report));
+  const [productName, setProductName] = useState(() =>
+    report.product_name ? String(report.product_name) : ''
+  );
   const [markers, setMarkers] = useState(() => cloneMarkingData(report.marking_data));
   const originalMarkers = useRef(cloneMarkingData(report.marking_data));
   const [saving, setSaving] = useState(false);
@@ -64,13 +73,17 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
   const imageContainerRef = useRef(null);
   // 저장 시 stale closure 방지용 — 항상 최신 code/markers 참조
   const codeRef = useRef(code);
+  const productNameRef = useRef(productName);
   const markersRef = useRef(markers);
   const aiSuggestionRef = useRef(aiSuggestion);
   const correctionReasonRef = useRef(correctionReason);
   codeRef.current = code;
+  productNameRef.current = productName;
   markersRef.current = markers;
   aiSuggestionRef.current = aiSuggestion;
   correctionReasonRef.current = correctionReason;
+
+  const productDatalistId = `defect-product-names-${report.id}`;
 
   const aspectRatio =
     report.image_width > 0 && report.image_height > 0
@@ -93,7 +106,9 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
     setPendingAi(null);
     setCorrectionReason(null);
     try {
-      const result = await requestClassifyPhoto(report.image_url, 'defect');
+      const result = await requestClassifyPhoto(report.image_url, 'defect', {
+        productName: productNameRef.current,
+      });
       const normalized = normalizeDefectCode(result.code);
       const suggestion = {
         code: normalized,
@@ -164,6 +179,7 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
     const nextCode = codeRef.current;
     const nextMarkers = markersRef.current;
     const nextAi = aiSuggestionRef.current;
+    const nextProductName = String(productNameRef.current || '').trim() || null;
 
     if (!nextCode || !DEFECT_CODE_LABELS[nextCode]) {
       setError('유효한 불량 유형을 선택해 주세요.');
@@ -173,6 +189,7 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
     const payload = {
       defect_code: nextCode,
       defect_type: DEFECT_CODE_LABELS[nextCode],
+      product_name: nextProductName,
       marking_data: Array.isArray(nextMarkers) ? nextMarkers : [],
       marking_count: Array.isArray(nextMarkers) ? nextMarkers.length : 0,
       ai_suggested_code: nextAi?.code ?? report.ai_suggested_code ?? null,
@@ -185,7 +202,7 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
       .from('defect_reports')
       .update(payload)
       .eq('id', report.id)
-      .select('id, defect_code, defect_type')
+      .select('id, defect_code, defect_type, product_name')
       .maybeSingle();
 
     if (updateError) {
@@ -363,6 +380,27 @@ export default function DefectEditModal({ report, workerDirectory, onClose, onSa
                 codeSet="defect"
               />
             ) : null}
+
+            <div>
+              <label htmlFor={productDatalistId} className="mb-1.5 block text-xs text-muted">
+                제품명
+              </label>
+              <input
+                id={productDatalistId}
+                type="text"
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                list={`${productDatalistId}-list`}
+                placeholder="제품명 입력 (선택)"
+                autoComplete="off"
+                className={inputClass}
+              />
+              <datalist id={`${productDatalistId}-list`}>
+                {productNameOptions.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            </div>
 
             <div>
               <label className="mb-1.5 block text-xs text-muted">불량 유형</label>
