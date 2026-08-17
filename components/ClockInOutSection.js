@@ -44,6 +44,7 @@ function formatWorkDate(date) {
 }
 
 function clockBaselineLabel(row) {
+  if (row.noData) return '데이터없음';
   const base = `${row.clockInTime} / ${row.clockOutTime}`;
   return row.isPersonalized ? base : `${base}(기본값)`;
 }
@@ -70,7 +71,14 @@ function SelectionCheckbox({ checked, onChange, label }) {
   );
 }
 
-function OverallBadge({ isWarning }) {
+function OverallBadge({ isWarning, noData }) {
+  if (noData) {
+    return (
+      <span className="inline-block rounded-full bg-surface2 px-2.5 py-0.5 text-xs font-medium text-muted">
+        데이터 없음
+      </span>
+    );
+  }
   if (isWarning) {
     return (
       <span className="inline-block rounded-full bg-dangerSoft px-2.5 py-0.5 text-xs font-medium text-danger">
@@ -296,12 +304,13 @@ export default function ClockInOutSection({ fives, workerDirectory }) {
     const inMiss = [];
     const outMiss = [];
     for (const row of todayRows) {
-      if (row.clockIn.status !== 'pending') {
+      if (row.noData) continue;
+      if (row.clockIn.status !== 'pending' && row.clockIn.status !== 'skipped') {
         inTarget += 1;
         if (row.clockIn.status === 'done') inDone += 1;
         else inMiss.push(row.worker_name);
       }
-      if (row.clockOut.status !== 'pending') {
+      if (row.clockOut.status !== 'pending' && row.clockOut.status !== 'skipped') {
         outTarget += 1;
         if (row.clockOut.status === 'done') outDone += 1;
         else outMiss.push(row.worker_name);
@@ -522,7 +531,7 @@ export default function ClockInOutSection({ fives, workerDirectory }) {
                     <MobileListCard
                       key={row.worker_name}
                       header={displayMap.get(row.worker_name) || row.worker_name}
-                      badge={<OverallBadge isWarning={isWarning} />}
+                      badge={<OverallBadge isWarning={isWarning} noData={row.noData} />}
                       leading={
                         <SelectionCheckbox
                           checked={isSelected}
@@ -605,7 +614,7 @@ export default function ClockInOutSection({ fives, workerDirectory }) {
                           {clockBaselineLabel(row)}
                         </td>
                         <td className="px-4 py-3">
-                          <OverallBadge isWarning={isWarning} />
+                          <OverallBadge isWarning={isWarning} noData={row.noData} />
                         </td>
                       </tr>
                     );
@@ -654,7 +663,7 @@ export default function ClockInOutSection({ fives, workerDirectory }) {
                     <MobileListCard
                       key={row.worker_name}
                       header={displayMap.get(row.worker_name) || row.worker_name}
-                      badge={<OverallBadge isWarning={isWarning} />}
+                      badge={<OverallBadge isWarning={isWarning} noData={row.noData} />}
                       leading={
                         <SelectionCheckbox
                           checked={isSelected}
@@ -757,7 +766,7 @@ export default function ClockInOutSection({ fives, workerDirectory }) {
                           {clockBaselineLabel(row)}
                         </td>
                         <td className="px-4 py-3">
-                          <OverallBadge isWarning={isWarning} />
+                          <OverallBadge isWarning={isWarning} noData={row.noData} />
                         </td>
                       </tr>
                     );

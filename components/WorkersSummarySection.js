@@ -10,8 +10,9 @@ import {
   buildWorkerDisplayNameMap,
   getComplianceStatusLabel,
   getExcludedWorkerNames,
+  workerMatchesProcessFilter,
 } from '../lib/analytics';
-import { FIVES_CYCLE_DAYS, INSPECTION_CYCLE_DAYS, SHIFT_STAGES } from '../lib/constants';
+import { FIVES_CYCLE_DAYS, INSPECTION_CYCLE_DAYS, PROCESS_FILTER_ALL, SHIFT_STAGES } from '../lib/constants';
 import { sortRows, toggleSortKey } from '../lib/tableSort';
 import PageTableShell from './PageTableShell';
 import SortableTh from './SortableTh';
@@ -144,6 +145,7 @@ function getWorkerSortValue(worker, key) {
  * @param {Array} props.goods
  * @param {Array} props.fives
  * @param {Array} props.workerDirectory
+ * @param {string} [props.processFilter] - 공정 필터. 기본 'all'(미지정 포함)
  */
 export default function WorkersSummarySection({
   endDate,
@@ -153,6 +155,7 @@ export default function WorkersSummarySection({
   workerDirectory,
   stickyTop = 0,
   layoutVariant = 'fill',
+  processFilter = PROCESS_FILTER_ALL,
 }) {
   const [sortKey, setSortKey] = useState('completionRate');
   const [sortDir, setSortDir] = useState('asc');
@@ -176,14 +179,16 @@ export default function WorkersSummarySection({
       workerDirectory,
       endDate,
       WORKER_SUMMARY_DAYS,
-      excludedNames
+      excludedNames,
+      processFilter
     );
     const fivesMap = buildWorkerFivesSummary(
       fives,
       workerDirectory,
       endDate,
       WORKER_SUMMARY_DAYS,
-      excludedNames
+      excludedNames,
+      processFilter
     );
     const activityMap = buildWorkerLastActivityMap(defects, goods, fives);
     const dailyMap = buildWorkerDailyStatusMap(
@@ -192,38 +197,49 @@ export default function WorkersSummarySection({
       fives,
       workerDirectory,
       endDate,
-      excludedNames
+      excludedNames,
+      processFilter
     );
 
-    return stats.map((w) => {
-      const frequent = frequentMap.get(w.worker_name) ?? {
-        completedCount: 0,
-        expectedCount: 0,
-        completionRate: null,
-      };
-      const fivesSummary = fivesMap.get(w.worker_name) ?? {
-        completedDays: 0,
-        totalDays: WORKER_SUMMARY_DAYS,
-        completionRate: 0,
-      };
-      const activity = activityMap.get(w.worker_name) ?? {
-        lastFrequentCheckAt: w.lastInspectionAt,
-        lastFivesAt: w.lastFivesAt,
-      };
-      const daily = dailyMap.get(w.worker_name) ?? DEFAULT_DAILY_STATUS;
-      return {
-        ...w,
-        ...frequent,
-        fivesCompletedDays: fivesSummary.completedDays,
-        fivesTotalDays: fivesSummary.totalDays,
-        fivesCompletionRate: fivesSummary.completionRate,
-        lastFrequentCheckAt: activity.lastFrequentCheckAt,
-        lastFivesAt: activity.lastFivesAt,
-        todayFrequentStages: daily.frequentStages,
-        todayFivesDone: daily.fivesDone,
-      };
-    });
-  }, [defects, goods, fives, workerDirectory, excludedNames, endDate]);
+    const directoryByName = new Map(
+      (workerDirectory || [])
+        .filter((row) => row.worker_name)
+        .map((row) => [row.worker_name, row])
+    );
+
+    return stats
+      .filter((w) =>
+        workerMatchesProcessFilter(directoryByName.get(w.worker_name), processFilter)
+      )
+      .map((w) => {
+        const frequent = frequentMap.get(w.worker_name) ?? {
+          completedCount: 0,
+          expectedCount: 0,
+          completionRate: null,
+        };
+        const fivesSummary = fivesMap.get(w.worker_name) ?? {
+          completedDays: 0,
+          totalDays: WORKER_SUMMARY_DAYS,
+          completionRate: 0,
+        };
+        const activity = activityMap.get(w.worker_name) ?? {
+          lastFrequentCheckAt: w.lastInspectionAt,
+          lastFivesAt: w.lastFivesAt,
+        };
+        const daily = dailyMap.get(w.worker_name) ?? DEFAULT_DAILY_STATUS;
+        return {
+          ...w,
+          ...frequent,
+          fivesCompletedDays: fivesSummary.completedDays,
+          fivesTotalDays: fivesSummary.totalDays,
+          fivesCompletionRate: fivesSummary.completionRate,
+          lastFrequentCheckAt: activity.lastFrequentCheckAt,
+          lastFivesAt: activity.lastFivesAt,
+          todayFrequentStages: daily.frequentStages,
+          todayFivesDone: daily.fivesDone,
+        };
+      });
+  }, [defects, goods, fives, workerDirectory, excludedNames, endDate, processFilter]);
 
   const workers = useMemo(() => {
     const sorted = sortRows(workerRows, sortKey, sortDir, getWorkerSortValue);

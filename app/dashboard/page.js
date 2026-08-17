@@ -11,7 +11,7 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import {
   buildWorkerStats,
@@ -21,11 +21,14 @@ import {
   buildTodayShiftSummary,
   buildWorkerDisplayNameMap,
   filterByExcludedWorkers,
+  filterRecordsByProcess,
   getExcludedWorkerNames,
   summarizeTodayFives,
 } from '../../lib/analytics';
+import { DEFAULT_PROCESS_FILTER } from '../../lib/constants';
 import PageHeader from '../../components/PageHeader';
 import StatCard from '../../components/StatCard';
+import ProcessFilterSelect from '../../components/ProcessFilterSelect';
 
 /** 이행률 → StatCard tone (90%↑ good, 70~89% warn, 70%↓ danger, null muted) */
 function rateTone(rate) {
@@ -93,6 +96,7 @@ function ShiftStageStatCard({ item }) {
 
 export default function DashboardPage() {
   const { loading, error, defects, goods, fives, workerDirectory } = useReports();
+  const [processFilter, setProcessFilter] = useState(DEFAULT_PROCESS_FILTER);
 
   const excludedNames = useMemo(
     () => getExcludedWorkerNames(workerDirectory),
@@ -105,16 +109,31 @@ export default function DashboardPage() {
   );
 
   const filteredDefects = useMemo(
-    () => filterByExcludedWorkers(defects, excludedNames),
-    [defects, excludedNames]
+    () =>
+      filterRecordsByProcess(
+        filterByExcludedWorkers(defects, excludedNames),
+        workerDirectory,
+        processFilter
+      ),
+    [defects, excludedNames, workerDirectory, processFilter]
   );
   const filteredGoods = useMemo(
-    () => filterByExcludedWorkers(goods, excludedNames),
-    [goods, excludedNames]
+    () =>
+      filterRecordsByProcess(
+        filterByExcludedWorkers(goods, excludedNames),
+        workerDirectory,
+        processFilter
+      ),
+    [goods, excludedNames, workerDirectory, processFilter]
   );
   const filteredFives = useMemo(
-    () => filterByExcludedWorkers(fives, excludedNames),
-    [fives, excludedNames]
+    () =>
+      filterRecordsByProcess(
+        filterByExcludedWorkers(fives, excludedNames),
+        workerDirectory,
+        processFilter
+      ),
+    [fives, excludedNames, workerDirectory, processFilter]
   );
 
   const workerStats = useMemo(
@@ -139,9 +158,10 @@ export default function DashboardPage() {
         filteredGoods,
         workerDirectory,
         new Date(),
-        filteredFives
+        filteredFives,
+        processFilter
       ),
-    [filteredDefects, filteredGoods, filteredFives, workerDirectory]
+    [filteredDefects, filteredGoods, filteredFives, workerDirectory, processFilter]
   );
 
   const overdueMissingWorkers = useMemo(() => {
@@ -164,9 +184,11 @@ export default function DashboardPage() {
         filteredDefects,
         filteredGoods,
         filteredFives,
-        workerDirectory
+        workerDirectory,
+        new Date(),
+        processFilter
       ),
-    [filteredDefects, filteredGoods, filteredFives, workerDirectory]
+    [filteredDefects, filteredGoods, filteredFives, workerDirectory, processFilter]
   );
 
   if (loading) {
@@ -195,10 +217,11 @@ export default function DashboardPage() {
       <PageHeader
         eyebrow="OVERVIEW"
         title="대시보드"
-        description="전체 검사 현황과 최근 14일 추세 (평일 기준)"
+        description="선택한 공정 작업자 기준 검사 현황과 최근 14일 추세 (평일 기준)"
       />
 
       <div className="p-8 space-y-8">
+        <ProcessFilterSelect value={processFilter} onChange={setProcessFilter} />
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard label="총 검사 건수" value={total} sub={`불량 ${filteredDefects.length} · 양품 ${filteredGoods.length}`} />
           <StatCard

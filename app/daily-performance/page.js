@@ -14,7 +14,7 @@ import {
   getStageNonComplianceList,
   isSameCalendarDay,
 } from '../../lib/analytics';
-import { SHIFT_STAGES } from '../../lib/constants';
+import { DEFAULT_PROCESS_FILTER, SHIFT_STAGES } from '../../lib/constants';
 import { isWeekend, shiftWorkDate, toPreviousWeekday } from '../../lib/dateRange';
 import { sortRows, toggleSortKey } from '../../lib/tableSort';
 import PageHeader from '../../components/PageHeader';
@@ -26,6 +26,7 @@ import SortableTh from '../../components/SortableTh';
 import MobileSortSelect, { parseSortValue } from '../../components/MobileSortSelect';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
 import WorkerDailyDetailModal from '../../components/WorkerDailyDetailModal';
+import ProcessFilterSelect from '../../components/ProcessFilterSelect';
 
 const TABS = [
   { id: 'today', label: '오늘 현황' },
@@ -375,6 +376,7 @@ export default function DailyPerformancePage() {
   const [activeTab, setActiveTab] = useState('today');
   const [date, setDate] = useState(() => toPreviousWeekday(startOfDay(new Date())));
   const [includeHolidays, setIncludeHolidays] = useState(false);
+  const [processFilter, setProcessFilter] = useState(DEFAULT_PROCESS_FILTER);
   const [now, setNow] = useState(() => new Date());
   const [selected, setSelected] = useState(new Set());
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -419,8 +421,17 @@ export default function DailyPerformancePage() {
   );
 
   const performance = useMemo(
-    () => buildDailyPerformance(defects, goods, fives, docs, workerDirectory, date),
-    [defects, goods, fives, docs, workerDirectory, date]
+    () =>
+      buildDailyPerformance(
+        defects,
+        goods,
+        fives,
+        docs,
+        workerDirectory,
+        date,
+        processFilter
+      ),
+    [defects, goods, fives, docs, workerDirectory, date, processFilter]
   );
 
   const frequentEligibleNames = useMemo(
@@ -439,9 +450,10 @@ export default function DailyPerformancePage() {
         fives,
         date,
         excludedNames,
-        workerDirectory
+        workerDirectory,
+        processFilter
       ),
-    [defects, goods, fives, date, excludedNames, workerDirectory]
+    [defects, goods, fives, date, excludedNames, workerDirectory, processFilter]
   );
 
   const complianceByWorker = useMemo(
@@ -576,6 +588,14 @@ export default function DailyPerformancePage() {
         </button>
         <span className={includeHolidays ? 'font-medium text-text' : ''}>휴일 포함</span>
       </label>
+      <ProcessFilterSelect
+        value={processFilter}
+        onChange={(next) => {
+          setProcessFilter(next);
+          setSelected(new Set());
+        }}
+        className="w-full justify-center sm:w-auto"
+      />
     </div>
   );
 
@@ -884,6 +904,7 @@ export default function DailyPerformancePage() {
             goods={goods}
             fives={fives}
             workerDirectory={workerDirectory}
+            processFilter={processFilter}
             stickyTop={dayNavHeight}
             layoutVariant="flow"
           />

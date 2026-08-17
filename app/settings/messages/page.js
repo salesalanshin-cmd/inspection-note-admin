@@ -9,10 +9,12 @@ import {
   getWorkDateForRecord,
 } from '../../../lib/analytics';
 import { getRecentDaysRange, formatISODate } from '../../../lib/dateRange';
+import { DEFAULT_PROCESS_FILTER } from '../../../lib/constants';
 import { useReports } from '../../../lib/useReports';
 import PageHeader from '../../../components/PageHeader';
 import DateRangePicker from '../../../components/DateRangePicker';
 import NotifyReviewModal from '../../../components/NotifyReviewModal';
+import ProcessFilterSelect from '../../../components/ProcessFilterSelect';
 
 const PREVIEW_LIMIT = 4;
 
@@ -163,6 +165,7 @@ export default function MessagesSettingsPage() {
     const work = getWorkDateForRecord(new Date());
     return startOfDay(new Date(`${work}T00:00:00`));
   });
+  const [processFilter, setProcessFilter] = useState(DEFAULT_PROCESS_FILTER);
   const [selectedWarning, setSelectedWarning] = useState(() => new Set());
   const [reviewOpen, setReviewOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -227,9 +230,10 @@ export default function MessagesSettingsPage() {
         docs,
         workerDirectory,
         now,
-        selectedDate
+        selectedDate,
+        processFilter
       ),
-    [defects, goods, fives, docs, workerDirectory, now, selectedDate]
+    [defects, goods, fives, docs, workerDirectory, now, selectedDate, processFilter]
   );
 
   const okRows = useMemo(
@@ -500,6 +504,14 @@ export default function MessagesSettingsPage() {
                   오늘로 이동
                 </button>
               ) : null}
+              <ProcessFilterSelect
+                value={processFilter}
+                onChange={(next) => {
+                  setProcessFilter(next);
+                  setSelectedWarning(new Set());
+                }}
+                className="w-full justify-center sm:w-auto"
+              />
             </div>
           </div>
 

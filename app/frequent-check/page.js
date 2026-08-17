@@ -11,7 +11,7 @@ import {
   groupComplianceByShift,
   sortComplianceByShift,
 } from '../../lib/analytics';
-import { SHIFT_STAGES } from '../../lib/constants';
+import { DEFAULT_PROCESS_FILTER, SHIFT_STAGES } from '../../lib/constants';
 import { sortRows, toggleSortKey } from '../../lib/tableSort';
 import { exportToExcel, formatDateRangeForFilename, formatExportDateTime } from '../../lib/exportExcel';
 import {
@@ -29,6 +29,7 @@ import TrafficLightDots from '../../components/TrafficLightDots';
 import MobileSortSelect, { parseSortValue } from '../../components/MobileSortSelect';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
 import WorkerHistoryModal from '../../components/WorkerHistoryModal';
+import ProcessFilterSelect from '../../components/ProcessFilterSelect';
 
 const exportBtnClass =
   'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
@@ -162,6 +163,7 @@ function getComplianceSortValue(row, key) {
 export default function FrequentCheckPage() {
   const { loading, error, defects, goods, fives, workerDirectory } = useReports();
   const [date, setDate] = useState(() => startOfDay(new Date()));
+  const [processFilter, setProcessFilter] = useState(DEFAULT_PROCESS_FILTER);
   const [exportDateRange, setExportDateRange] = useState(() => getRecentDaysRange(7));
   const [sortKey, setSortKey] = useState('nonCompliant');
   const [sortDir, setSortDir] = useState('desc');
@@ -185,9 +187,10 @@ export default function FrequentCheckPage() {
         fives,
         date,
         excludedNames,
-        workerDirectory
+        workerDirectory,
+        processFilter
       ),
-    [defects, goods, fives, date, excludedNames, workerDirectory]
+    [defects, goods, fives, date, excludedNames, workerDirectory, processFilter]
   );
 
   const groupedCompliance = useMemo(() => {
@@ -214,7 +217,8 @@ export default function FrequentCheckPage() {
         fives,
         new Date(`${dateStr}T00:00:00`),
         excludedNames,
-        workerDirectory
+        workerDirectory,
+        processFilter
       );
       const sorted = sortComplianceByShift(dayCompliance);
       rows.push(...complianceToExportRows(dateStr, sorted, displayMap));
@@ -302,6 +306,7 @@ export default function FrequentCheckPage() {
                 </>
               }
             >
+              <ProcessFilterSelect value={processFilter} onChange={setProcessFilter} />
               <button
                 type="button"
                 onClick={handleExportExcel}
