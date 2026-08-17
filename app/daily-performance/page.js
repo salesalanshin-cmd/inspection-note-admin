@@ -15,7 +15,7 @@ import {
   isSameCalendarDay,
 } from '../../lib/analytics';
 import { DEFAULT_PROCESS_FILTER, SHIFT_STAGES } from '../../lib/constants';
-import { isWeekend, shiftWorkDate, toPreviousWeekday } from '../../lib/dateRange';
+import { isWeekend, shiftWorkDate, startOfLocalDay as startOfDay, toPreviousWeekday } from '../../lib/dateRange';
 import { sortRows, toggleSortKey } from '../../lib/tableSort';
 import PageHeader from '../../components/PageHeader';
 import NotifyReviewModal from '../../components/NotifyReviewModal';
@@ -105,12 +105,6 @@ function getPerformanceSortValue(row, key, complianceByWorker) {
     default:
       return row.worker_name;
   }
-}
-
-function startOfDay(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
 }
 
 function formatWorkDate(date) {

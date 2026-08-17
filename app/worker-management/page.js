@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { ClipboardCheck, FileText, LayoutGrid, Pencil } from 'lucide-react';
 import { useReports } from '../../lib/useReports';
 import {
@@ -191,6 +192,23 @@ function EditButton({ name, onClick, disabled }) {
   );
 }
 
+function workerDetailHref(name) {
+  return `/worker-detail?name=${encodeURIComponent(name)}`;
+}
+
+function WorkerNameLink({ name, displayName, className = '' }) {
+  const label = displayName.trim() || name;
+  return (
+    <Link
+      href={workerDetailHref(name)}
+      className={`font-medium text-text hover:text-accent hover:underline ${className}`.trim()}
+      title="작업자 상세 조회"
+    >
+      {label}
+    </Link>
+  );
+}
+
 function WorkerRow({ name, row, showStatus, isSaving, onUpsert, onEdit }) {
   const excluded = row?.excluded ?? false;
   const displayName = row?.display_name ?? '';
@@ -198,8 +216,13 @@ function WorkerRow({ name, row, showStatus, isSaving, onUpsert, onEdit }) {
   return (
     <tr className="border-b border-border last:border-0">
       <td className="px-4 py-3">
-        <div className="font-medium text-text">{displayName.trim() || name}</div>
-        <div className="mt-0.5 text-[11px] text-muted">원본: {name}</div>
+        <WorkerNameLink name={name} displayName={displayName} />
+        <div className="mt-0.5 flex items-center gap-2 text-[11px]">
+          <span className="text-muted">원본: {name}</span>
+          <Link href={workerDetailHref(name)} className="text-accent hover:underline">
+            상세
+          </Link>
+        </div>
       </td>
       {showStatus ? (
         <td className="px-4 py-3">
@@ -241,12 +264,17 @@ function WorkerMobileCard({ name, row, showStatus, isSaving, onUpsert, onEdit })
 
   return (
     <MobileListCard
-      header={displayName.trim() || name}
+      header={<WorkerNameLink name={name} displayName={displayName} />}
       badge={showStatus ? <WorkerStatusBadge row={row} /> : null}
       className={excluded ? 'border-l-2 border-l-danger' : ''}
     >
       <MobileCardField label="원본" className="col-span-2">
-        <span className="text-xs text-muted">{name}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted">{name}</span>
+          <Link href={workerDetailHref(name)} className="text-xs text-accent hover:underline">
+            상세
+          </Link>
+        </div>
       </MobileCardField>
       <MobileCardField label="근무조" className="col-span-2">
         <ShiftSelect name={name} row={row} isSaving={isSaving} onUpsert={onUpsert} />

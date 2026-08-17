@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { Copy, Check, Send, X, Loader2, RotateCcw } from 'lucide-react';
-import { getDisplayName } from '../lib/analytics';
+import { getDisplayName, getWorkDateForRecord } from '../lib/analytics';
 import {
   resolveNotifyTemplateType,
   buildNotifyVariables,
@@ -23,14 +23,7 @@ function buildCopyMessage(row, workerDirectory, date) {
   if (row.fives?.status === 'fail') items.push('3정5S 기록');
   if (row.documents?.status === 'fail') items.push('문서스캔 기록');
 
-  const todayLocal = (() => {
-    const d = new Date();
-    if (d.getHours() < 8) d.setDate(d.getDate() - 1);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  })();
+  const todayLocal = getWorkDateForRecord(new Date());
 
   const dateStr = date || todayLocal;
   const isToday = dateStr === todayLocal;

@@ -8,7 +8,7 @@ import {
   buildWorkerDisplayNameMap,
   isSameCalendarDay,
 } from '../lib/analytics';
-import { isWeekend, shiftWorkDate, toPreviousWeekday } from '../lib/dateRange';
+import { isWeekend, shiftWorkDate, startOfLocalDay as startOfDay, toPreviousWeekday } from '../lib/dateRange';
 import StatusDot from './StatusDot';
 import MobileListCard, { MobileCardField } from './MobileListCard';
 
@@ -27,12 +27,6 @@ const actionBtnClass =
 
 const tabBtnClass =
   'min-h-[44px] flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-colors md:min-h-0 md:flex-none';
-
-function startOfDay(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function formatWorkDate(date) {
   return date.toLocaleDateString('ko-KR', {

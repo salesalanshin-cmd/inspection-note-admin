@@ -19,6 +19,7 @@ import {
   eachDateInRange,
   getRecentDaysRange,
   isDateRangeValid,
+  startOfLocalDay as startOfDay,
 } from '../../lib/dateRange';
 import PageHeader from '../../components/PageHeader';
 import PageTableShell from '../../components/PageTableShell';
@@ -45,12 +46,6 @@ const FREQUENT_SORT_OPTIONS = [
 
 const dayNavBtnClass =
   'min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text md:min-h-0';
-
-function startOfDay(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function complianceToExportRows(dateStr, rows, displayMap) {
   return rows.map((row) => {

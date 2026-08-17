@@ -7,8 +7,9 @@ import {
   buildTodayRealtimePerformance,
   getDisplayName,
   getWorkDateForRecord,
+  getWorkRangeBounds,
 } from '../../../lib/analytics';
-import { getRecentDaysRange, formatISODate } from '../../../lib/dateRange';
+import { getRecentDaysRange, formatISODate, startOfLocalDay as startOfDay } from '../../../lib/dateRange';
 import { DEFAULT_PROCESS_FILTER } from '../../../lib/constants';
 import { useReports } from '../../../lib/useReports';
 import PageHeader from '../../../components/PageHeader';
@@ -89,16 +90,8 @@ function sortByMissCountThenName(rows) {
 
 function workDayBounds(now = new Date()) {
   const workDateStr = getWorkDateForRecord(now);
-  const start = new Date(`${workDateStr}T08:00:00`);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+  const { start, end } = getWorkRangeBounds(workDateStr);
   return { start, end, workDateStr };
-}
-
-function startOfDay(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
 }
 
 function formatNavDate(date) {
