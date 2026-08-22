@@ -17,9 +17,10 @@ const NAV = [
 const SETTINGS_NAV = [
   { href: '/worker-management', label: '작업자 관리', code: '07' },
   { href: '/worker-detail', label: '작업자 상세조회', code: '08' },
-  { href: '/settings/messages', label: '메시지 관리', code: '09' },
-  { href: '/trash', label: '휴지통', code: '10' },
-  { href: '/master', label: 'MES 기준정보', code: '11' },
+  { href: '/notices', label: '공지사항', code: '09' },
+  { href: '/settings/messages', label: '메시지 관리', code: '10' },
+  { href: '/trash', label: '휴지통', code: '11' },
+  { href: '/master', label: 'MES 기준정보', code: '12' },
 ];
 
 const INSIGHT_LAB_NAV = {
