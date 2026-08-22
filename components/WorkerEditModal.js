@@ -1,9 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import ModalShell, { ModalFooterActions } from './ModalShell';
 import ConfirmDialog from './ConfirmDialog';
+import {
+  NATIONALITY_LANG_HINTS,
+  WORKER_LANGS,
+  normalizeWorkerLang,
+  workerLangLabel,
+  workerRoleLabel,
+} from '../lib/constants';
 
 const inputClass =
   'w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
@@ -102,6 +109,7 @@ export default function WorkerEditModal({
 }) {
   const [displayName, setDisplayName] = useState(row?.display_name ?? '');
   const [nationality, setNationality] = useState(row?.nationality ?? '');
+  const [lang, setLang] = useState(() => normalizeWorkerLang(row?.lang));
   const [phone, setPhone] = useState(row?.phone_number ?? '');
   const [note, setNote] = useState(row?.note ?? '');
   const [handlesDefects, setHandlesDefects] = useState(
@@ -113,6 +121,7 @@ export default function WorkerEditModal({
   useEffect(() => {
     setDisplayName(row?.display_name ?? '');
     setNationality(row?.nationality ?? '');
+    setLang(normalizeWorkerLang(row?.lang));
     setPhone(row?.phone_number ?? '');
     setNote(row?.note ?? '');
     setHandlesDefects(row?.handles_defects ?? row?.defect_enabled ?? true);
@@ -121,16 +130,29 @@ export default function WorkerEditModal({
   }, [workerName, row]);
 
   const processLabel = row?.process || '미지정';
+  const roleLabel = workerRoleLabel(row?.role);
   const defaultShift =
     row?.default_shift === 'day' || row?.default_shift === 'night'
       ? row.default_shift
       : '';
+
+  const langHint = useMemo(() => {
+    const nat = nationality.trim();
+    if (!nat || lang !== 'ko') return null;
+    const suggested = NATIONALITY_LANG_HINTS[nat];
+    if (!suggested) return null;
+    return {
+      suggested,
+      label: workerLangLabel(suggested),
+    };
+  }, [nationality, lang]);
 
   async function handleSave() {
     setError(null);
     const ok = await onSave(workerName, {
       display_name: displayName.trim(),
       nationality: nationality.trim(),
+      lang,
       phone_number: phone.trim(),
       note,
       handles_defects: handlesDefects,
@@ -164,6 +186,10 @@ export default function WorkerEditModal({
             <p className="mt-3 text-[11px] font-medium text-muted">목록에서 바로 수정</p>
             <dl className="mt-1.5 space-y-1 text-xs text-text">
               <div className="flex gap-2">
+                <dt className="w-16 shrink-0 text-muted">역할</dt>
+                <dd>{roleLabel}</dd>
+              </div>
+              <div className="flex gap-2">
                 <dt className="w-16 shrink-0 text-muted">근무조</dt>
                 <dd>{shiftLabel(defaultShift)}</dd>
               </div>
@@ -177,7 +203,7 @@ export default function WorkerEditModal({
               </div>
             </dl>
             <p className="mt-2 text-[11px] leading-relaxed text-muted">
-              근무조·담당업무·공정은 목록에서 인라인으로 변경하세요.
+              역할·근무조·담당업무·공정은 목록에서 인라인으로 변경하세요.
             </p>
           </div>
 
@@ -202,6 +228,28 @@ export default function WorkerEditModal({
               onChange={setNationality}
             />
           </div>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium text-muted">사용 언어</span>
+            <select
+              value={lang}
+              disabled={saving}
+              onChange={(e) => setLang(e.target.value)}
+              className={inputClass}
+            >
+              {WORKER_LANGS.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            {langHint ? (
+              <p className="text-[11px] leading-relaxed text-warn">
+                국적이 {nationality.trim()}입니다. 언어를 {langHint.suggested}({langHint.label}
+                )로 변경하시겠습니까?
+              </p>
+            ) : null}
+          </label>
 
           <label className="block space-y-1.5">
             <span className="text-xs font-medium text-muted">연락처</span>

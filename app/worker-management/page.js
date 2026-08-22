@@ -10,7 +10,12 @@ import {
   hasResignedNote,
   getWorkerListStatus,
 } from '../../lib/analytics';
-import { WORKER_PROCESSES } from '../../lib/constants';
+import {
+  WORKER_PROCESSES,
+  WORKER_ROLES,
+  normalizeWorkerRole,
+  normalizeWorkerLang,
+} from '../../lib/constants';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
@@ -124,6 +129,26 @@ function DutyToggles({ name, row, isSaving, onUpsert }) {
   );
 }
 
+function RoleSelect({ name, row, isSaving, onUpsert }) {
+  const role = normalizeWorkerRole(row?.role);
+
+  return (
+    <select
+      value={role}
+      disabled={isSaving}
+      aria-label={`${name} 역할`}
+      onChange={(e) => onUpsert(name, { role: e.target.value })}
+      className={`${inputClass} w-full min-w-[6.5rem] md:w-28`}
+    >
+      {WORKER_ROLES.map(({ value, label }) => (
+        <option key={value} value={value}>
+          {label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function ShiftSelect({ name, row, isSaving, onUpsert }) {
   const defaultShift =
     row?.default_shift === 'day' || row?.default_shift === 'night'
@@ -230,6 +255,9 @@ function WorkerRow({ name, row, showStatus, isSaving, onUpsert, onEdit }) {
         </td>
       ) : null}
       <td className="px-4 py-3">
+        <RoleSelect name={name} row={row} isSaving={isSaving} onUpsert={onUpsert} />
+      </td>
+      <td className="px-4 py-3">
         <ShiftSelect name={name} row={row} isSaving={isSaving} onUpsert={onUpsert} />
       </td>
       <td className="px-4 py-3">
@@ -275,6 +303,9 @@ function WorkerMobileCard({ name, row, showStatus, isSaving, onUpsert, onEdit })
             상세
           </Link>
         </div>
+      </MobileCardField>
+      <MobileCardField label="역할" className="col-span-2">
+        <RoleSelect name={name} row={row} isSaving={isSaving} onUpsert={onUpsert} />
       </MobileCardField>
       <MobileCardField label="근무조" className="col-span-2">
         <ShiftSelect name={name} row={row} isSaving={isSaving} onUpsert={onUpsert} />
@@ -352,7 +383,7 @@ export default function WorkerManagementPage() {
     const names = showAllWorkers ? everyNames : visibleNames;
     return showAllWorkers ? sortWorkersActiveFirst(names, directoryMap) : names;
   }, [showAllWorkers, everyNames, visibleNames, directoryMap]);
-  const colCount = showAllWorkers ? 7 : 6;
+  const colCount = showAllWorkers ? 8 : 7;
 
   async function upsertWorker(worker_name, patch) {
     setSaving(worker_name);
@@ -375,6 +406,8 @@ export default function WorkerManagementPage() {
       phone_number: existing?.phone_number ?? '',
       display_name: existing?.display_name ?? '',
       nationality: existing?.nationality ?? '',
+      role: normalizeWorkerRole(existing?.role),
+      lang: normalizeWorkerLang(existing?.lang),
       process: existing?.process || null,
       removed: existing?.removed ?? false,
       ...patch,
@@ -409,6 +442,8 @@ export default function WorkerManagementPage() {
       phone_number: '',
       display_name: '',
       nationality: '',
+      role: 'inspector',
+      lang: 'ko',
       process: null,
     });
     setSaving(null);
@@ -444,6 +479,8 @@ export default function WorkerManagementPage() {
       phone_number: existing?.phone_number ?? '',
       display_name: existing?.display_name ?? '',
       nationality: existing?.nationality ?? '',
+      role: normalizeWorkerRole(existing?.role),
+      lang: normalizeWorkerLang(existing?.lang),
       process: existing?.process || null,
       removed: true,
     });
@@ -469,7 +506,7 @@ export default function WorkerManagementPage() {
       <PageHeader
         eyebrow="SETTINGS"
         title="작업자 관리"
-        description="근무조·담당업무·공정·제외는 목록에서 바로 바꾸고, 국적·별칭·연락처·메모는 편집에서 설정합니다."
+        description="역할·근무조·담당업무·공정·제외는 목록에서 바로 바꾸고, 사용언어·국적·별칭·연락처·메모는 편집에서 설정합니다."
       />
 
       <div className="space-y-6 p-4 md:p-8">
@@ -539,6 +576,7 @@ export default function WorkerManagementPage() {
               <tr className="border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
                 <th className="px-4 py-3">작업자</th>
                 {showAllWorkers ? <th className="px-4 py-3">상태</th> : null}
+                <th className="px-4 py-3">역할</th>
                 <th className="px-4 py-3">근무조</th>
                 <th className="px-4 py-3">담당업무</th>
                 <th className="px-4 py-3">공정</th>
