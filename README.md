@@ -17,7 +17,7 @@
 
 ## DB 마이그레이션
 
-스키마 변경 SQL은 `supabase/migrations/`에 `001_...`, `002_...`처럼 번호 순으로 파일을 추가해 관리합니다.
+`supabase/legacy-migrations/`는 과거 이력 참고용이며 더 이상 추가하지 않습니다. 스키마 변경은 defect-inspector 레포의 `supabase/migrations/`에서만 하며, Supabase 대시보드 SQL Editor에서 직접 실행하지 않습니다.
 
 ## 실행 방법
 
