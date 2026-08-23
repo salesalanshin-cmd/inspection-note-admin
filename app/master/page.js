@@ -5,6 +5,11 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import {
+  applyMoldChange,
+  formatMoldChangedMeta,
+  moldLabel,
+} from '../../lib/equipmentMold';
 import PageHeader from '../../components/PageHeader';
 import CsvImportPanel, { inputClass } from '../../components/CsvImportPanel';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
@@ -239,6 +244,47 @@ function MasterPageContent() {
     await fetchAll();
   }
 
+  /**
+   * 현재 금형 변경 — equipment 갱신 + mold_change_log(source=manual).
+   * 관리자 콘솔은 worker 세션이 없어 mold_changed_by / changed_by 는 null.
+   */
+  async function changeCurrentMold(row, toMoldId) {
+    if (!row?.id || String(row.id).startsWith('draft-')) return;
+    const next = toMoldId || null;
+    const prev = row.current_mold_id || null;
+    if (prev === next) return;
+
+    setSaving(`eq-mold-${row.id}`);
+    setFormError(null);
+    try {
+      const result = await applyMoldChange({
+        equipmentId: row.id,
+        fromMoldId: prev,
+        toMoldId: next,
+        changedBy: null,
+        source: 'manual',
+      });
+      if (!result.skipped) {
+        setEquipment((prevList) =>
+          prevList.map((r) =>
+            r.id === row.id
+              ? {
+                  ...r,
+                  current_mold_id: next,
+                  mold_changed_at: result.mold_changed_at,
+                  mold_changed_by: null,
+                }
+              : r
+          )
+        );
+      }
+    } catch (err) {
+      setFormError(err?.message || '금형 변경에 실패했습니다.');
+    } finally {
+      setSaving(null);
+    }
+  }
+
   async function saveProductMoldRow(row) {
     if (!companyId) {
       setFormError('먼저 회사를 등록하세요.');
@@ -375,6 +421,12 @@ function MasterPageContent() {
           >
             제품 매칭 확인 →
           </Link>
+          <Link
+            href="/master/mold-history"
+            className="min-h-[44px] rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-surface2 md:min-h-0"
+          >
+            금형 교체 이력 →
+          </Link>
         </div>
 
         {formError ? (
@@ -447,146 +499,206 @@ function MasterPageContent() {
             />
 
             <div className="md:hidden">
-              {equipment.map((row) => (
-                <MobileListCard key={row.id} header={row.name?.trim() || '새 설비'}>
-                  <MobileCardField label="이름" className="col-span-2">
-                    <input
-                      type="text"
-                      value={row.name ?? ''}
-                      placeholder="350T 다이캐스팅 #2"
-                      disabled={Boolean(saving?.startsWith('eq-'))}
-                      className={`${inputClass} w-full`}
-                      onChange={(e) => updateEquipmentLocal(row.id, { name: e.target.value })}
-                      onBlur={() => saveEquipmentRow(row)}
-                    />
-                  </MobileCardField>
-                  <MobileCardField label="라인">
-                    <input
-                      type="text"
-                      value={row.line ?? ''}
-                      disabled={Boolean(saving?.startsWith('eq-'))}
-                      className={`${inputClass} w-full`}
-                      onChange={(e) => updateEquipmentLocal(row.id, { line: e.target.value })}
-                      onBlur={() => saveEquipmentRow(row)}
-                    />
-                  </MobileCardField>
-                  <MobileCardField label="최대 CAPA">
-                    <input
-                      type="text"
-                      value={row.max_capacity ?? ''}
-                      disabled={Boolean(saving?.startsWith('eq-'))}
-                      className={`${inputClass} w-full`}
-                      onChange={(e) =>
-                        updateEquipmentLocal(row.id, { max_capacity: e.target.value })
-                      }
-                      onBlur={() => saveEquipmentRow(row)}
-                    />
-                  </MobileCardField>
-                  <MobileCardField label="설치일" className="col-span-2">
-                    <input
-                      type="date"
-                      value={(row.installed_at ?? '').slice(0, 10)}
-                      disabled={Boolean(saving?.startsWith('eq-'))}
-                      className={`${inputClass} w-full`}
-                      onChange={(e) =>
-                        updateEquipmentLocal(row.id, { installed_at: e.target.value || null })
-                      }
-                      onBlur={() => saveEquipmentRow(row)}
-                    />
-                  </MobileCardField>
-                  <MobileCardField label="" className="col-span-2">
-                    <button
-                      type="button"
-                      onClick={() => deleteEquipment(row.id)}
-                      className="text-xs text-danger hover:underline"
-                    >
-                      삭제
-                    </button>
-                  </MobileCardField>
-                </MobileListCard>
-              ))}
+              {equipment.map((row) => {
+                const meta = formatMoldChangedMeta(row.mold_changed_at);
+                const isDraft = String(row.id).startsWith('draft-');
+                return (
+                  <MobileListCard key={row.id} header={row.name?.trim() || '새 설비'}>
+                    <MobileCardField label="이름" className="col-span-2">
+                      <input
+                        type="text"
+                        value={row.name ?? ''}
+                        placeholder="350T 다이캐스팅 #2"
+                        disabled={Boolean(saving?.startsWith('eq-'))}
+                        className={`${inputClass} w-full`}
+                        onChange={(e) => updateEquipmentLocal(row.id, { name: e.target.value })}
+                        onBlur={() => saveEquipmentRow(row)}
+                      />
+                    </MobileCardField>
+                    <MobileCardField label="라인">
+                      <input
+                        type="text"
+                        value={row.line ?? ''}
+                        disabled={Boolean(saving?.startsWith('eq-'))}
+                        className={`${inputClass} w-full`}
+                        onChange={(e) => updateEquipmentLocal(row.id, { line: e.target.value })}
+                        onBlur={() => saveEquipmentRow(row)}
+                      />
+                    </MobileCardField>
+                    <MobileCardField label="최대 CAPA">
+                      <input
+                        type="text"
+                        value={row.max_capacity ?? ''}
+                        disabled={Boolean(saving?.startsWith('eq-'))}
+                        className={`${inputClass} w-full`}
+                        onChange={(e) =>
+                          updateEquipmentLocal(row.id, { max_capacity: e.target.value })
+                        }
+                        onBlur={() => saveEquipmentRow(row)}
+                      />
+                    </MobileCardField>
+                    <MobileCardField label="설치일" className="col-span-2">
+                      <input
+                        type="date"
+                        value={(row.installed_at ?? '').slice(0, 10)}
+                        disabled={Boolean(saving?.startsWith('eq-'))}
+                        className={`${inputClass} w-full`}
+                        onChange={(e) =>
+                          updateEquipmentLocal(row.id, { installed_at: e.target.value || null })
+                        }
+                        onBlur={() => saveEquipmentRow(row)}
+                      />
+                    </MobileCardField>
+                    <MobileCardField label="현재 금형" className="col-span-2">
+                      <select
+                        value={row.current_mold_id || ''}
+                        disabled={isDraft || Boolean(saving?.startsWith('eq-'))}
+                        className={`${inputClass} w-full`}
+                        onChange={(e) => changeCurrentMold(row, e.target.value || null)}
+                      >
+                        <option value="">미지정</option>
+                        {productMolds
+                          .filter((m) => !String(m.id).startsWith('draft-'))
+                          .map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {moldLabel(m)}
+                            </option>
+                          ))}
+                      </select>
+                      <div className="mt-1 text-[11px] text-muted">
+                        마지막 교체 {meta.absolute}
+                        {meta.hoursAgoLabel ? (
+                          <span className="ml-1.5 text-muted">· {meta.hoursAgoLabel}</span>
+                        ) : null}
+                      </div>
+                    </MobileCardField>
+                    <MobileCardField label="" className="col-span-2">
+                      <button
+                        type="button"
+                        onClick={() => deleteEquipment(row.id)}
+                        className="text-xs text-danger hover:underline"
+                      >
+                        삭제
+                      </button>
+                    </MobileCardField>
+                  </MobileListCard>
+                );
+              })}
               {equipment.length === 0 ? (
                 <p className="py-8 text-center text-xs text-muted">등록된 설비가 없습니다</p>
               ) : null}
             </div>
 
             <div className="hidden overflow-x-auto rounded-xl bg-surface shadow-card md:block">
-              <table className="w-full min-w-[40rem] text-sm">
+              <table className="w-full min-w-[52rem] text-sm">
                 <thead>
                   <tr className="border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
                     <th className="px-4 py-3">이름 *</th>
                     <th className="px-4 py-3">라인</th>
                     <th className="px-4 py-3">최대 CAPA</th>
                     <th className="px-4 py-3">설치일</th>
+                    <th className="px-4 py-3">현재 금형</th>
+                    <th className="px-4 py-3">마지막 교체</th>
                     <th className="px-4 py-3 w-16"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {equipment.map((row) => (
-                    <tr key={row.id} className="border-b border-border last:border-0">
-                      <td className="px-4 py-2">
-                        <input
-                          type="text"
-                          value={row.name ?? ''}
-                          placeholder="350T 다이캐스팅 #2"
-                          disabled={Boolean(saving?.startsWith('eq-'))}
-                          className={`${inputClass} w-full min-w-[10rem]`}
-                          onChange={(e) => updateEquipmentLocal(row.id, { name: e.target.value })}
-                          onBlur={() => saveEquipmentRow(row)}
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <input
-                          type="text"
-                          value={row.line ?? ''}
-                          disabled={Boolean(saving?.startsWith('eq-'))}
-                          className={`${inputClass} w-full min-w-[6rem]`}
-                          onChange={(e) => updateEquipmentLocal(row.id, { line: e.target.value })}
-                          onBlur={() => saveEquipmentRow(row)}
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <input
-                          type="text"
-                          value={row.max_capacity ?? ''}
-                          disabled={Boolean(saving?.startsWith('eq-'))}
-                          className={`${inputClass} w-24`}
-                          onChange={(e) =>
-                            updateEquipmentLocal(row.id, { max_capacity: e.target.value })
-                          }
-                          onBlur={() => saveEquipmentRow(row)}
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <input
-                          type="date"
-                          value={(row.installed_at ?? '').slice(0, 10)}
-                          disabled={Boolean(saving?.startsWith('eq-'))}
-                          className={`${inputClass} w-full min-w-[9rem]`}
-                          onChange={(e) =>
-                            updateEquipmentLocal(row.id, {
-                              installed_at: e.target.value || null,
-                            })
-                          }
-                          onBlur={() => saveEquipmentRow(row)}
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <button
-                          type="button"
-                          aria-label="삭제"
-                          disabled={Boolean(saving?.startsWith('eq-'))}
-                          onClick={() => deleteEquipment(row.id)}
-                          className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted hover:border-danger/40 hover:text-danger disabled:opacity-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {equipment.map((row) => {
+                    const meta = formatMoldChangedMeta(row.mold_changed_at);
+                    const isDraft = String(row.id).startsWith('draft-');
+                    return (
+                      <tr key={row.id} className="border-b border-border last:border-0">
+                        <td className="px-4 py-2">
+                          <input
+                            type="text"
+                            value={row.name ?? ''}
+                            placeholder="350T 다이캐스팅 #2"
+                            disabled={Boolean(saving?.startsWith('eq-'))}
+                            className={`${inputClass} w-full min-w-[10rem]`}
+                            onChange={(e) =>
+                              updateEquipmentLocal(row.id, { name: e.target.value })
+                            }
+                            onBlur={() => saveEquipmentRow(row)}
+                          />
+                        </td>
+                        <td className="px-4 py-2">
+                          <input
+                            type="text"
+                            value={row.line ?? ''}
+                            disabled={Boolean(saving?.startsWith('eq-'))}
+                            className={`${inputClass} w-full min-w-[6rem]`}
+                            onChange={(e) =>
+                              updateEquipmentLocal(row.id, { line: e.target.value })
+                            }
+                            onBlur={() => saveEquipmentRow(row)}
+                          />
+                        </td>
+                        <td className="px-4 py-2">
+                          <input
+                            type="text"
+                            value={row.max_capacity ?? ''}
+                            disabled={Boolean(saving?.startsWith('eq-'))}
+                            className={`${inputClass} w-24`}
+                            onChange={(e) =>
+                              updateEquipmentLocal(row.id, { max_capacity: e.target.value })
+                            }
+                            onBlur={() => saveEquipmentRow(row)}
+                          />
+                        </td>
+                        <td className="px-4 py-2">
+                          <input
+                            type="date"
+                            value={(row.installed_at ?? '').slice(0, 10)}
+                            disabled={Boolean(saving?.startsWith('eq-'))}
+                            className={`${inputClass} w-full min-w-[9rem]`}
+                            onChange={(e) =>
+                              updateEquipmentLocal(row.id, {
+                                installed_at: e.target.value || null,
+                              })
+                            }
+                            onBlur={() => saveEquipmentRow(row)}
+                          />
+                        </td>
+                        <td className="px-4 py-2">
+                          <select
+                            value={row.current_mold_id || ''}
+                            disabled={isDraft || Boolean(saving?.startsWith('eq-'))}
+                            className={`${inputClass} w-full min-w-[11rem]`}
+                            onChange={(e) => changeCurrentMold(row, e.target.value || null)}
+                          >
+                            <option value="">미지정</option>
+                            {productMolds
+                              .filter((m) => !String(m.id).startsWith('draft-'))
+                              .map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {moldLabel(m)}
+                                </option>
+                              ))}
+                          </select>
+                        </td>
+                        <td className="px-4 py-2 text-xs text-muted whitespace-nowrap">
+                          <div>{meta.absolute}</div>
+                          {meta.hoursAgoLabel ? (
+                            <div className="text-muted">{meta.hoursAgoLabel}</div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-2">
+                          <button
+                            type="button"
+                            aria-label="삭제"
+                            disabled={Boolean(saving?.startsWith('eq-'))}
+                            onClick={() => deleteEquipment(row.id)}
+                            className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted hover:border-danger/40 hover:text-danger disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {equipment.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-12 text-center text-xs text-muted">
+                      <td colSpan={7} className="px-4 py-12 text-center text-xs text-muted">
                         등록된 설비가 없습니다
                       </td>
                     </tr>

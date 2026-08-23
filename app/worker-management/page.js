@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ClipboardCheck, FileText, LayoutGrid, Pencil } from 'lucide-react';
 import { useReports } from '../../lib/useReports';
@@ -23,6 +23,10 @@ import WorkerEditModal from '../../components/WorkerEditModal';
 
 const inputClass =
   'rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
+
+function hasEquipmentAssigned(row) {
+  return Boolean(row?.default_equipment_id);
+}
 
 const STATUS_BADGE_CLASS = {
   good: 'bg-goodSoft text-good',
@@ -202,6 +206,32 @@ function ProcessSelect({ name, row, isSaving, onUpsert }) {
   );
 }
 
+function EquipmentSelect({ name, row, equipmentList, isSaving, onUpsert }) {
+  const value = row?.default_equipment_id || '';
+
+  return (
+    <select
+      value={value}
+      disabled={isSaving}
+      aria-label={`${name} 담당 설비`}
+      onChange={(e) =>
+        onUpsert(name, {
+          default_equipment_id: e.target.value === '' ? null : e.target.value,
+        })
+      }
+      className={`${inputClass} w-full min-w-[9rem] md:w-44 ${value ? '' : 'text-muted'}`}
+    >
+      <option value="">미지정</option>
+      {equipmentList.map((eq) => (
+        <option key={eq.id} value={eq.id}>
+          {eq.name}
+          {eq.line ? ` (${eq.line})` : ''}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function EditButton({ name, onClick, disabled }) {
   return (
     <button
@@ -234,12 +264,36 @@ function WorkerNameLink({ name, displayName, className = '' }) {
   );
 }
 
-function WorkerRow({ name, row, showStatus, isSaving, onUpsert, onEdit }) {
+function WorkerRow({
+  name,
+  row,
+  showStatus,
+  isSaving,
+  equipmentList,
+  selected,
+  onToggleSelect,
+  onUpsert,
+  onEdit,
+}) {
   const excluded = row?.excluded ?? false;
   const displayName = row?.display_name ?? '';
+  const unassigned = !hasEquipmentAssigned(row);
 
   return (
-    <tr className="border-b border-border last:border-0">
+    <tr
+      className={`border-b border-border last:border-0 ${
+        unassigned ? 'bg-warnSoft/30' : ''
+      }`}
+    >
+      <td className="px-3 py-3">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(name)}
+          aria-label={`${name} 선택`}
+          className="h-4 w-4 rounded border-border"
+        />
+      </td>
       <td className="px-4 py-3">
         <WorkerNameLink name={name} displayName={displayName} />
         <div className="mt-0.5 flex items-center gap-2 text-[11px]">
@@ -267,6 +321,15 @@ function WorkerRow({ name, row, showStatus, isSaving, onUpsert, onEdit }) {
         <ProcessSelect name={name} row={row} isSaving={isSaving} onUpsert={onUpsert} />
       </td>
       <td className="px-4 py-3">
+        <EquipmentSelect
+          name={name}
+          row={row}
+          equipmentList={equipmentList}
+          isSaving={isSaving}
+          onUpsert={onUpsert}
+        />
+      </td>
+      <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           <ToggleSwitch
             checked={excluded}
@@ -286,7 +349,17 @@ function WorkerRow({ name, row, showStatus, isSaving, onUpsert, onEdit }) {
   );
 }
 
-function WorkerMobileCard({ name, row, showStatus, isSaving, onUpsert, onEdit }) {
+function WorkerMobileCard({
+  name,
+  row,
+  showStatus,
+  isSaving,
+  equipmentList,
+  selected,
+  onToggleSelect,
+  onUpsert,
+  onEdit,
+}) {
   const excluded = row?.excluded ?? false;
   const displayName = row?.display_name ?? '';
 
@@ -294,7 +367,22 @@ function WorkerMobileCard({ name, row, showStatus, isSaving, onUpsert, onEdit })
     <MobileListCard
       header={<WorkerNameLink name={name} displayName={displayName} />}
       badge={showStatus ? <WorkerStatusBadge row={row} /> : null}
-      className={excluded ? 'border-l-2 border-l-danger' : ''}
+      leading={
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(name)}
+          aria-label={`${name} 선택`}
+          className="mt-1 h-4 w-4 rounded border-border"
+        />
+      }
+      className={
+        excluded
+          ? 'border-l-2 border-l-danger'
+          : !hasEquipmentAssigned(row)
+            ? 'border-l-2 border-l-warn'
+            : ''
+      }
     >
       <MobileCardField label="원본" className="col-span-2">
         <div className="flex items-center gap-2">
@@ -315,6 +403,15 @@ function WorkerMobileCard({ name, row, showStatus, isSaving, onUpsert, onEdit })
       </MobileCardField>
       <MobileCardField label="공정">
         <ProcessSelect name={name} row={row} isSaving={isSaving} onUpsert={onUpsert} />
+      </MobileCardField>
+      <MobileCardField label="담당 설비" className="col-span-2">
+        <EquipmentSelect
+          name={name}
+          row={row}
+          equipmentList={equipmentList}
+          isSaving={isSaving}
+          onUpsert={onUpsert}
+        />
       </MobileCardField>
       <MobileCardField label="제외">
         <div className="flex items-center gap-2 pt-0.5">
@@ -352,6 +449,30 @@ export default function WorkerManagementPage() {
   const [editTarget, setEditTarget] = useState(null);
   const [hiddenNames, setHiddenNames] = useState(() => new Set());
   const [showAllWorkers, setShowAllWorkers] = useState(false);
+  const [equipmentList, setEquipmentList] = useState([]);
+  const [filterUnassigned, setFilterUnassigned] = useState(false);
+  const [selectedNames, setSelectedNames] = useState(() => new Set());
+  const [bulkEquipmentId, setBulkEquipmentId] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error: eqError } = await supabase
+        .from('equipment')
+        .select('id, name, line')
+        .order('name');
+      if (cancelled) return;
+      if (eqError) {
+        setFormError(eqError.message);
+        return;
+      }
+      setEquipmentList(data || []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const directoryMap = useMemo(() => {
     const map = new Map();
@@ -379,19 +500,54 @@ export default function WorkerManagementPage() {
     return sortWorkersActiveFirst(names, directoryMap);
   }, [allNames, hiddenNames, directoryMap]);
 
-  const tableNames = useMemo(() => {
+  const baseTableNames = useMemo(() => {
     const names = showAllWorkers ? everyNames : visibleNames;
     return showAllWorkers ? sortWorkersActiveFirst(names, directoryMap) : names;
   }, [showAllWorkers, everyNames, visibleNames, directoryMap]);
-  const colCount = showAllWorkers ? 8 : 7;
 
-  async function upsertWorker(worker_name, patch) {
-    setSaving(worker_name);
-    setFormError(null);
-    const existing = directoryMap.get(worker_name);
-    // upsert는 행 전체를 덮어쓰므로 지정하지 않은 컬럼이 초기화되지 않도록
-    // 기존 값(담당 업무, 연락처 포함)을 모두 base에 채워 넣습니다.
-    const { error: upsertError } = await supabase.from('worker_directory').upsert({
+  const unassignedCount = useMemo(
+    () =>
+      baseTableNames.filter((name) => !hasEquipmentAssigned(directoryMap.get(name)))
+        .length,
+    [baseTableNames, directoryMap]
+  );
+
+  const tableNames = useMemo(() => {
+    if (!filterUnassigned) return baseTableNames;
+    return baseTableNames.filter(
+      (name) => !hasEquipmentAssigned(directoryMap.get(name))
+    );
+  }, [baseTableNames, filterUnassigned, directoryMap]);
+
+  const colCount = (showAllWorkers ? 8 : 7) + 2; // checkbox + 담당 설비
+
+  const allVisibleSelected =
+    tableNames.length > 0 && tableNames.every((n) => selectedNames.has(n));
+
+  function toggleSelect(name) {
+    setSelectedNames((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedNames((prev) => {
+      if (tableNames.every((n) => prev.has(n))) {
+        const next = new Set(prev);
+        for (const n of tableNames) next.delete(n);
+        return next;
+      }
+      const next = new Set(prev);
+      for (const n of tableNames) next.add(n);
+      return next;
+    });
+  }
+
+  function workerUpsertPayload(worker_name, existing, patch) {
+    return {
       worker_name,
       excluded: existing?.excluded ?? false,
       note: existing?.note ?? '',
@@ -410,8 +566,18 @@ export default function WorkerManagementPage() {
       lang: normalizeWorkerLang(existing?.lang),
       process: existing?.process || null,
       removed: existing?.removed ?? false,
+      default_equipment_id: existing?.default_equipment_id ?? null,
       ...patch,
-    });
+    };
+  }
+
+  async function upsertWorker(worker_name, patch) {
+    setSaving(worker_name);
+    setFormError(null);
+    const existing = directoryMap.get(worker_name);
+    const { error: upsertError } = await supabase
+      .from('worker_directory')
+      .upsert(workerUpsertPayload(worker_name, existing, patch));
     setSaving(null);
     if (upsertError) {
       setFormError(upsertError.message);
@@ -419,6 +585,37 @@ export default function WorkerManagementPage() {
     }
     refetch();
     return true;
+  }
+
+  async function handleBulkAssign() {
+    const names = [...selectedNames].filter((n) => tableNames.includes(n) || baseTableNames.includes(n));
+    if (!names.length) {
+      setFormError('설비를 지정할 작업자를 선택하세요.');
+      return;
+    }
+    setBulkSaving(true);
+    setFormError(null);
+    const equipmentId = bulkEquipmentId === '' ? null : bulkEquipmentId;
+    try {
+      for (const worker_name of names) {
+        const existing = directoryMap.get(worker_name);
+        const { error: upsertError } = await supabase
+          .from('worker_directory')
+          .upsert(
+            workerUpsertPayload(worker_name, existing, {
+              default_equipment_id: equipmentId,
+            })
+          );
+        if (upsertError) throw new Error(upsertError.message);
+      }
+      setSelectedNames(new Set());
+      setBulkEquipmentId('');
+      refetch();
+    } catch (err) {
+      setFormError(err?.message || '일괄 지정에 실패했습니다.');
+    } finally {
+      setBulkSaving(false);
+    }
   }
 
   async function handleAddWorker() {
@@ -445,6 +642,7 @@ export default function WorkerManagementPage() {
       role: 'inspector',
       lang: 'ko',
       process: null,
+      default_equipment_id: null,
     });
     setSaving(null);
     if (insertError) {
@@ -464,26 +662,9 @@ export default function WorkerManagementPage() {
 
     setHiddenNames((prev) => new Set(prev).add(name));
 
-    const { error: removeError } = await supabase.from('worker_directory').upsert({
-      worker_name: name,
-      excluded: existing?.excluded ?? false,
-      note: existing?.note ?? '',
-      default_shift:
-        existing?.default_shift === 'day' || existing?.default_shift === 'night'
-          ? existing.default_shift
-          : null,
-      handles_frequent_check: existing?.handles_frequent_check ?? true,
-      handles_fives: existing?.handles_fives ?? true,
-      handles_documents: existing?.handles_documents ?? true,
-      handles_defects: existing?.handles_defects ?? existing?.defect_enabled ?? true,
-      phone_number: existing?.phone_number ?? '',
-      display_name: existing?.display_name ?? '',
-      nationality: existing?.nationality ?? '',
-      role: normalizeWorkerRole(existing?.role),
-      lang: normalizeWorkerLang(existing?.lang),
-      process: existing?.process || null,
-      removed: true,
-    });
+    const { error: removeError } = await supabase
+      .from('worker_directory')
+      .upsert(workerUpsertPayload(name, existing, { removed: true }));
     setSaving(null);
 
     if (removeError) {
@@ -506,10 +687,17 @@ export default function WorkerManagementPage() {
       <PageHeader
         eyebrow="SETTINGS"
         title="작업자 관리"
-        description="역할·근무조·담당업무·공정·제외는 목록에서 바로 바꾸고, 사용언어·국적·별칭·연락처·메모는 편집에서 설정합니다."
+        description="역할·근무조·담당업무·공정·담당 설비·제외는 목록에서 바로 바꾸고, 사용언어·국적·별칭·연락처·메모는 편집에서 설정합니다."
       />
 
       <div className="space-y-6 p-4 md:p-8">
+        {unassignedCount > 0 ? (
+          <div className="rounded-xl border border-warn/30 bg-warnSoft px-4 py-3 text-sm text-text">
+            담당 설비 미지정 {unassignedCount}명 — 이 작업자들의 불량 기록에는 설비 정보가
+            남지 않습니다
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[200px] flex-1">
             <label className="mb-1.5 block text-xs text-muted">새 작업자 이름 직접 추가</label>
@@ -539,6 +727,55 @@ export default function WorkerManagementPage() {
           >
             {showAllWorkers ? '기본 목록으로' : '전체 작업자 목록 보기'}
           </button>
+          <button
+            type="button"
+            onClick={() => setFilterUnassigned((prev) => !prev)}
+            className={`min-h-[44px] rounded-full border px-3 py-1.5 text-sm font-medium transition-colors md:min-h-0 ${
+              filterUnassigned
+                ? 'border-warn/40 bg-warnSoft text-text'
+                : 'border-border bg-surface text-muted hover:bg-surface2 hover:text-text'
+            }`}
+          >
+            설비 미지정{unassignedCount > 0 ? ` · ${unassignedCount}` : ''}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface2/40 px-4 py-3">
+          <div className="text-xs text-muted">
+            선택 {selectedNames.size}명 · 일괄 담당 설비
+          </div>
+          <select
+            value={bulkEquipmentId}
+            disabled={bulkSaving || selectedNames.size === 0}
+            onChange={(e) => setBulkEquipmentId(e.target.value)}
+            className={`${inputClass} min-w-[10rem]`}
+          >
+            <option value="">미지정으로</option>
+            {equipmentList.map((eq) => (
+              <option key={eq.id} value={eq.id}>
+                {eq.name}
+                {eq.line ? ` (${eq.line})` : ''}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleBulkAssign}
+            disabled={bulkSaving || selectedNames.size === 0}
+            className="min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
+          >
+            {bulkSaving ? '적용 중...' : '선택에게 적용'}
+          </button>
+          {selectedNames.size > 0 ? (
+            <button
+              type="button"
+              onClick={() => setSelectedNames(new Set())}
+              disabled={bulkSaving}
+              className="min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted hover:bg-surface md:min-h-0"
+            >
+              선택 해제
+            </button>
+          ) : null}
         </div>
 
         {formError && (
@@ -559,27 +796,44 @@ export default function WorkerManagementPage() {
               name={name}
               row={directoryMap.get(name)}
               showStatus={showAllWorkers}
-              isSaving={saving === name}
+              isSaving={saving === name || bulkSaving}
+              equipmentList={equipmentList}
+              selected={selectedNames.has(name)}
+              onToggleSelect={toggleSelect}
               onUpsert={upsertWorker}
               onEdit={setEditTarget}
             />
           ))}
           {tableNames.length === 0 ? (
-            <div className="py-12 text-center text-xs text-muted">등록된 작업자가 없습니다</div>
+            <div className="py-12 text-center text-xs text-muted">
+              {filterUnassigned
+                ? '설비 미지정 작업자가 없습니다'
+                : '등록된 작업자가 없습니다'}
+            </div>
           ) : null}
         </div>
 
         {/* Desktop table */}
         <div className="hidden overflow-x-auto rounded-xl bg-surface shadow-card md:block">
-          <table className="w-full min-w-[48rem] text-sm">
+          <table className="w-full min-w-[56rem] text-sm">
             <thead>
               <tr className="border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
+                <th className="px-3 py-3">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                    aria-label="현재 목록 전체 선택"
+                    className="h-4 w-4 rounded border-border"
+                  />
+                </th>
                 <th className="px-4 py-3">작업자</th>
                 {showAllWorkers ? <th className="px-4 py-3">상태</th> : null}
                 <th className="px-4 py-3">역할</th>
                 <th className="px-4 py-3">근무조</th>
                 <th className="px-4 py-3">담당업무</th>
                 <th className="px-4 py-3">공정</th>
+                <th className="px-4 py-3">담당 설비</th>
                 <th className="px-4 py-3">제외</th>
                 <th className="px-4 py-3">편집</th>
               </tr>
@@ -591,7 +845,10 @@ export default function WorkerManagementPage() {
                   name={name}
                   row={directoryMap.get(name)}
                   showStatus={showAllWorkers}
-                  isSaving={saving === name}
+                  isSaving={saving === name || bulkSaving}
+                  equipmentList={equipmentList}
+                  selected={selectedNames.has(name)}
+                  onToggleSelect={toggleSelect}
                   onUpsert={upsertWorker}
                   onEdit={setEditTarget}
                 />
@@ -599,7 +856,9 @@ export default function WorkerManagementPage() {
               {tableNames.length === 0 && (
                 <tr>
                   <td colSpan={colCount} className="px-4 py-12 text-center text-xs text-muted">
-                    등록된 작업자가 없습니다
+                    {filterUnassigned
+                      ? '설비 미지정 작업자가 없습니다'
+                      : '등록된 작업자가 없습니다'}
                   </td>
                 </tr>
               )}
@@ -611,8 +870,8 @@ export default function WorkerManagementPage() {
           제외된 작업자는 작업자 현황, 자주검사 현황, 대시보드 등 집계 화면에서 표시되지 않습니다.
           표시 이름(별칭)은 화면·엑셀에만 쓰이며, 저장·필터·조회 키는 원본 이름을 유지합니다. 근무조를
           주간/야간으로 고정하면 자동 판단보다 우선 적용됩니다. 담당공정은 현황·대시보드 공정 필터에
-          사용되며, 미지정 작업자는 &quot;전체&quot;에서만 보입니다. 메모에 &apos;퇴사&apos;가 있으면
-          기본 목록에서 숨겨집니다.
+          사용되며, 미지정 작업자는 &quot;전체&quot;에서만 보입니다. 담당 설비는 불량 기록에 자동
+          연결됩니다. 메모에 &apos;퇴사&apos;가 있으면 기본 목록에서 숨겨집니다.
         </p>
       </div>
 
