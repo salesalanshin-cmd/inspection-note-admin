@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabase';
 import { getDisplayName } from '../../../lib/analytics';
+import { getCompanyId } from '../../../lib/company';
 import { getRecentDaysRange } from '../../../lib/dateRange';
 import { moldLabel } from '../../../lib/equipmentMold';
 import { kstWallToUtc } from '../../../lib/kst';
@@ -98,11 +99,22 @@ export default function MoldHistoryPage() {
 
       if (equipmentId) query = query.eq('equipment_id', equipmentId);
 
+      const companyId = await getCompanyId();
       const [logRes, eqRes, moldRes, dirRes] = await Promise.all([
         query,
-        supabase.from('equipment').select('id, name, line').order('name'),
-        supabase.from('product_mold').select('id, product_name, mold_code'),
-        supabase.from('worker_directory').select('worker_name, display_name'),
+        supabase
+          .from('equipment')
+          .select('id, name, line')
+          .eq('company_id', companyId)
+          .order('name'),
+        supabase
+          .from('product_mold')
+          .select('id, product_name, mold_code')
+          .eq('company_id', companyId),
+        supabase
+          .from('worker_directory')
+          .select('worker_name, display_name')
+          .eq('company_id', companyId),
       ]);
 
       if (logRes.error) throw new Error(logRes.error.message);

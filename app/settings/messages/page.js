@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell, ChevronDown, ChevronUp, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
+import { getCompanyId } from '../../../lib/company';
 import {
   buildTodayRealtimePerformance,
   getDisplayName,
@@ -168,29 +169,45 @@ export default function MessagesSettingsPage() {
   const loadLogs = useCallback(async () => {
     setLoadingLogs(true);
     setLogsError(null);
-    const { data, error } = await supabase
-      .from('notification_send_log')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(500);
-    if (error) {
-      setLogsError(error.message);
+    try {
+      const companyId = await getCompanyId();
+      const { data, error } = await supabase
+        .from('notification_send_log')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) {
+        setLogsError(error.message);
+        setLogs([]);
+      } else {
+        setLogs(data || []);
+      }
+    } catch (err) {
+      setLogsError(err?.message || '로그를 불러오지 못했습니다.');
       setLogs([]);
-    } else {
-      setLogs(data || []);
     }
     setLoadingLogs(false);
   }, []);
 
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
-    const { data, error } = await supabase.from('automation_settings').select('*');
-    if (!error && data) {
-      const map = {};
-      for (const row of data) {
-        map[row.key] = row;
+    try {
+      const companyId = await getCompanyId();
+      const { data, error } = await supabase
+        .from('automation_settings')
+        .select('*')
+        .eq('company_id', companyId);
+      if (!error && data) {
+        const map = {};
+        for (const row of data) {
+          map[row.key] = row;
+        }
+        setSettings(map);
       }
-      setSettings(map);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[automation_settings] load', err);
     }
     setSettingsLoading(false);
   }, []);
@@ -354,13 +371,25 @@ export default function MessagesSettingsPage() {
       },
     }));
 
-    const { error } = await supabase
-      .from('automation_settings')
-      .update({ enabled: nextEnabled, updated_at: new Date().toISOString() })
-      .eq('key', key);
+    try {
+      const companyId = await getCompanyId();
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase.from('automation_settings').upsert(
+        {
+          company_id: companyId,
+          key,
+          enabled: nextEnabled,
+          updated_at: nowIso,
+        },
+        { onConflict: 'company_id,key' }
+      );
 
-    if (error) {
-      window.alert(error.message || '설정 저장에 실패했습니다.');
+      if (error) {
+        window.alert(error.message || '설정 저장에 실패했습니다.');
+        setSettings((s) => ({ ...s, [key]: prev }));
+      }
+    } catch (err) {
+      window.alert(err?.message || '설정 저장에 실패했습니다.');
       setSettings((s) => ({ ...s, [key]: prev }));
     }
     setTogglingKey(null);

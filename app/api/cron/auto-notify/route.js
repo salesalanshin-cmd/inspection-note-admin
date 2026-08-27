@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '../../../../lib/supabase';
+import { getCompanyId } from '../../../../lib/company';
 import {
   getOverdueFrequentCheckWorkers,
   getDisplayName,
@@ -27,12 +28,12 @@ function authorize(request) {
   return false;
 }
 
-async function fetchReportBundles() {
+async function fetchReportBundles(companyId) {
   const NOT_DELETED = 'is_deleted.eq.false,is_deleted.is.null';
   const [defectsRes, goodsRes, directoryRes] = await Promise.all([
-    supabase.from('defect_reports').select('*').or(NOT_DELETED),
-    supabase.from('good_reports').select('*').or(NOT_DELETED),
-    supabase.from('worker_directory').select('*'),
+    supabase.from('defect_reports').select('*').eq('company_id', companyId).or(NOT_DELETED),
+    supabase.from('good_reports').select('*').eq('company_id', companyId).or(NOT_DELETED),
+    supabase.from('worker_directory').select('*').eq('company_id', companyId),
   ]);
 
   if (defectsRes.error) throw new Error(defectsRes.error.message);
@@ -46,10 +47,11 @@ async function fetchReportBundles() {
   };
 }
 
-async function hasExistingAutoSend(autoKey) {
+async function hasExistingAutoSend(companyId, autoKey) {
   const { data, error } = await supabase
     .from('notification_send_log')
     .select('id')
+    .eq('company_id', companyId)
     .eq('auto_key', autoKey)
     .limit(1);
   if (error) {
@@ -67,9 +69,12 @@ async function insertLog(row) {
 }
 
 async function runAutoNotify() {
+  const companyId = await getCompanyId();
+
   const { data: setting, error: settingError } = await supabase
     .from('automation_settings')
     .select('enabled')
+    .eq('company_id', companyId)
     .eq('key', 'frequent_check_auto_send')
     .maybeSingle();
 
@@ -88,7 +93,7 @@ async function runAutoNotify() {
   }
 
   const now = new Date();
-  const { defects, goods, workerDirectory } = await fetchReportBundles();
+  const { defects, goods, workerDirectory } = await fetchReportBundles(companyId);
   const targets = getOverdueFrequentCheckWorkers(defects, goods, workerDirectory, now);
   const workDate = getWorkDateForRecord(now);
 
@@ -100,7 +105,7 @@ async function runAutoNotify() {
     const stagesKey = target.overdueStages.join(',');
     const autoKey = `frequent_check:${workDate}:${target.worker_name}:${stagesKey}`;
 
-    if (await hasExistingAutoSend(autoKey)) {
+    if (await hasExistingAutoSend(companyId, autoKey)) {
       skipped += 1;
       continue;
     }
@@ -110,6 +115,7 @@ async function runAutoNotify() {
 
     if (!phone) {
       await insertLog({
+        company_id: companyId,
         worker_name: target.worker_name,
         phone_number: '',
         template_type: 'frequent_check',
@@ -134,6 +140,7 @@ async function runAutoNotify() {
 
     const success = Boolean(sendResult.success);
     await insertLog({
+      company_id: companyId,
       worker_name: target.worker_name,
       phone_number: phone,
       template_type: 'frequent_check',

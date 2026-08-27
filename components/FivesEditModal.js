@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Crosshair } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCompanyId } from '../lib/company';
 import {
   SOS_ERROR_CATEGORIES,
   SOS_ERROR_CODES,
@@ -187,10 +188,12 @@ export default function FivesEditModal({ report, onClose, onSaved }) {
     };
 
     setSaving(true);
+    const companyId = await getCompanyId();
     const { error: updateError } = await supabase
       .from('fives_reports')
       .update(payload)
-      .eq('id', report.id);
+      .eq('id', report.id)
+      .eq('company_id', companyId);
 
     if (updateError) {
       setSaving(false);

@@ -6,6 +6,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import {
+  clearCompanyIdCache,
+  getCompanyCode,
+  getCompanyId,
+  isValidCompanyCode,
+} from '../../lib/company';
+import {
   applyMoldChange,
   formatMoldChangedMeta,
   moldLabel,
@@ -13,6 +19,7 @@ import {
 import PageHeader from '../../components/PageHeader';
 import CsvImportPanel, { inputClass } from '../../components/CsvImportPanel';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 const TABS = [
   { id: 'company', label: '회사' },
@@ -95,25 +102,46 @@ function MasterPageContent() {
   const [productMolds, setProductMolds] = useState([]);
   const [companyName, setCompanyName] = useState('');
   const [saving, setSaving] = useState(null);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [regenConfirm, setRegenConfirm] = useState(false);
+  const [newCompany, setNewCompany] = useState({ name: '', code: '' });
   const prefillApplied = useRef(false);
 
   const companyId = company?.id ?? null;
 
   const fetchAll = useCallback(async () => {
     setError(null);
-    const [companyRes, equipmentRes, moldRes] = await Promise.all([
-      supabase.from('company').select('*').order('created_at', { ascending: true }).limit(1),
-      supabase.from('equipment').select('*').order('name'),
-      supabase.from('product_mold').select('*').order('product_name'),
+    const code = getCompanyCode();
+    const [companyRes, companyIdValue] = await Promise.all([
+      code
+        ? supabase.from('company').select('*').eq('code', code).maybeSingle()
+        : supabase.from('company').select('*').order('created_at', { ascending: true }).limit(1).maybeSingle(),
+      getCompanyId().catch(() => null),
     ]);
 
     if (companyRes.error) throw new Error(companyRes.error.message);
+
+    const co = companyRes.data ?? null;
+    const cid = co?.id || companyIdValue;
+    if (!cid) {
+      setCompany(null);
+      setCompanyName('');
+      setEquipment([]);
+      setProductMolds([]);
+      return;
+    }
+
+    const [equipmentRes, moldRes] = await Promise.all([
+      supabase.from('equipment').select('*').eq('company_id', cid).order('name'),
+      supabase.from('product_mold').select('*').eq('company_id', cid).order('product_name'),
+    ]);
+
     if (equipmentRes.error) throw new Error(equipmentRes.error.message);
     if (moldRes.error) throw new Error(moldRes.error.message);
 
-    const co = companyRes.data?.[0] ?? null;
     setCompany(co);
     setCompanyName(co?.name ?? '');
+    setShowApiKey(false);
     setEquipment(equipmentRes.data ?? []);
     setProductMolds(moldRes.data ?? []);
   }, []);
@@ -166,32 +194,92 @@ function MasterPageContent() {
       setFormError('회사 이름을 입력하세요.');
       return;
     }
+    if (!company?.id) {
+      setFormError('새 회사는 아래 「새 회사 추가」폼을 사용하세요.');
+      return;
+    }
     setSaving('company');
     setFormError(null);
-    if (company?.id) {
-      const { error: updateError } = await supabase
-        .from('company')
-        .update({ name })
-        .eq('id', company.id);
-      setSaving(null);
-      if (updateError) {
-        setFormError(updateError.message);
-        return;
-      }
-    } else {
-      const { data, error: insertError } = await supabase
-        .from('company')
-        .insert({ name })
-        .select()
-        .single();
-      setSaving(null);
-      if (insertError) {
-        setFormError(insertError.message);
-        return;
-      }
-      setCompany(data);
+    const { error: updateError } = await supabase
+      .from('company')
+      .update({ name })
+      .eq('id', company.id);
+    setSaving(null);
+    if (updateError) {
+      setFormError(updateError.message);
+      return;
     }
     await fetchAll();
+  }
+
+  async function handleToggleActive() {
+    if (!company?.id) return;
+    setSaving('company-active');
+    setFormError(null);
+    const { error: updateError } = await supabase
+      .from('company')
+      .update({ is_active: !company.is_active })
+      .eq('id', company.id);
+    setSaving(null);
+    if (updateError) {
+      setFormError(updateError.message);
+      return;
+    }
+    await fetchAll();
+  }
+
+  async function handleRegenerateApiKey() {
+    if (!company?.id) return;
+    setSaving('company-key');
+    setFormError(null);
+    const nextKey = crypto.randomUUID();
+    const { error: updateError } = await supabase
+      .from('company')
+      .update({ api_key: nextKey })
+      .eq('id', company.id);
+    setSaving(null);
+    setRegenConfirm(false);
+    if (updateError) {
+      setFormError(updateError.message);
+      return;
+    }
+    setShowApiKey(true);
+    await fetchAll();
+  }
+
+  async function handleCreateCompany() {
+    const name = newCompany.name.trim();
+    const code = newCompany.code.trim().toLowerCase();
+    if (!name) {
+      setFormError('새 회사 이름을 입력하세요.');
+      return;
+    }
+    if (!isValidCompanyCode(code)) {
+      setFormError('code는 소문자 영문과 하이픈만 사용할 수 있습니다. (예: dkmetal, acme-co)');
+      return;
+    }
+    setSaving('company-create');
+    setFormError(null);
+    const { data, error: insertError } = await supabase
+      .from('company')
+      .insert({
+        name,
+        code,
+        api_key: crypto.randomUUID(),
+        is_active: true,
+      })
+      .select()
+      .single();
+    setSaving(null);
+    if (insertError) {
+      setFormError(insertError.message);
+      return;
+    }
+    setNewCompany({ name: '', code: '' });
+    clearCompanyIdCache();
+    setFormError(
+      `회사 '${data.code}' 가 생성되었습니다. .env의 COMPANY_CODE / NEXT_PUBLIC_COMPANY_CODE 를 '${data.code}' 로 바꾼 뒤 서버를 재시작하세요.`
+    );
   }
 
   async function saveEquipmentRow(row) {
@@ -208,7 +296,11 @@ function MasterPageContent() {
 
     let dbError;
     if (row.id && !String(row.id).startsWith('draft-')) {
-      ({ error: dbError } = await supabase.from('equipment').update(payload).eq('id', row.id));
+      ({ error: dbError } = await supabase
+        .from('equipment')
+        .update(payload)
+        .eq('id', row.id)
+        .eq('company_id', companyId));
     } else {
       const { data, error: insertError } = await supabase
         .from('equipment')
@@ -235,7 +327,11 @@ function MasterPageContent() {
       return;
     }
     setSaving(`eq-del-${id}`);
-    const { error: delError } = await supabase.from('equipment').delete().eq('id', id);
+    const { error: delError } = await supabase
+      .from('equipment')
+      .delete()
+      .eq('id', id)
+      .eq('company_id', companyId);
     setSaving(null);
     if (delError) {
       setFormError(delError.message);
@@ -299,7 +395,11 @@ function MasterPageContent() {
 
     let dbError;
     if (row.id && !String(row.id).startsWith('draft-')) {
-      ({ error: dbError } = await supabase.from('product_mold').update(payload).eq('id', row.id));
+      ({ error: dbError } = await supabase
+        .from('product_mold')
+        .update(payload)
+        .eq('id', row.id)
+        .eq('company_id', companyId));
     } else {
       const { data, error: insertError } = await supabase
         .from('product_mold')
@@ -326,7 +426,11 @@ function MasterPageContent() {
       return;
     }
     setSaving(`pm-del-${id}`);
-    const { error: delError } = await supabase.from('product_mold').delete().eq('id', id);
+    const { error: delError } = await supabase
+      .from('product_mold')
+      .delete()
+      .eq('id', id)
+      .eq('company_id', companyId);
     setSaving(null);
     if (delError) {
       setFormError(delError.message);
@@ -440,36 +544,150 @@ function MasterPageContent() {
         ) : null}
 
         {activeTab === 'company' ? (
-          <section className="space-y-4">
-            <h2 className="text-base font-semibold text-text">회사</h2>
-            <p className="text-xs text-muted">
-              현재는 1개 회사만 등록합니다. 등록 후 설비·제품·금형에 자동 연결됩니다.
-            </p>
-            <div className="max-w-md space-y-3">
-              <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-muted">회사 이름</span>
-                <input
-                  type="text"
-                  value={companyName}
-                  disabled={saving === 'company'}
-                  placeholder="(주)디케이메탈"
-                  className={`${inputClass} w-full`}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={handleSaveCompany}
-                disabled={!companyName.trim() || saving === 'company'}
-                className={btnPrimary}
-              >
-                {company ? '이름 저장' : '회사 등록'}
-              </button>
+          <section className="space-y-8">
+            <div className="space-y-4">
+              <h2 className="text-base font-semibold text-text">현재 회사</h2>
+              <p className="text-xs text-muted">
+                env <code className="rounded bg-surface2 px-1">COMPANY_CODE</code>=
+                {getCompanyCode() || '(미설정)'} 기준으로 로드합니다. api_key는
+                어드민 env에 넣지 마세요.
+              </p>
               {company ? (
-                <p className="text-xs text-muted">
-                  등록됨 · ID <span className="font-mono">{company.id}</span>
+                <div className="max-w-lg space-y-4 rounded-xl border border-border bg-surface p-4 shadow-card">
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-muted">회사 이름</span>
+                    <input
+                      type="text"
+                      value={companyName}
+                      disabled={saving === 'company'}
+                      className={`${inputClass} w-full`}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-xs text-muted">code</div>
+                      <div className="mt-0.5 font-mono text-text">{company.code || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted">활성</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={Boolean(company.is_active)}
+                          disabled={saving === 'company-active'}
+                          onClick={handleToggleActive}
+                          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+                            company.is_active ? 'bg-accent' : 'bg-border'
+                          }`}
+                        >
+                          <span
+                            className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                              company.is_active ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                        <span className="text-xs text-muted">
+                          {company.is_active ? '활성' : '비활성'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-medium text-muted">api_key</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <code className="min-w-0 flex-1 break-all rounded-xl border border-border bg-surface2 px-3 py-2 font-mono text-xs text-text">
+                        {showApiKey
+                          ? company.api_key || '(없음)'
+                          : '●●●●●●●●●●●●●●●●'}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey((v) => !v)}
+                        className={btnSecondary}
+                      >
+                        {showApiKey ? '숨기기' : '보기'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRegenConfirm(true)}
+                        disabled={saving === 'company-key'}
+                        className={btnSecondary}
+                      >
+                        키 재발급
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveCompany}
+                    disabled={!companyName.trim() || saving === 'company'}
+                    className={btnPrimary}
+                  >
+                    이름 저장
+                  </button>
+                  <p className="text-xs text-muted">
+                    ID <span className="font-mono">{company.id}</span>
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted">
+                  COMPANY_CODE에 해당하는 회사가 없습니다. 아래에서 추가하세요.
                 </p>
-              ) : null}
+              )}
+            </div>
+
+            <div className="space-y-4 border-t border-border pt-6">
+              <h2 className="text-base font-semibold text-text">새 회사 추가</h2>
+              <div className="max-w-lg space-y-3">
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-muted">이름</span>
+                  <input
+                    type="text"
+                    value={newCompany.name}
+                    disabled={saving === 'company-create'}
+                    placeholder="(주)디케이메탈"
+                    className={`${inputClass} w-full`}
+                    onChange={(e) =>
+                      setNewCompany((s) => ({ ...s, name: e.target.value }))
+                    }
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-muted">
+                    code (소문자 영문·하이픈)
+                  </span>
+                  <input
+                    type="text"
+                    value={newCompany.code}
+                    disabled={saving === 'company-create'}
+                    placeholder="dkmetal"
+                    className={`${inputClass} w-full font-mono`}
+                    onChange={(e) =>
+                      setNewCompany((s) => ({
+                        ...s,
+                        code: e.target.value.toLowerCase(),
+                      }))
+                    }
+                  />
+                </label>
+                <p className="text-[11px] text-muted">
+                  api_key는 저장 시 자동 생성됩니다 (UUID).
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCreateCompany}
+                  disabled={
+                    saving === 'company-create' ||
+                    !newCompany.name.trim() ||
+                    !newCompany.code.trim()
+                  }
+                  className={btnPrimary}
+                >
+                  회사 등록
+                </button>
+              </div>
             </div>
           </section>
         ) : null}
@@ -874,6 +1092,17 @@ function MasterPageContent() {
           </section>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={regenConfirm}
+        title="api_key 재발급"
+        message="이 회사의 모든 앱을 재빌드해야 합니다. 기존 키는 즉시 무효화됩니다. 계속할까요?"
+        confirmLabel={saving === 'company-key' ? '재발급 중...' : '재발급'}
+        confirmTone="danger"
+        loading={saving === 'company-key'}
+        onConfirm={handleRegenerateApiKey}
+        onCancel={() => saving !== 'company-key' && setRegenConfirm(false)}
+      />
     </div>
   );
 }

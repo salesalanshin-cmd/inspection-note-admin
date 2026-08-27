@@ -15,6 +15,7 @@ import {
 } from '../../lib/downloadImages';
 import { countPendingDefectNotifications } from '../../lib/defectNotificationQueue';
 import { supabase } from '../../lib/supabase';
+import { getCompanyId } from '../../lib/company';
 import {
   insertAiCorrectionLog,
   resolveWasAiAccepted,
@@ -188,6 +189,7 @@ export default function DefectsPage() {
   }
 
   async function handleBatchSave(updates) {
+    const companyId = await getCompanyId();
     const responses = await Promise.all(
       updates.map((u) =>
         supabase
@@ -200,6 +202,7 @@ export default function DefectsPage() {
             ai_reason: u.ai_reason,
           })
           .eq('id', u.id)
+          .eq('company_id', companyId)
       )
     );
     const failed = responses.find((r) => r.error);

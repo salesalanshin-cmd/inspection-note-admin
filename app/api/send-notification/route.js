@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getCompanyId } from '../../../lib/company';
 import { supabase } from '../../../lib/supabase';
 import { sendAlimtalk } from '../../../lib/solapiClient';
 import { renderTemplatePreview } from '../../../lib/notifyTemplates';
@@ -8,7 +9,7 @@ import { renderTemplatePreview } from '../../../lib/notifyTemplates';
  * body: { targets: [{ workerName, phoneNumber, templateType, variables, autoKey? }] }
  *
  * notification_send_log 컬럼(라이브): worker_name, phone_number, template_type,
- * status, error_message, created_at, sent_at, auto_key, message_content
+ * status, error_message, created_at, sent_at, auto_key, message_content, company_id
  */
 export async function POST(request) {
   let body;
@@ -21,6 +22,16 @@ export async function POST(request) {
   const targets = Array.isArray(body?.targets) ? body.targets : null;
   if (!targets || targets.length === 0) {
     return NextResponse.json({ error: '발송 대상(targets)이 없습니다.' }, { status: 400 });
+  }
+
+  let companyId;
+  try {
+    companyId = await getCompanyId();
+  } catch (err) {
+    return NextResponse.json(
+      { error: err?.message || '회사 정보를 확인할 수 없습니다.' },
+      { status: 500 }
+    );
   }
 
   const results = [];
@@ -48,6 +59,7 @@ export async function POST(request) {
         error: '연락처가 없습니다.',
       });
       await insertLog({
+        companyId,
         workerName,
         phoneNumber: '',
         templateType,
@@ -74,6 +86,7 @@ export async function POST(request) {
     });
 
     await insertLog({
+      companyId,
       workerName,
       phoneNumber,
       templateType,
@@ -89,6 +102,7 @@ export async function POST(request) {
 }
 
 async function insertLog({
+  companyId,
   workerName,
   phoneNumber,
   templateType,
@@ -100,6 +114,7 @@ async function insertLog({
 }) {
   try {
     const row = {
+      company_id: companyId,
       worker_name: workerName,
       phone_number: phoneNumber,
       template_type: templateType || null,

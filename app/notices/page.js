@@ -12,7 +12,6 @@ import {
   buildNoticeListRows,
   createNotice,
   deleteNotice,
-  fetchCompanyId,
   fetchNoticeMessage,
   fetchNoticeReads,
   fetchNoticeThreads,
@@ -20,6 +19,7 @@ import {
   splitReadUnread,
   updateNotice,
 } from '../../lib/notices';
+import { getCompanyId } from '../../lib/company';
 import { supabase } from '../../lib/supabase';
 
 /** 승인된 알림톡 6종에 공지 전용 템플릿 없음 → 버튼 비활성 */
@@ -219,9 +219,13 @@ export default function NoticesPage() {
 
   const loadList = useCallback(async () => {
     setError(null);
-    const [company, directoryRes, threads] = await Promise.all([
-      fetchCompanyId(),
-      supabase.from('worker_directory').select('*').order('worker_name'),
+    const companyIdValue = await getCompanyId();
+    const [directoryRes, threads] = await Promise.all([
+      supabase
+        .from('worker_directory')
+        .select('*')
+        .eq('company_id', companyIdValue)
+        .order('worker_name'),
       fetchNoticeThreads(),
     ]);
     if (directoryRes.error) throw new Error(directoryRes.error.message);
@@ -234,7 +238,7 @@ export default function NoticesPage() {
       authorLabel: getDisplayName(row.created_by_worker, directory),
     }));
 
-    setCompanyId(company);
+    setCompanyId(companyIdValue);
     setWorkerDirectory(directory);
     setRows(list);
     return list;

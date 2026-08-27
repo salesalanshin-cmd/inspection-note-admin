@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabase';
+import { getCompanyId } from '../../../lib/company';
 import PageHeader from '../../../components/PageHeader';
 
 const NOT_DELETED = 'is_deleted.eq.false,is_deleted.is.null';
@@ -22,9 +23,17 @@ export default function MasterMappingPage() {
       setLoading(true);
       setError(null);
       try {
+        const companyId = await getCompanyId();
         const [defectRes, moldRes] = await Promise.all([
-          supabase.from('defect_reports').select('product_name').or(NOT_DELETED),
-          supabase.from('product_mold').select('product_name'),
+          supabase
+            .from('defect_reports')
+            .select('product_name')
+            .eq('company_id', companyId)
+            .or(NOT_DELETED),
+          supabase
+            .from('product_mold')
+            .select('product_name')
+            .eq('company_id', companyId),
         ]);
         if (defectRes.error) throw new Error(defectRes.error.message);
         if (moldRes.error) throw new Error(moldRes.error.message);

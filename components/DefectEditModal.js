@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { getCompanyId } from '../lib/company';
 import { DEFECT_CODE_LABELS, defectLabel } from '../lib/constants';
 import { getDefectCodeDefinition } from '../lib/defectCodeDefinitions';
 import { getDisplayName } from '../lib/analytics';
@@ -198,10 +199,12 @@ export default function DefectEditModal({
     };
 
     setSaving(true);
+    const companyId = await getCompanyId();
     const { data, error: updateError } = await supabase
       .from('defect_reports')
       .update(payload)
       .eq('id', report.id)
+      .eq('company_id', companyId)
       .select('id, defect_code, defect_type, product_name')
       .maybeSingle();
 

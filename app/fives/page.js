@@ -27,6 +27,7 @@ import {
   downloadImagesAsZip,
 } from '../../lib/downloadImages';
 import { countPendingFivesNotifications } from '../../lib/fivesNotificationQueue';
+import { getCompanyId } from '../../lib/company';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 import PageTableShell from '../../components/PageTableShell';
@@ -171,6 +172,7 @@ export default function FivesPage() {
   }
 
   async function handleBatchSave(updates) {
+    const companyId = await getCompanyId();
     const responses = await Promise.all(
       updates.map((u) =>
         supabase
@@ -182,6 +184,7 @@ export default function FivesPage() {
             ai_reason: u.ai_reason,
           })
           .eq('id', u.id)
+          .eq('company_id', companyId)
       )
     );
     const failed = responses.find((r) => r.error);

@@ -16,6 +16,7 @@ import {
   normalizeWorkerRole,
   normalizeWorkerLang,
 } from '../../lib/constants';
+import { getCompanyId } from '../../lib/company';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
@@ -458,16 +459,22 @@ export default function WorkerManagementPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data, error: eqError } = await supabase
-        .from('equipment')
-        .select('id, name, line')
-        .order('name');
-      if (cancelled) return;
-      if (eqError) {
-        setFormError(eqError.message);
-        return;
+      try {
+        const companyId = await getCompanyId();
+        const { data, error: eqError } = await supabase
+          .from('equipment')
+          .select('id, name, line')
+          .eq('company_id', companyId)
+          .order('name');
+        if (cancelled) return;
+        if (eqError) {
+          setFormError(eqError.message);
+          return;
+        }
+        setEquipmentList(data || []);
+      } catch (err) {
+        if (!cancelled) setFormError(err?.message || '설비 목록을 불러오지 못했습니다.');
       }
-      setEquipmentList(data || []);
     })();
     return () => {
       cancelled = true;
@@ -546,9 +553,10 @@ export default function WorkerManagementPage() {
     });
   }
 
-  function workerUpsertPayload(worker_name, existing, patch) {
+  function workerUpsertPayload(worker_name, existing, patch, companyId) {
     return {
       worker_name,
+      company_id: existing?.company_id ?? companyId,
       excluded: existing?.excluded ?? false,
       note: existing?.note ?? '',
       default_shift:
@@ -575,16 +583,23 @@ export default function WorkerManagementPage() {
     setSaving(worker_name);
     setFormError(null);
     const existing = directoryMap.get(worker_name);
-    const { error: upsertError } = await supabase
-      .from('worker_directory')
-      .upsert(workerUpsertPayload(worker_name, existing, patch));
-    setSaving(null);
-    if (upsertError) {
-      setFormError(upsertError.message);
+    try {
+      const companyId = await getCompanyId();
+      const { error: upsertError } = await supabase
+        .from('worker_directory')
+        .upsert(workerUpsertPayload(worker_name, existing, patch, companyId));
+      setSaving(null);
+      if (upsertError) {
+        setFormError(upsertError.message);
+        return false;
+      }
+      refetch();
+      return true;
+    } catch (err) {
+      setSaving(null);
+      setFormError(err?.message || '저장에 실패했습니다.');
       return false;
     }
-    refetch();
-    return true;
   }
 
   async function handleBulkAssign() {
@@ -597,6 +612,7 @@ export default function WorkerManagementPage() {
     setFormError(null);
     const equipmentId = bulkEquipmentId === '' ? null : bulkEquipmentId;
     try {
+      const companyId = await getCompanyId();
       for (const worker_name of names) {
         const existing = directoryMap.get(worker_name);
         const { error: upsertError } = await supabase
@@ -604,7 +620,7 @@ export default function WorkerManagementPage() {
           .upsert(
             workerUpsertPayload(worker_name, existing, {
               default_equipment_id: equipmentId,
-            })
+            }, companyId)
           );
         if (upsertError) throw new Error(upsertError.message);
       }
@@ -627,30 +643,37 @@ export default function WorkerManagementPage() {
     }
     setSaving('__new__');
     setFormError(null);
-    const { error: insertError } = await supabase.from('worker_directory').insert({
-      worker_name: name,
-      excluded: false,
-      note: '',
-      default_shift: null,
-      handles_frequent_check: true,
-      handles_fives: true,
-      handles_documents: true,
-      handles_defects: true,
-      phone_number: '',
-      display_name: '',
-      nationality: '',
-      role: 'inspector',
-      lang: 'ko',
-      process: null,
-      default_equipment_id: null,
-    });
-    setSaving(null);
-    if (insertError) {
-      setFormError(insertError.message);
-      return;
+    try {
+      const companyId = await getCompanyId();
+      const { error: insertError } = await supabase.from('worker_directory').insert({
+        worker_name: name,
+        company_id: companyId,
+        excluded: false,
+        note: '',
+        default_shift: null,
+        handles_frequent_check: true,
+        handles_fives: true,
+        handles_documents: true,
+        handles_defects: true,
+        phone_number: '',
+        display_name: '',
+        nationality: '',
+        role: 'inspector',
+        lang: 'ko',
+        process: null,
+        default_equipment_id: null,
+      });
+      setSaving(null);
+      if (insertError) {
+        setFormError(insertError.message);
+        return;
+      }
+      setNewName('');
+      refetch();
+    } catch (err) {
+      setSaving(null);
+      setFormError(err?.message || '추가에 실패했습니다.');
     }
-    setNewName('');
-    refetch();
   }
 
   async function handleRemoveWorker(name) {
@@ -662,21 +685,32 @@ export default function WorkerManagementPage() {
 
     setHiddenNames((prev) => new Set(prev).add(name));
 
-    const { error: removeError } = await supabase
-      .from('worker_directory')
-      .upsert(workerUpsertPayload(name, existing, { removed: true }));
-    setSaving(null);
+    try {
+      const companyId = await getCompanyId();
+      const { error: removeError } = await supabase
+        .from('worker_directory')
+        .upsert(workerUpsertPayload(name, existing, { removed: true }, companyId));
+      setSaving(null);
 
-    if (removeError) {
+      if (removeError) {
+        setHiddenNames((prev) => {
+          const next = new Set(prev);
+          next.delete(name);
+          return next;
+        });
+        setFormError(removeError.message);
+        return;
+      }
+      refetch();
+    } catch (err) {
+      setSaving(null);
       setHiddenNames((prev) => {
         const next = new Set(prev);
         next.delete(name);
         return next;
       });
-      setFormError(removeError.message);
-      return;
+      setFormError(err?.message || '삭제에 실패했습니다.');
     }
-    refetch();
   }
 
   if (loading) return <div className="p-8 text-muted text-sm">데이터 불러오는 중...</div>;

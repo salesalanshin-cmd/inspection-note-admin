@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Crosshair } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCompanyId } from '../lib/company';
 import { DOC_ERROR_CODES, docLabel } from '../lib/constants';
 import { requestClassifyPhoto } from '../lib/classifyClient';
 import { cloneMarkingData, parseMarkingData } from '../lib/markingData';
@@ -59,11 +60,10 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
     setImageHeight(report.image_height || 0);
 
     (async () => {
-      const { data, error: fetchError } = await supabase
-        .from('ocr_results')
-        .select('marking_data')
-        .eq('id', report.id)
-        .maybeSingle();
+      const companyId = await getCompanyId().catch(() => null);
+      let q = supabase.from('ocr_results').select('marking_data').eq('id', report.id);
+      if (companyId) q = q.eq('company_id', companyId);
+      const { data, error: fetchError } = await q.maybeSingle();
       if (cancelled || fetchError || !data) return;
       setMarkers(cloneMarkingData(data.marking_data));
     })();
@@ -169,10 +169,12 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
     };
 
     setSaving(true);
+    const companyId = await getCompanyId();
     const { error: updateError } = await supabase
       .from('ocr_results')
       .update(payload)
-      .eq('id', report.id);
+      .eq('id', report.id)
+      .eq('company_id', companyId);
 
     if (updateError) {
       setSaving(false);
