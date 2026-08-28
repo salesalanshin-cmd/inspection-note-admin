@@ -7,6 +7,7 @@ export default function ConfirmDialog({
   title,
   message,
   confirmLabel,
+  cancelLabel = '취소',
   confirmTone = 'accent',
   onConfirm,
   onCancel,
@@ -30,7 +31,7 @@ export default function ConfirmDialog({
         <ModalFooterActions
           onCancel={onCancel}
           onConfirm={onConfirm}
-          cancelLabel="취소"
+          cancelLabel={cancelLabel}
           confirmLabel={loading ? '처리 중...' : confirmLabel}
           confirmDisabled={loading}
           confirmClassName={confirmClassName}

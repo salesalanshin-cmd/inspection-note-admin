@@ -11,7 +11,8 @@ const NAV = [
   { href: '/frequent-check', label: '자주검사 현황', code: '03' },
   { href: '/fives', label: '3정5S', code: '04' },
   { href: '/defects', label: '불량기록', code: '05' },
-  { href: '/documents', label: '문서스캔', code: '06' },
+  { href: '/document-scans', label: '문서스캔', code: '06' },
+  { href: '/documents', label: '문서 지식베이스', code: '06b' },
 ];
 
 const SETTINGS_NAV = [

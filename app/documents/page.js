@@ -1,371 +1,306 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useReports } from '../../lib/useReports';
-import { DOC_ERROR_CODES, docLabel } from '../../lib/constants';
-import { buildWorkerDisplayNameMap } from '../../lib/analytics';
-import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
-import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
-import {
-  buildImageDownloadFilename,
-  downloadImagesAsZip,
-} from '../../lib/downloadImages';
-import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
-import { countPendingDocumentNotifications } from '../../lib/documentNotificationQueue';
-import { parseMarkingData } from '../../lib/markingData';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { History, RefreshCw, Upload } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
-import StatCard from '../../components/StatCard';
-import SignedImage from '../../components/SignedImage';
-import DocumentEditModal from '../../components/DocumentEditModal';
-import DateRangePicker from '../../components/DateRangePicker';
-import FilterToolbar from '../../components/FilterToolbar';
-import ConfirmDialog from '../../components/ConfirmDialog';
-import GalleryFloatingBar from '../../components/GalleryFloatingBar';
-import {
-  exportToExcel,
-  formatDateRangeForFilename,
-  formatExportDateTime,
-  resolveFileName,
-} from '../../lib/exportExcel';
+import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
+import ModalShell from '../../components/ModalShell';
+import { getCompanyId } from '../../lib/company';
+import { supabase } from '../../lib/supabase';
+import { isProcessingStatus, STATUS_LABELS } from '../../lib/documents/statusLabels';
 
-const selectClass =
-  'bg-surface border border-border text-sm text-text px-4 py-2 rounded-xl focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
+const btnPrimary =
+  'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0';
+const btnSecondary =
+  'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-surface2 disabled:opacity-50 md:min-h-0';
 
-const exportBtnClass =
-  'min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0 md:min-h-0';
+function formatDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('ko-KR');
+}
 
-const actionBtnClass =
-  'min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50 md:min-h-0';
+function StatusBadge({ status }) {
+  const tone =
+    status === 'ready'
+      ? 'bg-goodSoft text-good'
+      : status === 'failed'
+        ? 'bg-dangerSoft text-danger'
+        : isProcessingStatus(status)
+          ? 'bg-warnSoft text-warn'
+          : 'bg-surface2 text-muted';
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${tone}`}>
+      {STATUS_LABELS[status] || status}
+    </span>
+  );
+}
 
-const dangerBtnClass =
-  'rounded-xl bg-danger px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50';
+export default function KnowledgeDocumentsPage() {
+  const [rows, setRows] = useState([]);
+  const [chunkCounts, setChunkCounts] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [historyDoc, setHistoryDoc] = useState(null);
+  const [historyChain, setHistoryChain] = useState([]);
+  const [reprocessId, setReprocessId] = useState(null);
 
-export default function DocumentsPage() {
-  const { loading, error, docs, refetch, workerDirectory } = useReports();
-  const [worker, setWorker] = useState('all');
-  const [docType, setDocType] = useState('all');
-  const [errorCode, setErrorCode] = useState('all');
-  const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
-  const [selected, setSelected] = useState(null);
-  const [trashConfirm, setTrashConfirm] = useState(false);
-  const [trashLoading, setTrashLoading] = useState(false);
-  const [downloadLoading, setDownloadLoading] = useState(false);
-  const [batchError, setBatchError] = useState(null);
-  const [pendingNotifyCount, setPendingNotifyCount] = useState(0);
-  const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
-    useGalleryBatchSelect();
+  const fetchRows = useCallback(async () => {
+    try {
+      const companyId = await getCompanyId();
+      const { data, error: fetchError } = await supabase
+        .from('document')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false });
+
+      if (fetchError) throw new Error(fetchError.message);
+      const docs = data || [];
+      setRows(docs);
+
+      if (docs.length) {
+        const ids = docs.map((d) => d.id);
+        const { data: chunks } = await supabase
+          .from('document_chunk')
+          .select('document_id')
+          .eq('company_id', companyId)
+          .in('document_id', ids);
+
+        const counts = {};
+        for (const c of chunks || []) {
+          counts[c.document_id] = (counts[c.document_id] || 0) + 1;
+        }
+        setChunkCounts(counts);
+      } else {
+        setChunkCounts({});
+      }
+      setError(null);
+    } catch (err) {
+      setError(err.message || '목록을 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    // 발송 대기 건수 — 알림톡 발송 UI는 추후 솔라피 연동 시 별도 구현
-    countPendingDocumentNotifications()
-      .then((n) => {
-        if (!cancelled) setPendingNotifyCount(n);
-      })
-      .catch(() => {
-        if (!cancelled) setPendingNotifyCount(0);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [docs, selected]);
+    fetchRows();
+  }, [fetchRows]);
 
-  const displayMap = useMemo(
-    () => buildWorkerDisplayNameMap(workerDirectory),
-    [workerDirectory]
+  const hasProcessing = useMemo(
+    () => rows.some((r) => isProcessingStatus(r.status)),
+    [rows]
   );
 
-  const dateFiltered = useMemo(
-    () => filterByCreatedAtDateRange(docs, dateRange),
-    [docs, dateRange]
-  );
+  useEffect(() => {
+    if (!hasProcessing) return undefined;
+    const timer = setInterval(fetchRows, 3000);
+    return () => clearInterval(timer);
+  }, [hasProcessing, fetchRows]);
 
-  const workers = useMemo(
-    () => Array.from(new Set(dateFiltered.map((d) => d.worker_name).filter(Boolean))).sort(),
-    [dateFiltered]
-  );
-
-  const docTypes = useMemo(
-    () => Array.from(new Set(dateFiltered.map((d) => d.doc_type).filter(Boolean))).sort(),
-    [dateFiltered]
-  );
-
-  const filtered = dateFiltered.filter((d) => {
-    if (worker !== 'all' && d.worker_name !== worker) return false;
-    if (docType !== 'all' && d.doc_type !== docType) return false;
-    if (errorCode === 'none' && d.doc_error_code) return false;
-    if (errorCode !== 'all' && errorCode !== 'none' && d.doc_error_code !== errorCode) return false;
-    return true;
-  });
-
-  const selectedRecords = useMemo(
-    () => filtered.filter((d) => selectedIds.has(d.id)),
-    [filtered, selectedIds]
-  );
-
-  const errorCount = filtered.filter((d) => d.doc_error_code).length;
-  const normalRate =
-    filtered.length > 0
-      ? `${Math.round(((filtered.length - errorCount) / filtered.length) * 100)}%`
-      : '—';
-
-  const canExport = isDateRangeValid(dateRange) && filtered.length > 0;
-
-  async function handleDownloadSelected() {
-    const items = selectedRecords
-      .filter((d) => d.image_url)
-      .map((d) => {
-        const w = d.worker_name;
-        return {
-          imageUrl: d.image_url,
-          filename: buildImageDownloadFilename(
-            (w && (displayMap.get(w) || w)) || w,
-            d.created_at
-          ),
-        };
-      });
-
-    if (!items.length) {
-      setBatchError('이미지가 있는 항목을 선택해 주세요.');
+  async function toggleActive(doc) {
+    const next = !doc.is_active;
+    const res = await fetch(`/api/documents/${doc.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: next }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      alert(json.error || '상태 변경 실패');
       return;
     }
+    fetchRows();
+  }
 
-    setBatchError(null);
-    setDownloadLoading(true);
+  async function handleReprocess(documentId) {
+    setReprocessId(documentId);
     try {
-      await downloadImagesAsZip(items, '문서스캔_선택.zip');
+      const res = await fetch('/api/documents/reprocess', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || '재처리 실패');
+      fetchRows();
     } catch (err) {
-      setBatchError(err.message || '이미지 다운로드에 실패했습니다.');
+      alert(err.message);
     } finally {
-      setDownloadLoading(false);
+      setReprocessId(null);
     }
   }
 
-  async function handleMoveToTrash() {
-    setTrashLoading(true);
-    try {
-      await moveToTrash(TRASH_TABLES.doc, [...selectedIds]);
-      clearAll();
-      setTrashConfirm(false);
-      refetch();
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[documents trash]', err);
-    } finally {
-      setTrashLoading(false);
+  async function openHistory(doc) {
+    setHistoryDoc(doc);
+    const companyId = await getCompanyId();
+    const chain = [];
+    let currentId = doc.id;
+    const seen = new Set();
+
+    while (currentId && !seen.has(currentId)) {
+      seen.add(currentId);
+      const { data } = await supabase
+        .from('document')
+        .select('id, title, version, supersedes, created_at, is_active, status')
+        .eq('company_id', companyId)
+        .eq('id', currentId)
+        .maybeSingle();
+      if (!data) break;
+      chain.unshift(data);
+      if (!data.supersedes) break;
+      currentId = data.supersedes;
     }
+    setHistoryChain(chain);
   }
 
-  function handleExportExcel() {
-    const rows = filtered.map((d) => ({
-      작업자: (d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '',
-      문서유형: d.doc_type || '',
-      오류코드: d.doc_error_code || '',
-      오류내용: d.doc_error_code ? DOC_ERROR_CODES[d.doc_error_code] || '' : '',
-      오류메모: d.doc_error_note || '',
-      촬영시각: formatExportDateTime(d.created_at),
-      파일명: resolveFileName(d),
-    }));
-    exportToExcel(
-      rows,
-      `문서스캔_${formatDateRangeForFilename(dateRange.start, dateRange.end)}.xlsx`
-    );
-  }
-
-  if (loading) return <div className="p-8 text-muted text-sm">데이터 불러오는 중...</div>;
-  if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
+  if (loading) return <div className="p-8 text-sm text-muted">데이터 불러오는 중...</div>;
+  if (error) return <div className="p-8 text-sm text-danger">오류: {error}</div>;
 
   return (
     <div>
       <PageHeader
-        eyebrow="DOCUMENTS"
-        title="문서스캔"
-        description={`총 ${filtered.length}건`}
+        eyebrow="KNOWLEDGE BASE"
+        title="문서 지식베이스"
+        description={`등록 문서 ${rows.length}건`}
+        actions={
+          <Link href="/documents/upload" className={btnPrimary}>
+            <Upload className="h-4 w-4" />
+            문서 업로드
+          </Link>
+        }
       />
 
-      {pendingNotifyCount > 0 ? (
-        <div className="px-4 pt-3 md:px-8">
-          {/* 카카오 알림톡 발송 화면은 솔라피 등 준비 후 별도 구현. 지금은 pending 집계만. */}
-          <span className="inline-flex items-center rounded-full bg-warnSoft px-3 py-1 text-xs font-medium text-warn">
-            발송 대기 {pendingNotifyCount}건
-          </span>
-        </div>
-      ) : null}
-
-      <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="총 스캔 건수" value={filtered.length} />
-          <StatCard label="오류 건수" value={errorCount} tone="danger" />
-          <StatCard label="정상률" value={normalRate} tone="good" />
-        </div>
-
-        <div className="shrink-0 bg-bg pb-4">
-          <FilterToolbar primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}>
-            <select value={worker} onChange={(e) => setWorker(e.target.value)} className={selectClass}>
-              <option value="all">전체 작업자</option>
-              {workers.map((w) => (
-                <option key={w} value={w}>
-                  {displayMap.get(w) || w}
-                </option>
+      <div className="space-y-4 px-4 pb-8 pt-4 md:px-8">
+        <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+          <table className="min-w-full text-sm">
+            <thead className="bg-surface2 text-left text-xs text-muted">
+              <tr>
+                <th className="px-4 py-3 font-medium">문서명</th>
+                <th className="px-4 py-3 font-medium">버전</th>
+                <th className="px-4 py-3 font-medium">페이지</th>
+                <th className="px-4 py-3 font-medium">상태</th>
+                <th className="px-4 py-3 font-medium">조각</th>
+                <th className="px-4 py-3 font-medium">업로드</th>
+                <th className="px-4 py-3 font-medium">활성</th>
+                <th className="px-4 py-3 font-medium">작업</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border bg-surface">
+              {rows.map((doc) => (
+                <tr key={doc.id} className={!doc.is_active ? 'opacity-60' : undefined}>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-text">{doc.title || doc.file_name}</div>
+                    <div className="text-xs text-muted">{doc.file_name}</div>
+                  </td>
+                  <td className="px-4 py-3">v{doc.version || 1}</td>
+                  <td className="px-4 py-3">{doc.page_count || '—'}</td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={doc.status} />
+                    {doc.status === 'failed' && doc.error_message ? (
+                      <div className="mt-1 max-w-xs text-xs text-danger">{doc.error_message}</div>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3">{chunkCounts[doc.id] ?? '—'}</td>
+                  <td className="px-4 py-3 text-muted">{formatDateTime(doc.created_at)}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleActive(doc)}
+                      className={`rounded-lg px-2 py-1 text-xs font-medium ${
+                        doc.is_active
+                          ? 'bg-goodSoft text-good'
+                          : 'bg-surface2 text-muted'
+                      }`}
+                    >
+                      {doc.is_active ? '활성' : '비활성'}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Link href={`/documents/${doc.id}/chunks`} className={btnSecondary}>
+                        조각 보기
+                      </Link>
+                      <button type="button" onClick={() => openHistory(doc)} className={btnSecondary}>
+                        <History className="h-4 w-4" />
+                        개정 이력
+                      </button>
+                      {doc.status === 'failed' ? (
+                        <button
+                          type="button"
+                          disabled={reprocessId === doc.id}
+                          onClick={() => handleReprocess(doc.id)}
+                          className={btnSecondary}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          재처리
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
               ))}
-            </select>
-            <select value={docType} onChange={(e) => setDocType(e.target.value)} className={selectClass}>
-              <option value="all">전체 문서유형</option>
-              {docTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <select
-              value={errorCode}
-              onChange={(e) => setErrorCode(e.target.value)}
-              className={selectClass}
-            >
-              <option value="all">전체 오류코드</option>
-              <option value="none">오류 없음</option>
-              {Object.entries(DOC_ERROR_CODES).map(([code, label]) => (
-                <option key={code} value={code}>
-                  {label} ({code})
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              disabled={!canExport}
-              className={exportBtnClass}
-            >
-              엑셀 다운로드
-            </button>
-            <button
-              type="button"
-              onClick={() => selectAll(filtered)}
-              disabled={filtered.length === 0}
-              className={actionBtnClass}
-            >
-              전체 선택
-            </button>
-            <button
-              type="button"
-              onClick={clearAll}
-              disabled={selectedCount === 0}
-              className={actionBtnClass}
-            >
-              선택 해제
-            </button>
-          </FilterToolbar>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center text-muted">
+                    등록된 문서가 없습니다. 업로드해 주세요.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
 
-        {batchError ? (
-          <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{batchError}</div>
-        ) : null}
-
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
-          {filtered.map((d) => (
-            <div key={d.id} className="bg-surface rounded-xl shadow-card overflow-hidden group">
-              <div
-                className="relative aspect-square bg-surface2 cursor-pointer"
-                onClick={() => setSelected(d)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setSelected(d);
-                  }
-                }}
-              >
-                <label
-                  className="absolute left-2 top-2 z-30 flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center rounded-lg border border-border bg-surface/90"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected(d.id)}
-                    onChange={() => toggle(d.id)}
-                    className="h-3.5 w-3.5 accent-accent"
-                    aria-label={`${(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '작업자'} 선택`}
-                  />
-                </label>
-                {d.image_url ? (
-                  <SignedImage url={d.image_url} alt={docLabel(d)} />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-muted text-xs">
-                    이미지 없음
-                  </div>
-                )}
-                <div className="absolute bottom-2 left-2 right-2 z-20 flex flex-wrap gap-1">
-                  {(() => {
-                    const markCount = parseMarkingData(d.marking_data).filter((m) => m.code).length;
-                    return markCount > 0 ? (
-                      <span className="rounded-full bg-dangerSoft px-2 py-0.5 text-[10px] font-medium text-danger">
-                        지적 {markCount}건
-                      </span>
-                    ) : null;
-                  })()}
-                  {d.doc_error_code ? (
-                    <span className="rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
-                      {DOC_ERROR_CODES[d.doc_error_code] || d.doc_error_code}
-                    </span>
-                  ) : null}
-                </div>
+        <div className="space-y-3 md:hidden">
+          {rows.map((doc) => (
+            <MobileListCard key={doc.id} title={doc.title || doc.file_name} subtitle={doc.file_name}>
+              <MobileCardField label="버전" value={`v${doc.version || 1}`} />
+              <MobileCardField label="상태" value={<StatusBadge status={doc.status} />} />
+              <MobileCardField label="조각" value={chunkCounts[doc.id] ?? '—'} />
+              <MobileCardField label="업로드" value={formatDateTime(doc.created_at)} />
+              {doc.status === 'failed' && doc.error_message ? (
+                <p className="text-xs text-danger">{doc.error_message}</p>
+              ) : null}
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Link href={`/documents/${doc.id}/chunks`} className={btnSecondary}>
+                  조각 보기
+                </Link>
+                <button type="button" onClick={() => openHistory(doc)} className={btnSecondary}>
+                  개정 이력
+                </button>
               </div>
-              <div className="p-2.5 text-[11px] md:text-xs">
-                <div className="truncate font-medium text-text">
-                  {d.doc_title || d.doc_type || '문서'}
-                </div>
-                <div className="mt-0.5 text-muted">
-                  {(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) ||
-                    '작업자 미상'}
-                </div>
-                <div className="mt-0.5 text-muted">
-                  {d.created_at ? new Date(d.created_at).toLocaleString('ko-KR') : ''}
-                </div>
-              </div>
-            </div>
+            </MobileListCard>
           ))}
-          {filtered.length === 0 && (
-            <div className="col-span-full text-center py-12 text-muted text-xs">
-              조건에 맞는 기록이 없습니다
-            </div>
-          )}
         </div>
       </div>
 
-      {selected ? (
-        <DocumentEditModal
-          key={selected.id}
-          report={selected}
-          onClose={() => setSelected(null)}
-          onSaved={() => refetch()}
-        />
-      ) : null}
-
-      <ConfirmDialog
-        open={trashConfirm}
-        title="휴지통으로 이동"
-        message={`선택한 ${selectedCount}개 항목을 휴지통으로 이동합니다. 휴지통에서 복구하거나 완전히 삭제할 수 있습니다.`}
-        confirmLabel="휴지통으로 이동"
-        confirmTone="danger"
-        loading={trashLoading}
-        onConfirm={handleMoveToTrash}
-        onCancel={() => setTrashConfirm(false)}
-      />
-
-      <GalleryFloatingBar count={selectedCount}>
-        <button
-          type="button"
-          onClick={handleDownloadSelected}
-          disabled={downloadLoading}
-          className={actionBtnClass}
+      {historyDoc ? (
+        <ModalShell
+          title="개정 이력"
+          onClose={() => {
+            setHistoryDoc(null);
+            setHistoryChain([]);
+          }}
         >
-          {downloadLoading ? '다운로드 중...' : `선택 ${selectedCount}개 다운로드`}
-        </button>
-        <button type="button" onClick={() => setTrashConfirm(true)} className={dangerBtnClass}>
-          선택 {selectedCount}개 휴지통으로 이동
-        </button>
-      </GalleryFloatingBar>
+          <ul className="divide-y divide-border rounded-xl border border-border mx-4 my-4 md:mx-6">
+          {historyChain.map((item) => (
+            <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+              <div>
+                <div className="font-medium text-text">
+                  {item.title} <span className="text-muted">v{item.version}</span>
+                </div>
+                <div className="text-xs text-muted">{formatDateTime(item.created_at)}</div>
+              </div>
+              <StatusBadge status={item.status} />
+            </li>
+          ))}
+          {!historyChain.length ? (
+            <li className="px-4 py-6 text-center text-sm text-muted">이력이 없습니다.</li>
+          ) : null}
+        </ul>
+        </ModalShell>
+      ) : null}
     </div>
   );
 }
