@@ -50,8 +50,21 @@ export default function DocumentUploadPage() {
     if (options.supersedesId) form.append('supersedesId', options.supersedesId);
 
     const res = await fetch('/api/documents/upload', { method: 'POST', body: form });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || '업로드 실패');
+    const text = await res.text();
+    let json = {};
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error('업로드 응답을 해석할 수 없습니다.');
+    }
+
+    if (!res.ok) {
+      const devDetail =
+        process.env.NODE_ENV === 'development' && json.message
+          ? `\n\n[개발] ${json.message}`
+          : '';
+      throw new Error((json.error || '업로드 실패') + devDetail);
+    }
     return json.document;
   }
 
