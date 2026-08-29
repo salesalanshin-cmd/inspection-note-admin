@@ -3,23 +3,34 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { ChevronDown, Sparkles } from 'lucide-react';
 
-const NAV = [
+/** 상시 — 매일 확인 */
+const DAILY_NAV = [
   { href: '/dashboard', label: '대시보드', code: '01' },
   { href: '/daily-performance', label: '일일 실적 관리', code: '02' },
   { href: '/frequent-check', label: '자주검사 현황', code: '03' },
   { href: '/fives', label: '3정5S', code: '04' },
   { href: '/defects', label: '불량기록', code: '05' },
-  { href: '/document-scans', label: '문서스캔', code: '06' },
-  { href: '/documents', label: '문서 지식베이스', code: '06b' },
-  { href: '/ask', label: '지식 검색 테스트', code: '06c' },
+  { href: '/notices', label: '공지사항', code: '09' },
 ];
 
+/** 보조 — 주 단위·필요 시 확인 */
+const WEEKLY_NAV = [
+  { href: '/document-scans', label: '스캔 문서 검수', code: '06' },
+  { href: '/documents', label: 'AI 매뉴얼 관리', code: '06b' },
+  { href: '/worker-detail', label: '작업자 상세조회', code: '08' },
+];
+
+/** 개발 환경 전용 — 프로덕션 메뉴에서 제외 */
+const DEV_NAV =
+  process.env.NODE_ENV !== 'production'
+    ? [{ href: '/ask', label: '지식 검색 테스트', code: '06c' }]
+    : [];
+
+/** 설정 — 초기 세팅 후 거의 안 봄 (접힌 그룹) */
 const SETTINGS_NAV = [
   { href: '/worker-management', label: '작업자 관리', code: '07' },
-  { href: '/worker-detail', label: '작업자 상세조회', code: '08' },
-  { href: '/notices', label: '공지사항', code: '09' },
   { href: '/settings/messages', label: '메시지 관리', code: '10' },
   { href: '/trash', label: '휴지통', code: '11' },
   { href: '/master', label: 'MES 기준정보', code: '12' },
@@ -29,6 +40,10 @@ const INSIGHT_LAB_NAV = {
   href: '/insight-lab',
   label: '인사이트 랩',
 };
+
+function isActive(pathname, href) {
+  return pathname?.startsWith(href);
+}
 
 function NavLink({ item, active, onNavigate }) {
   return (
@@ -44,6 +59,57 @@ function NavLink({ item, active, onNavigate }) {
       <span className="text-xs text-muted">{item.code}</span>
       <span>{item.label}</span>
     </Link>
+  );
+}
+
+function NavSection({ label, children }) {
+  return (
+    <div className="mb-1">
+      {label ? (
+        <div className="px-3 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wide text-muted">
+          {label}
+        </div>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+function SettingsGroup({ pathname, onNavigate }) {
+  const settingsActive = SETTINGS_NAV.some((item) => isActive(pathname, item.href));
+  const [open, setOpen] = useState(settingsActive);
+
+  useEffect(() => {
+    if (settingsActive) setOpen(true);
+  }, [settingsActive]);
+
+  return (
+    <div className="mt-3 border-t border-border pt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-muted transition-colors hover:bg-surface2 hover:text-text"
+        aria-expanded={open}
+      >
+        <span>설정</span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`}
+          strokeWidth={2}
+        />
+      </button>
+      {open ? (
+        <div className="mt-0.5">
+          {SETTINGS_NAV.map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              active={isActive(pathname, item.href)}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -74,6 +140,38 @@ function InsightLabNavLink({ active, onNavigate, mobile = false }) {
   );
 }
 
+function MainNav({ pathname, onNavigate }) {
+  const weeklyItems = [...WEEKLY_NAV, ...DEV_NAV];
+
+  return (
+    <>
+      <NavSection label={null}>
+        {DAILY_NAV.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            active={isActive(pathname, item.href)}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </NavSection>
+
+      <NavSection label="보조">
+        {weeklyItems.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            active={isActive(pathname, item.href)}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </NavSection>
+
+      <SettingsGroup pathname={pathname} onNavigate={onNavigate} />
+    </>
+  );
+}
+
 function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
   return (
     <>
@@ -82,26 +180,7 @@ function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
         <div className="mt-1 text-lg font-semibold text-text">검사노트 관리</div>
       </Link>
       <nav className="min-h-0 flex-1 px-3 py-2">
-        {NAV.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            active={pathname?.startsWith(item.href)}
-            onNavigate={onNavigate}
-          />
-        ))}
-        <div className="my-3 border-t border-border" />
-        <div className="px-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
-          운영 설정
-        </div>
-        {SETTINGS_NAV.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            active={pathname?.startsWith(item.href)}
-            onNavigate={onNavigate}
-          />
-        ))}
+        <MainNav pathname={pathname} onNavigate={onNavigate} />
       </nav>
 
       <div className="shrink-0 px-3 pb-3">
@@ -115,7 +194,7 @@ function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
             </span>
           </div>
           <InsightLabNavLink
-            active={pathname?.startsWith(INSIGHT_LAB_NAV.href)}
+            active={isActive(pathname, INSIGHT_LAB_NAV.href)}
             onNavigate={onNavigate}
           />
         </div>
@@ -148,27 +227,8 @@ function MobileSidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
         <div className="mt-1 text-lg font-semibold text-text">검사노트 관리</div>
       </Link>
 
-      <nav className="px-3 py-2">
-        {NAV.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            active={pathname?.startsWith(item.href)}
-            onNavigate={onNavigate}
-          />
-        ))}
-        <div className="my-3 border-t border-border" />
-        <div className="px-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
-          운영 설정
-        </div>
-        {SETTINGS_NAV.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            active={pathname?.startsWith(item.href)}
-            onNavigate={onNavigate}
-          />
-        ))}
+      <nav className="min-h-0 flex-1 px-3 py-2">
+        <MainNav pathname={pathname} onNavigate={onNavigate} />
       </nav>
 
       <div className="px-3 pb-3">
@@ -183,7 +243,7 @@ function MobileSidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
           </div>
           <InsightLabNavLink
             mobile
-            active={pathname?.startsWith(INSIGHT_LAB_NAV.href)}
+            active={isActive(pathname, INSIGHT_LAB_NAV.href)}
             onNavigate={onNavigate}
           />
         </div>
