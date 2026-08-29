@@ -7,7 +7,9 @@ function isPublicPath(pathname) {
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return true;
   }
-  // Vercel Cron은 세션 쿠키 없이 호출 — 라우트 내부에서 CRON_SECRET 검증
+  // 앱 /api/ask — 라우트 내부에서 세션 또는 x-company-key 검증
+  if (pathname === '/api/ask' || pathname.startsWith('/api/ask/')) return true;
+  // Vercel Cron — 라우트 내부에서 CRON_SECRET 검증
   if (pathname.startsWith('/api/cron')) return true;
   if (pathname.startsWith('/_next')) return true;
   if (pathname.startsWith('/favicon')) return true;
