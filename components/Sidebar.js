@@ -13,6 +13,7 @@ const NAV = [
   { href: '/defects', label: '불량기록', code: '05' },
   { href: '/document-scans', label: '문서스캔', code: '06' },
   { href: '/documents', label: '문서 지식베이스', code: '06b' },
+  { href: '/ask', label: '지식 검색 테스트', code: '06c' },
 ];
 
 const SETTINGS_NAV = [
