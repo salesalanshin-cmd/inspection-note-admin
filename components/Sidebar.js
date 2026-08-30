@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, Sparkles } from 'lucide-react';
+import { fetchWaitManagerCount } from '../lib/questions';
 
 /** 상시 — 매일 확인 */
 const DAILY_NAV = [
@@ -12,6 +13,7 @@ const DAILY_NAV = [
   { href: '/frequent-check', label: '자주검사 현황', code: '03' },
   { href: '/fives', label: '3정5S', code: '04' },
   { href: '/defects', label: '불량기록', code: '05' },
+  { href: '/questions', label: '질문 답변', code: '13', badgeKey: 'questions' },
   { href: '/notices', label: '공지사항', code: '09' },
 ];
 
@@ -45,7 +47,7 @@ function isActive(pathname, href) {
   return pathname?.startsWith(href);
 }
 
-function NavLink({ item, active, onNavigate }) {
+function NavLink({ item, active, onNavigate, badge }) {
   return (
     <Link
       href={item.href}
@@ -57,7 +59,12 @@ function NavLink({ item, active, onNavigate }) {
       }`}
     >
       <span className="text-xs text-muted">{item.code}</span>
-      <span>{item.label}</span>
+      <span className="flex-1">{item.label}</span>
+      {badge != null && badge > 0 ? (
+        <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -140,8 +147,10 @@ function InsightLabNavLink({ active, onNavigate, mobile = false }) {
   );
 }
 
-function MainNav({ pathname, onNavigate }) {
+function MainNav({ pathname, onNavigate, questionBadge }) {
   const weeklyItems = [...WEEKLY_NAV, ...DEV_NAV];
+
+  const badgeFor = (item) => (item.badgeKey === 'questions' ? questionBadge : null);
 
   return (
     <>
@@ -152,6 +161,7 @@ function MainNav({ pathname, onNavigate }) {
             item={item}
             active={isActive(pathname, item.href)}
             onNavigate={onNavigate}
+            badge={badgeFor(item)}
           />
         ))}
       </NavSection>
@@ -172,7 +182,7 @@ function MainNav({ pathname, onNavigate }) {
   );
 }
 
-function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
+function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut, questionBadge }) {
   return (
     <>
       <Link href="/dashboard" onClick={onNavigate} className="block cursor-pointer px-5 py-6">
@@ -180,7 +190,7 @@ function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
         <div className="mt-1 text-lg font-semibold text-text">검사노트 관리</div>
       </Link>
       <nav className="min-h-0 flex-1 px-3 py-2">
-        <MainNav pathname={pathname} onNavigate={onNavigate} />
+        <MainNav pathname={pathname} onNavigate={onNavigate} questionBadge={questionBadge} />
       </nav>
 
       <div className="shrink-0 px-3 pb-3">
@@ -219,7 +229,7 @@ function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
   );
 }
 
-function MobileSidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
+function MobileSidebarPanel({ pathname, onNavigate, onLogout, loggingOut, questionBadge }) {
   return (
     <div className="flex min-h-full flex-col">
       <Link href="/dashboard" onClick={onNavigate} className="block cursor-pointer px-5 py-6">
@@ -228,7 +238,7 @@ function MobileSidebarPanel({ pathname, onNavigate, onLogout, loggingOut }) {
       </Link>
 
       <nav className="min-h-0 flex-1 px-3 py-2">
-        <MainNav pathname={pathname} onNavigate={onNavigate} />
+        <MainNav pathname={pathname} onNavigate={onNavigate} questionBadge={questionBadge} />
       </nav>
 
       <div className="px-3 pb-3">
@@ -272,8 +282,24 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [questionBadge, setQuestionBadge] = useState(0);
   const onMobileCloseRef = useRef(onMobileClose);
   const ignoreOverlayCloseRef = useRef(false);
+
+  const loadQuestionBadge = useCallback(async () => {
+    try {
+      const count = await fetchWaitManagerCount();
+      setQuestionBadge(count);
+    } catch {
+      setQuestionBadge(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadQuestionBadge();
+    const timer = window.setInterval(loadQuestionBadge, 60_000);
+    return () => window.clearInterval(timer);
+  }, [loadQuestionBadge, pathname]);
 
   onMobileCloseRef.current = onMobileClose;
 
@@ -325,6 +351,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
           onNavigate={undefined}
           onLogout={handleLogout}
           loggingOut={loggingOut}
+          questionBadge={questionBadge}
         />
       </aside>
 
@@ -350,6 +377,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
             onNavigate={handleNavigate}
             onLogout={handleLogout}
             loggingOut={loggingOut}
+            questionBadge={questionBadge}
           />
         </aside>
       </div>
