@@ -1,8 +1,13 @@
 # 검사노트 관리자 콘솔
 
 기존 검사노트(defect-inspector) 앱의 Supabase 데이터를 읽어와 관리자용으로
-통계/현황을 보여주는 Next.js 대시보드입니다. **읽기 전용**이며, 검사노트 앱의 데이터는
-건드리지 않습니다.
+통계/현황을 보여주는 Next.js 대시보드입니다.
+
+> **DB 스키마 변경 규칙**
+>
+> - 이 레포(`inspection-note-admin`)의 `supabase/legacy-migrations/`는 **과거 이력 보관용**이며, **새 마이그레이션을 추가하지 않습니다.**
+> - 모든 스키마 변경은 앱 레포(**defect-inspector**)의 `supabase/migrations/`에서만 합니다.
+> - Supabase SQL Editor에 수동으로 DDL을 실행하지 않습니다. 앱 레포 마이그레이션을 적용하세요.
 
 ## 구성
 
@@ -17,7 +22,12 @@
 
 ## DB 마이그레이션
 
-`supabase/legacy-migrations/`는 과거 이력 참고용이며 더 이상 추가하지 않습니다. 스키마 변경은 defect-inspector 레포의 `supabase/migrations/`에서만 하며, Supabase 대시보드 SQL Editor에서 직접 실행하지 않습니다.
+| 위치 | 용도 |
+|------|------|
+| `defect-inspector/supabase/migrations/` | **유일한 스키마 변경 경로** — 여기에만 새 SQL 추가 |
+| `inspection-note-admin/supabase/legacy-migrations/` | 과거 이력 참고용, **추가 금지** |
+
+`document_folder` 등 신규 테이블·컬럼도 defect-inspector 레포에서 마이그레이션을 작성·적용합니다.
 
 ## 실행 방법
 

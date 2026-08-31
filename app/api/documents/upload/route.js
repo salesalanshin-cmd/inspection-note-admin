@@ -41,6 +41,8 @@ export async function POST(request) {
     const isRevision = form.get('isRevision') === 'true';
     const supersedesId = form.get('supersedesId')?.toString()?.trim() || null;
     const title = form.get('title')?.toString()?.trim() || '';
+    const folderIdRaw = form.get('folderId')?.toString()?.trim() || null;
+    let folderId = folderIdRaw;
 
     if (!file || typeof file === 'string') {
       return uploadErrorResponse('missing file', '파일이 필요합니다.', 400);
@@ -71,6 +73,10 @@ export async function POST(request) {
       version = (prev.version || 1) + 1;
       supersedes = prev.id;
       await deactivateDocument(prev.id, companyId);
+      if (!folderId && prev.folder_id) {
+        // 개정판은 기존 문서 폴더 유지
+        folderId = prev.folder_id;
+      }
     }
 
     doc = await createDocumentRow({
@@ -80,6 +86,7 @@ export async function POST(request) {
       fileType,
       version,
       supersedes,
+      folderId,
     });
 
     console.info('[documents/upload] document created', {

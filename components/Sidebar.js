@@ -20,7 +20,8 @@ const DAILY_NAV = [
 /** 보조 — 주 단위·필요 시 확인 */
 const WEEKLY_NAV = [
   { href: '/document-scans', label: '스캔 문서 검수', code: '06' },
-  { href: '/documents', label: 'AI 매뉴얼 관리', code: '06b' },
+  { href: '/documents', label: '문서', code: '06b' },
+  { href: '/knowledge', label: '지식 관리', code: '06d' },
   { href: '/worker-detail', label: '작업자 상세조회', code: '08' },
 ];
 
