@@ -12,6 +12,8 @@ import {
   fetchWorkerProfile,
   formatElapsed,
   getFirstWorkerQuestion,
+  getIneffectiveManagerAnswers,
+  getMessageOutcome,
   isElapsedOver24h,
 } from '../../../lib/questions';
 
@@ -43,11 +45,30 @@ function SourceBadge({ source }) {
   );
 }
 
+function OutcomeBadge({ outcome }) {
+  if (outcome === 'effective') {
+    return (
+      <span className="inline-flex rounded-full bg-goodSoft px-2 py-0.5 text-[11px] font-medium text-good">
+        해결됨
+      </span>
+    );
+  }
+  if (outcome === 'ineffective') {
+    return (
+      <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+        미해결
+      </span>
+    );
+  }
+  return null;
+}
+
 function MessageBubble({ message }) {
   const meta = ROLE_META[message.author_role] || ROLE_META.system;
   const Icon = meta.icon;
   const text = message.body_ko || message.body || '';
   const sources = message.meta?.sources;
+  const outcome = message.author_role === 'manager' ? getMessageOutcome(message) : null;
 
   return (
     <div className="flex gap-3">
@@ -59,6 +80,7 @@ function MessageBubble({ message }) {
           <span className="font-medium text-text">{meta.label}</span>
           {message.author_worker ? <span>{message.author_worker}</span> : null}
           <span>{formatDateTime(message.created_at)}</span>
+          {outcome ? <OutcomeBadge outcome={outcome} /> : null}
         </div>
         <div className={`rounded-xl px-4 py-3 text-sm leading-relaxed ${meta.bubble}`}>
           <p className="whitespace-pre-wrap">{text}</p>
@@ -94,6 +116,10 @@ export default function QuestionDetailPage() {
   const [saveResult, setSaveResult] = useState(null);
 
   const firstQuestion = useMemo(() => getFirstWorkerQuestion(messages), [messages]);
+  const ineffectiveAnswers = useMemo(
+    () => getIneffectiveManagerAnswers(messages),
+    [messages]
+  );
 
   const load = useCallback(async () => {
     try {
@@ -191,6 +217,30 @@ export default function QuestionDetailPage() {
         ) : (
           <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1fr_280px]">
             <div className="space-y-4">
+              {canAnswer && ineffectiveAnswers.length > 0 ? (
+                <div className="rounded-2xl border-2 border-warn/50 bg-warnSoft px-4 py-4 md:px-5">
+                  <p className="text-sm font-semibold text-warn">
+                    이전 답변이 효과가 없었습니다
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    작업자가 미해결로 표시했습니다. 같은 답변을 반복하지 마세요.
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {ineffectiveAnswers.map((m) => (
+                      <li
+                        key={m.id}
+                        className="rounded-xl border border-warn/30 bg-surface px-3 py-2 text-sm text-text"
+                      >
+                        <p className="whitespace-pre-wrap">{m.body_ko || m.body}</p>
+                        <p className="mt-1 text-[10px] text-muted">
+                          {formatDateTime(m.created_at)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
               <div className="rounded-2xl border border-border bg-surface p-4 md:p-6">
                 <h2 className="mb-4 text-sm font-medium text-text">대화</h2>
                 <div className="space-y-5">

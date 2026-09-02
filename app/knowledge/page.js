@@ -375,6 +375,7 @@ export default function KnowledgePage() {
                 <th className="px-4 py-3 font-medium">답변 미리보기</th>
                 <th className="px-4 py-3 font-medium">출처</th>
                 <th className="px-4 py-3 font-medium">등록일</th>
+                <th className="px-4 py-3 font-medium">피드백</th>
                 <th className="px-4 py-3 font-medium">신호</th>
                 <th className="px-4 py-3 font-medium">활성</th>
                 <th className="px-4 py-3 font-medium">작업</th>
@@ -383,7 +384,7 @@ export default function KnowledgePage() {
             <tbody className="divide-y divide-border bg-surface">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={8} className="px-4 py-12 text-center text-muted">
                     불러오는 중…
                   </td>
                 </tr>
@@ -425,6 +426,15 @@ export default function KnowledgePage() {
                       <td className="whitespace-nowrap px-4 py-3 text-muted">
                         {formatDateTime(item.created_at)}
                       </td>
+                      <td className="px-4 py-3 tabular-nums text-xs">
+                        <span className="text-good" title="도움됨">
+                          O {item.helpful_count ?? 0}
+                        </span>
+                        <span className="mx-1 text-muted">/</span>
+                        <span className="text-warn" title="도움 안 됨">
+                          X {item.unhelpful_count ?? 0}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">
                         <SignalBadge unused={unused} review={review} />
                       </td>
@@ -455,7 +465,7 @@ export default function KnowledgePage() {
                 })}
               {!loading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted">
+                  <td colSpan={8} className="px-4 py-12 text-center text-muted">
                     표시할 지식이 없습니다.
                   </td>
                 </tr>

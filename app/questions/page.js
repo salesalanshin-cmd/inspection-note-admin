@@ -8,6 +8,7 @@ import MobileListCard, { MobileCardField } from '../../components/MobileListCard
 import {
   QUESTION_STATUS_LABELS,
   buildQuestionListRows,
+  fetchManagerMessagesForThreads,
   fetchQuestionThreads,
   formatElapsed,
   isElapsedOver24h,
@@ -26,6 +27,14 @@ const TABS = [
   { id: 'all', label: '전체' },
   { id: 'done', label: '답변 완료' },
 ];
+
+function ReinquiryBadge() {
+  return (
+    <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
+      재문의
+    </span>
+  );
+}
 
 function StatusBadge({ status }) {
   const tone =
@@ -83,7 +92,14 @@ export default function QuestionsPage() {
         fetchQuestionThreads(tab, { includeHidden: showHidden }),
       ]);
       if (directoryRes.error) throw new Error(directoryRes.error.message);
-      setRows(buildQuestionListRows(threads, directoryRes.data || []));
+      const managerByThread = showHidden
+        ? null
+        : await fetchManagerMessagesForThreads(threads.map((t) => t.id));
+      setRows(
+        buildQuestionListRows(threads, directoryRes.data || [], {
+          managerMessagesByThread: managerByThread,
+        })
+      );
       setSelectedIds(new Set());
       setError(null);
     } catch (err) {
@@ -294,7 +310,12 @@ export default function QuestionsPage() {
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <tr key={row.id} className="border-t border-border hover:bg-surface2/50">
+                    <tr
+                      key={row.id}
+                      className={`border-t border-border hover:bg-surface2/50 ${
+                        row.isReinquiry ? 'bg-warnSoft/20' : ''
+                      }`}
+                    >
                       {!showHidden ? (
                         <td className="px-3 py-3">
                           <input
@@ -313,12 +334,15 @@ export default function QuestionsPage() {
                         )}
                       </td>
                       <td className="max-w-md px-4 py-3">
-                        <Link
-                          href={`/questions/${row.id}`}
-                          className="font-medium text-text hover:text-accent"
-                        >
-                          {row.preview}
-                        </Link>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            href={`/questions/${row.id}`}
+                            className="font-medium text-text hover:text-accent"
+                          >
+                            {row.preview}
+                          </Link>
+                          {row.isReinquiry ? <ReinquiryBadge /> : null}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-text">{row.displayName}</td>
                       <td className="px-4 py-3 text-muted">{row.process || '—'}</td>
@@ -366,9 +390,16 @@ export default function QuestionsPage() {
                           aria-label="선택"
                         />
                       ) : null}
-                      <Link href={`/questions/${row.id}`} className="font-medium text-text hover:text-accent">
-                        {row.preview}
-                      </Link>
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/questions/${row.id}`} className="font-medium text-text hover:text-accent">
+                          {row.preview}
+                        </Link>
+                        {row.isReinquiry ? (
+                          <div className="mt-1">
+                            <ReinquiryBadge />
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   }
                   badge={<StatusBadge status={row.status} />}
