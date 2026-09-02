@@ -98,7 +98,7 @@ export default function QuestionDetailPage() {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const t = await fetchQuestionThread(threadId);
+      const t = await fetchQuestionThread(threadId, { allowHidden: true });
       if (!t) {
         setError('질문을 찾을 수 없습니다.');
         return;

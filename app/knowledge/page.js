@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Plus, RefreshCw, Upload } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import ModalShell, { ModalFooterActions } from '../../components/ModalShell';
@@ -404,8 +405,21 @@ export default function KnowledgePage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="text-text">{item.source_label || '—'}</div>
-                        <div className="text-[10px] text-muted">
-                          {SOURCE_TYPE_LABELS[item.source_type] || item.source_type}
+                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+                          <span>{SOURCE_TYPE_LABELS[item.source_type] || item.source_type}</span>
+                          {item.created_from_thread_id ? (
+                            <>
+                              <span className="inline-flex rounded-full bg-surface2 px-1.5 py-0.5 font-medium text-muted">
+                                현장 Q&A
+                              </span>
+                              <Link
+                                href={`/questions/${item.created_from_thread_id}`}
+                                className="text-accent hover:underline"
+                              >
+                                원본 대화
+                              </Link>
+                            </>
+                          ) : null}
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-muted">
