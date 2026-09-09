@@ -10,7 +10,7 @@ import { fetchWaitManagerCount } from '../lib/questions';
 const DAILY_NAV = [
   { href: '/dashboard', label: '대시보드', code: '01' },
   { href: '/daily-performance', label: '일일 실적 관리', code: '02' },
-  { href: '/frequent-check', label: '자주검사 현황', code: '03' },
+  { href: '/frequent-check', label: '자주검사', code: '03' },
   { href: '/fives', label: '3정5S', code: '04' },
   { href: '/defects', label: '불량기록', code: '05' },
   { href: '/questions', label: '질문 답변', code: '13', badgeKey: 'questions' },

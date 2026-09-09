@@ -125,14 +125,14 @@ export default function InspectionHistoryPage() {
       <PageHeader
         eyebrow="INSPECTION HISTORY"
         title="자주검사 이력조회"
-        description="오늘 자주검사 현황을 한눈에 확인하고, 작업자를 클릭하면 개별 촬영 이력을 볼 수 있습니다"
+        description="오늘 자주검사를 한눈에 확인하고, 작업자를 클릭하면 개별 촬영 이력을 볼 수 있습니다"
       />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
         <div className="mb-4 rounded-xl border border-accent/30 bg-accentSoft px-4 py-3 text-sm text-text">
           이 화면은{' '}
           <Link href="/frequent-check" className="font-medium text-accent underline-offset-2 hover:underline">
-            자주검사 현황
+            자주검사
           </Link>
           에 통합되었습니다. 작업자를 클릭하면 동일한 촬영 이력 팝업이 열립니다. 아래는 참고용입니다.
         </div>
