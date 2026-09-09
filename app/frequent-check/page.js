@@ -77,11 +77,6 @@ const GALLERY_SORT_OPTIONS = [
   { value: 'worker_name:asc', label: '작업자명순' },
 ];
 
-const VIEW_TABS = [
-  { id: 'status', label: '현황' },
-  { id: 'gallery', label: '사진' },
-];
-
 const dayNavBtnClass =
   'min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text md:min-h-0';
 
@@ -225,9 +220,8 @@ function buildInspectionPhotoRows(defects, goods) {
 
 export default function FrequentCheckPage() {
   const { loading, error, defects, goods, fives, workerDirectory } = useReports();
-  const [viewTab, setViewTab] = useState('status');
 
-  // ——— 현황 탭 ———
+  // ——— 현황 ———
   const [date, setDate] = useState(() => startOfDay(new Date()));
   const [processFilter, setProcessFilter] = useState(DEFAULT_PROCESS_FILTER);
   const [exportDateRange, setExportDateRange] = useState(() => getRecentDaysRange(7));
@@ -235,7 +229,7 @@ export default function FrequentCheckPage() {
   const [sortDir, setSortDir] = useState('desc');
   const [modalWorker, setModalWorker] = useState(null);
 
-  // ——— 사진 탭 ———
+  // ——— 사진 갤러리 ———
   const [galleryDateRange, setGalleryDateRange] = useState(() => getRecentDaysRange(7));
   const [galleryWorker, setGalleryWorker] = useState('all');
   const [gallerySortKey, setGallerySortKey] = useState('created_at');
@@ -434,216 +428,197 @@ export default function FrequentCheckPage() {
     'cursor-pointer transition-colors hover:bg-surface2/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30';
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div>
       <PageHeader
         eyebrow="FREQUENT CHECK"
         title="자주검사"
-        description={
-          viewTab === 'gallery'
-            ? `양품·불량 촬영 기록 · 총 ${galleryFiltered.length}건`
-            : '근무 시프트는 작업자 관리 설정(고정) 또는 당일 기록(자동)으로 결정되며, 초품·중품·종품 검사 준수 여부를 확인합니다.'
-        }
+        description={`초·중·종 준수 현황 · 사진 ${galleryFiltered.length}건`}
       />
 
-      <div className="border-b border-border px-4 md:px-8">
-        <div className="flex gap-1">
-          {VIEW_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setViewTab(t.id)}
-              className={`border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
-                viewTab === t.id
-                  ? 'border-accent text-accent'
-                  : 'border-transparent text-muted hover:text-text'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {viewTab === 'status' ? (
-        <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
-          <PageTableShell
-            toolbar={
-              <FilterToolbar
-                primary={
-                  <div className="flex w-full items-center gap-2 md:w-auto">
-                    <button
-                      type="button"
-                      onClick={() => shiftDay(-1)}
-                      className={`${dayNavBtnClass} flex-1 md:flex-none`}
-                      aria-label="이전 날"
-                    >
-                      ◀ 이전날
-                    </button>
-                    <span className="min-w-0 flex-1 text-center text-sm font-medium text-text md:min-w-[10rem]">
-                      {formatWorkDate(date)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => shiftDay(1)}
-                      className={`${dayNavBtnClass} flex-1 md:flex-none`}
-                      aria-label="다음 날"
-                    >
-                      다음날 ▶
-                    </button>
-                  </div>
-                }
-                aside={
-                  <>
-                    <p className="text-xs text-muted md:text-right">
-                      시프트가 고정(🔒)된 작업자는 설정값을 우선 적용합니다. 미정인 작업자는 당일 기록
-                      시간대로 자동 판단하며, 기록이 없으면 데이터 없음으로 표시됩니다.
+      <div className="space-y-6 px-4 pb-8 pt-0 md:px-8">
+        {/* 상단: 현황 표 (3정5S의 ClockInOutSection 위치) */}
+        <PageTableShell
+          variant="flow"
+          stickyToolbar={false}
+          toolbar={
+            <FilterToolbar
+              primary={
+                <div className="flex w-full items-center gap-2 md:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => shiftDay(-1)}
+                    className={`${dayNavBtnClass} flex-1 md:flex-none`}
+                    aria-label="이전 날"
+                  >
+                    ◀ 이전날
+                  </button>
+                  <span className="min-w-0 flex-1 text-center text-sm font-medium text-text md:min-w-[10rem]">
+                    {formatWorkDate(date)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => shiftDay(1)}
+                    className={`${dayNavBtnClass} flex-1 md:flex-none`}
+                    aria-label="다음 날"
+                  >
+                    다음날 ▶
+                  </button>
+                </div>
+              }
+              aside={
+                <>
+                  <p className="text-xs text-muted md:text-right">
+                    시프트가 고정(🔒)된 작업자는 설정값을 우선 적용합니다. 미정인 작업자는 당일 기록
+                    시간대로 자동 판단하며, 기록이 없으면 데이터 없음으로 표시됩니다.
+                  </p>
+                  {exportRangeTooLong ? (
+                    <p className="text-xs text-warn md:text-right">
+                      현황 엑셀은 최대 {MAX_EXPORT_DAYS}일까지 선택할 수 있습니다. (현재{' '}
+                      {exportDayCount}일)
                     </p>
-                    {exportRangeTooLong ? (
-                      <p className="text-xs text-warn md:text-right">
-                        엑셀 다운로드는 최대 {MAX_EXPORT_DAYS}일까지 선택할 수 있습니다. (현재{' '}
-                        {exportDayCount}일)
-                      </p>
-                    ) : null}
-                  </>
-                }
+                  ) : null}
+                </>
+              }
+            >
+              <ProcessFilterSelect value={processFilter} onChange={setProcessFilter} />
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                disabled={!canExport}
+                className={exportBtnClass}
               >
-                <ProcessFilterSelect value={processFilter} onChange={setProcessFilter} />
-                <button
-                  type="button"
-                  onClick={handleExportExcel}
-                  disabled={!canExport}
-                  className={exportBtnClass}
-                >
-                  엑셀 다운로드
-                </button>
-                <DateRangePicker value={exportDateRange} onChange={setExportDateRange} />
-              </FilterToolbar>
-            }
-            table={
-              <>
-                <MobileSortSelect
-                  value={`${sortKey}:${sortDir}`}
-                  options={FREQUENT_SORT_OPTIONS}
-                  onChange={handleMobileSort}
-                />
-                <div className="md:hidden">
+                현황 엑셀
+              </button>
+              <DateRangePicker value={exportDateRange} onChange={setExportDateRange} />
+            </FilterToolbar>
+          }
+          table={
+            <>
+              <MobileSortSelect
+                value={`${sortKey}:${sortDir}`}
+                options={FREQUENT_SORT_OPTIONS}
+                onChange={handleMobileSort}
+              />
+              <div className="md:hidden">
+                {groupedCompliance.map((group) => (
+                  <Fragment key={group.shift}>
+                    <div className="mb-2 mt-1 px-1 text-xs font-medium text-muted">
+                      {group.label} ({group.rows.length}명)
+                    </div>
+                    {group.rows.map((row) => (
+                      <MobileListCard
+                        key={row.worker_name}
+                        header={displayMap.get(row.worker_name) || row.worker_name}
+                        badge={<OverallBadge row={row} />}
+                        className={clickableRowClass}
+                        onClick={() => setModalWorker(row.worker_name)}
+                      >
+                        <MobileCardField label="시프트">
+                          <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
+                        </MobileCardField>
+                        <MobileCardField label="자주검사" className="col-span-2">
+                          <TrafficLightDots stages={complianceStagesForDots(row)} />
+                        </MobileCardField>
+                      </MobileListCard>
+                    ))}
+                  </Fragment>
+                ))}
+                {compliance.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-muted">
+                    기록된 작업자가 없습니다
+                  </div>
+                ) : null}
+              </div>
+              <table className="hidden w-full text-sm md:table">
+                <thead>
+                  <tr className="sticky top-0 z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
+                    <SortableTh
+                      column="worker_name"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      작업자
+                    </SortableTh>
+                    <SortableTh
+                      column="shift"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      시프트
+                    </SortableTh>
+                    <SortableTh
+                      column="nonCompliant"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      자주검사
+                    </SortableTh>
+                    <SortableTh
+                      column="overall"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                    >
+                      종합판정
+                    </SortableTh>
+                  </tr>
+                </thead>
+                <tbody>
                   {groupedCompliance.map((group) => (
                     <Fragment key={group.shift}>
-                      <div className="mb-2 mt-1 px-1 text-xs font-medium text-muted">
-                        {group.label} ({group.rows.length}명)
-                      </div>
+                      <tr className="border-b border-border bg-surface2/60">
+                        <td colSpan={4} className="px-4 pb-1 pt-4 text-xs font-medium text-muted">
+                          {group.label} ({group.rows.length}명)
+                        </td>
+                      </tr>
                       {group.rows.map((row) => (
-                        <MobileListCard
+                        <tr
                           key={row.worker_name}
-                          header={displayMap.get(row.worker_name) || row.worker_name}
-                          badge={<OverallBadge row={row} />}
-                          className={clickableRowClass}
+                          className={`border-b border-border last:border-0 ${clickableRowClass}`}
                           onClick={() => setModalWorker(row.worker_name)}
                         >
-                          <MobileCardField label="시프트">
+                          <td className="px-4 py-3 font-medium text-text">
+                            {displayMap.get(row.worker_name) || row.worker_name}
+                          </td>
+                          <td className="px-4 py-3">
                             <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
-                          </MobileCardField>
-                          <MobileCardField label="자주검사" className="col-span-2">
+                          </td>
+                          <td className="px-4 py-3">
                             <TrafficLightDots stages={complianceStagesForDots(row)} />
-                          </MobileCardField>
-                        </MobileListCard>
+                          </td>
+                          <td className="px-4 py-3">
+                            <OverallBadge row={row} />
+                          </td>
+                        </tr>
                       ))}
                     </Fragment>
                   ))}
-                  {compliance.length === 0 ? (
-                    <div className="py-12 text-center text-xs text-muted">
-                      기록된 작업자가 없습니다
-                    </div>
-                  ) : null}
-                </div>
-                <table className="hidden w-full text-sm md:table">
-                  <thead>
-                    <tr className="sticky top-0 z-[1] border-b border-border bg-surface2 text-left text-xs font-medium text-muted">
-                      <SortableTh
-                        column="worker_name"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      >
-                        작업자
-                      </SortableTh>
-                      <SortableTh
-                        column="shift"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      >
-                        시프트
-                      </SortableTh>
-                      <SortableTh
-                        column="nonCompliant"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      >
-                        자주검사
-                      </SortableTh>
-                      <SortableTh
-                        column="overall"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                      >
-                        종합판정
-                      </SortableTh>
+                  {compliance.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-12 text-center text-xs text-muted">
+                        기록된 작업자가 없습니다
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {groupedCompliance.map((group) => (
-                      <Fragment key={group.shift}>
-                        <tr className="border-b border-border bg-surface2/60">
-                          <td colSpan={4} className="px-4 pb-1 pt-4 text-xs font-medium text-muted">
-                            {group.label} ({group.rows.length}명)
-                          </td>
-                        </tr>
-                        {group.rows.map((row) => (
-                          <tr
-                            key={row.worker_name}
-                            className={`border-b border-border last:border-0 ${clickableRowClass}`}
-                            onClick={() => setModalWorker(row.worker_name)}
-                          >
-                            <td className="px-4 py-3 font-medium text-text">
-                              {displayMap.get(row.worker_name) || row.worker_name}
-                            </td>
-                            <td className="px-4 py-3">
-                              <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
-                            </td>
-                            <td className="px-4 py-3">
-                              <TrafficLightDots stages={complianceStagesForDots(row)} />
-                            </td>
-                            <td className="px-4 py-3">
-                              <OverallBadge row={row} />
-                            </td>
-                          </tr>
-                        ))}
-                      </Fragment>
-                    ))}
-                    {compliance.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-4 py-12 text-center text-xs text-muted">
-                          기록된 작업자가 없습니다
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </>
-            }
-          />
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-24 pt-4 md:px-8">
+                  )}
+                </tbody>
+              </table>
+            </>
+          }
+        />
+
+        {/* 하단: 사진 갤러리 (3정5S와 동일 — pt-2 + flow shell) */}
+        <div className="pt-2">
           <PageTableShell
             variant="flow"
             stickyToolbar={false}
             toolbar={
               <FilterToolbar
-                primary={<DateRangePicker value={galleryDateRange} onChange={setGalleryDateRange} />}
+                primary={
+                  <DateRangePicker value={galleryDateRange} onChange={setGalleryDateRange} />
+                }
               >
                 <select
                   className={selectClass}
@@ -773,7 +748,7 @@ export default function FrequentCheckPage() {
             }
           />
         </div>
-      )}
+      </div>
 
       {modalWorker ? (
         <WorkerHistoryModal
@@ -794,7 +769,7 @@ export default function FrequentCheckPage() {
         />
       ) : null}
 
-      {viewTab === 'gallery' && selectedCount > 0 ? (
+      {selectedCount > 0 ? (
         <GalleryFloatingBar count={selectedCount}>
           <button
             type="button"
