@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getCompanyId } from '../../../lib/company';
-import { createKnowledge, listKnowledge } from '../../../lib/knowledgeAdmin';
+import {
+  countActiveKnowledge,
+  createKnowledge,
+  listKnowledge,
+} from '../../../lib/knowledgeAdmin';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,17 +15,20 @@ export async function GET(request) {
     const companyId = await getCompanyId();
     const { searchParams } = new URL(request.url);
     const sourceType = searchParams.get('sourceType') || undefined;
-    const activeFilter = searchParams.get('active') || 'all';
+    const activeFilter = searchParams.get('active') || 'active';
     const search = searchParams.get('search') || undefined;
     const sort = searchParams.get('sort') === 'helpful' ? 'helpful' : 'latest';
 
-    const items = await listKnowledge(companyId, {
-      sourceType,
-      activeFilter,
-      search,
-      sort,
-    });
-    return NextResponse.json({ items });
+    const [items, activeCount] = await Promise.all([
+      listKnowledge(companyId, {
+        sourceType,
+        activeFilter,
+        search,
+        sort,
+      }),
+      countActiveKnowledge(companyId),
+    ]);
+    return NextResponse.json({ items, activeCount });
   } catch (err) {
     return NextResponse.json({ error: err?.message || '목록 조회 실패' }, { status: 500 });
   }

@@ -23,12 +23,6 @@ const SOURCE_FILTERS = [
   ...SOURCE_TYPES.map((t) => ({ id: t, label: SOURCE_TYPE_LABELS[t] })),
 ];
 
-const ACTIVE_FILTERS = [
-  { id: 'all', label: '전체' },
-  { id: 'active', label: '활성' },
-  { id: 'inactive', label: '비활성' },
-];
-
 function formatDateTime(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -107,11 +101,12 @@ function SignalBadge({ unused, review }) {
 
 export default function KnowledgePage() {
   const [items, setItems] = useState([]);
+  const [activeCount, setActiveCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const [sourceType, setSourceType] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [includeInactive, setIncludeInactive] = useState(false);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [sort, setSort] = useState('latest');
@@ -142,7 +137,7 @@ export default function KnowledgePage() {
       setLoading(true);
       const params = new URLSearchParams();
       if (sourceType) params.set('sourceType', sourceType);
-      if (activeFilter !== 'all') params.set('active', activeFilter);
+      params.set('active', includeInactive ? 'all' : 'active');
       if (search.trim()) params.set('search', search.trim());
       if (sort === 'helpful') params.set('sort', 'helpful');
 
@@ -150,13 +145,14 @@ export default function KnowledgePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '목록 조회 실패');
       setItems(json.items || []);
+      setActiveCount(json.activeCount ?? 0);
       setError(null);
     } catch (err) {
       setError(err.message || '목록을 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
-  }, [sourceType, activeFilter, search, sort]);
+  }, [sourceType, includeInactive, search, sort]);
 
   useEffect(() => {
     load();
@@ -220,9 +216,7 @@ export default function KnowledgePage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '변경 실패');
-      setItems((prev) =>
-        prev.map((k) => (k.id === item.id ? { ...k, is_active: !item.is_active } : k))
-      );
+      await load();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -318,6 +312,9 @@ export default function KnowledgePage() {
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-lg bg-accentSoft px-2.5 py-1 text-xs font-medium text-accent">
+            활성 {activeCount}건
+          </span>
           <input
             type="search"
             value={searchInput}
@@ -335,7 +332,7 @@ export default function KnowledgePage() {
           </select>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {SOURCE_FILTERS.map((f) => (
             <button
               key={f.id || 'all'}
@@ -351,20 +348,17 @@ export default function KnowledgePage() {
             </button>
           ))}
           <span className="mx-1 w-px self-stretch bg-border" />
-          {ACTIVE_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setActiveFilter(f.id)}
-              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                activeFilter === f.id
-                  ? 'bg-accentSoft text-accent'
-                  : 'bg-surface2 text-muted hover:text-text'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => setIncludeInactive((v) => !v)}
+            className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+              includeInactive
+                ? 'bg-accentSoft text-accent'
+                : 'bg-surface2 text-muted hover:text-text'
+            }`}
+          >
+            비활성 포함
+          </button>
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-border">
@@ -396,10 +390,17 @@ export default function KnowledgePage() {
                   return (
                     <tr
                       key={item.id}
-                      className={!item.is_active ? 'opacity-60' : undefined}
+                      className={!item.is_active ? 'bg-surface2/40 opacity-60' : undefined}
                     >
                       <td className="max-w-[200px] px-4 py-3 font-medium text-text">
-                        {previewText(item.question_text, 60)}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span>{previewText(item.question_text, 60)}</span>
+                          {!item.is_active ? (
+                            <span className="inline-flex rounded-full bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                              비활성
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="max-w-[240px] px-4 py-3 text-muted">
                         {previewText(item.answer_text, 80)}
