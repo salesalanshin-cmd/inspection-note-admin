@@ -6,7 +6,13 @@ import { useRouter } from 'next/navigation';
 import { FileUp, X } from 'lucide-react';
 import PageHeader from '../../../components/PageHeader';
 import ConfirmDialog from '../../../components/ConfirmDialog';
-import { ALLOWED_EXTENSIONS } from '../../../lib/documents/constants';
+import ExcelUploadOptions from '../../../components/ExcelUploadOptions';
+import {
+  ALLOWED_ACCEPT,
+  ALLOWED_EXTENSIONS,
+  detectFileType,
+  isExcelFileType,
+} from '../../../lib/documents/constants';
 
 const btnPrimary =
   'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0';
@@ -33,7 +39,15 @@ export default function DocumentUploadPage() {
       const names = new Set(prev.map((f) => f.name));
       const merged = [...prev];
       for (const file of incoming) {
-        if (!names.has(file.name)) merged.push(file);
+        if (!names.has(file.name)) {
+          merged.push({
+            name: file.name,
+            file,
+            xlsxOptions: isExcelFileType(detectFileType(file.name))
+              ? { useRecommended: true }
+              : null,
+          });
+        }
       }
       return merged;
     });
@@ -43,11 +57,20 @@ export default function DocumentUploadPage() {
     setQueue((prev) => prev.filter((f) => f.name !== name));
   }
 
+  function updateXlsxOptions(name, xlsxOptions) {
+    setQueue((prev) =>
+      prev.map((item) => (item.name === name ? { ...item, xlsxOptions } : item))
+    );
+  }
+
   async function uploadOne(file, options = {}) {
     const form = new FormData();
     form.append('file', file);
     form.append('isRevision', options.isRevision ? 'true' : 'false');
     if (options.supersedesId) form.append('supersedesId', options.supersedesId);
+    if (options.xlsxOptions) {
+      form.append('xlsxOptions', JSON.stringify(options.xlsxOptions));
+    }
 
     const res = await fetch('/api/documents/upload', { method: 'POST', body: form });
     const text = await res.text();
@@ -75,27 +98,32 @@ export default function DocumentUploadPage() {
     return json.existing;
   }
 
-  async function processQueue(files, startIndex = 0) {
-    if (startIndex >= files.length) {
+  async function processQueue(items, startIndex = 0) {
+    if (startIndex >= items.length) {
       router.push('/documents');
       return;
     }
 
-    const file = files[startIndex];
+    const item = items[startIndex];
+    const file = item.file;
     const existing = await checkDuplicate(file.name);
 
     if (existing) {
       setRevisionPrompt({
         file,
         existing,
-        files,
+        files: items,
         index: startIndex,
+        xlsxOptions: item.xlsxOptions,
       });
       return;
     }
 
-    await uploadOne(file, { isRevision: false });
-    await processQueue(files, startIndex + 1);
+    const xlsxOptions = isExcelFileType(detectFileType(file.name))
+      ? item.xlsxOptions || { useRecommended: true }
+      : undefined;
+    await uploadOne(file, { isRevision: false, xlsxOptions });
+    await processQueue(items, startIndex + 1);
   }
 
   async function handleStartUpload() {
@@ -112,13 +140,16 @@ export default function DocumentUploadPage() {
 
   async function handleRevisionChoice(isRevision) {
     if (!revisionPrompt) return;
-    const { file, existing, files, index } = revisionPrompt;
+    const { file, existing, files, index, xlsxOptions } = revisionPrompt;
     setRevisionPrompt(null);
     setUploading(true);
     try {
       await uploadOne(file, {
         isRevision,
         supersedesId: isRevision ? existing.id : undefined,
+        xlsxOptions: isExcelFileType(detectFileType(file.name))
+          ? xlsxOptions || { useRecommended: true }
+          : undefined,
       });
       await processQueue(files, index + 1);
     } catch (err) {
@@ -133,7 +164,7 @@ export default function DocumentUploadPage() {
       <PageHeader
         eyebrow="KNOWLEDGE BASE"
         title="문서 업로드"
-        description="PDF, DOCX, TXT · 여러 파일 동시 업로드 가능"
+        description="PDF, DOCX, TXT, XLSX, XLS · 여러 파일 동시 업로드 가능"
         actions={
           <Link href="/documents" className={btnSecondary}>
             목록으로
@@ -165,12 +196,12 @@ export default function DocumentUploadPage() {
         >
           <FileUp className="mb-3 h-10 w-10 text-accent" />
           <p className="text-sm font-medium text-text">파일을 끌어다 놓거나 클릭하여 선택</p>
-          <p className="mt-1 text-xs text-muted">PDF · DOCX · TXT</p>
+          <p className="mt-1 text-xs text-muted">PDF · DOCX · TXT · XLSX · XLS</p>
           <input
             ref={inputRef}
             type="file"
             multiple
-            accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+            accept={ALLOWED_ACCEPT}
             className="hidden"
             onChange={(e) => {
               addFiles(e.target.files);
@@ -185,51 +216,53 @@ export default function DocumentUploadPage() {
               업로드 대기 ({queue.length})
             </div>
             <ul className="divide-y divide-border">
-              {queue.map((file) => (
-                <li key={file.name} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                  <span className="truncate text-text">{file.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeFile(file.name)}
-                    className="rounded-lg p-1 text-muted hover:bg-surface2 hover:text-text"
-                    aria-label="제거"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+              {queue.map((item) => (
+                <li key={item.name} className="px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-text">{item.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(item.name)}
+                      className="rounded-lg p-1 text-muted hover:bg-surface2 hover:text-text"
+                      aria-label="제거"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {isExcelFileType(detectFileType(item.name)) ? (
+                    <ExcelUploadOptions
+                      file={item.file}
+                      value={item.xlsxOptions || { useRecommended: true }}
+                      onChange={(next) => updateXlsxOptions(item.name, next)}
+                    />
+                  ) : null}
                 </li>
               ))}
             </ul>
+            <div className="border-t border-border px-4 py-3">
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={uploading}
+                onClick={handleStartUpload}
+              >
+                {uploading ? '업로드 중…' : '업로드 시작'}
+              </button>
+            </div>
           </div>
         ) : null}
-
-        <div className="flex justify-end gap-2">
-          <Link href="/documents" className={btnSecondary}>
-            취소
-          </Link>
-          <button
-            type="button"
-            className={btnPrimary}
-            disabled={!queue.length || uploading}
-            onClick={handleStartUpload}
-          >
-            {uploading ? '업로드 중...' : `${queue.length || 0}개 업로드`}
-          </button>
-        </div>
       </div>
 
-      <ConfirmDialog
-        open={Boolean(revisionPrompt)}
-        title="개정판 확인"
-        message={
-          revisionPrompt
-            ? `같은 이름의 활성 문서가 있습니다.\n「${revisionPrompt.existing.title || revisionPrompt.existing.file_name}」(v${revisionPrompt.existing.version})의 개정판인가요?\n\n개정판이면 이전 버전은 비활성화되고 버전이 올라갑니다. 별개 문서면 새로 등록됩니다.`
-            : ''
-        }
-        confirmLabel="개정판입니다"
-        cancelLabel="별개 문서입니다"
-        onConfirm={() => handleRevisionChoice(true)}
-        onCancel={() => handleRevisionChoice(false)}
-      />
+      {revisionPrompt ? (
+        <ConfirmDialog
+          title="같은 파일명이 있습니다"
+          message={`「${revisionPrompt.existing.title || revisionPrompt.existing.file_name}」이(가) 이미 있습니다. 개정판으로 올릴까요?`}
+          confirmLabel="개정판으로 업로드"
+          cancelLabel="새 문서로 업로드"
+          onConfirm={() => handleRevisionChoice(true)}
+          onCancel={() => handleRevisionChoice(false)}
+        />
+      ) : null}
     </div>
   );
 }

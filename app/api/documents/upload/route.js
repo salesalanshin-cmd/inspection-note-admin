@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getCompanyId } from '../../../../lib/company';
 import { supabase } from '../../../../lib/supabase';
-import { DOCUMENT_BUCKET, detectFileType } from '../../../../lib/documents/constants';
+import {
+  DOCUMENT_BUCKET,
+  detectFileType,
+  isExcelFileType,
+} from '../../../../lib/documents/constants';
 import {
   createDocumentRow,
   deactivateDocument,
   getDocument,
   updateDocumentStatus,
+  uploadWorkJson,
 } from '../../../../lib/documents/db';
 import { toUploadUserMessage } from '../../../../lib/documents/fileName';
 import { uploadErrorResponse } from '../../../../lib/documents/uploadResponse';
@@ -29,6 +34,29 @@ async function markDocumentFailed(documentId, companyId, rawError, prefix = 'upl
   }
 }
 
+function parseXlsxOptions(form) {
+  const raw = form.get('xlsxOptions');
+  if (!raw || typeof raw === 'object') return null;
+  try {
+    const parsed = JSON.parse(String(raw));
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      sheetNames: Array.isArray(parsed.sheetNames) ? parsed.sheetNames : undefined,
+      sheetModes:
+        parsed.sheetModes && typeof parsed.sheetModes === 'object'
+          ? parsed.sheetModes
+          : undefined,
+      useRecommended: Boolean(parsed.useRecommended),
+      parseMode:
+        parsed.parseMode === 'flow' || parsed.parseMode === 'table'
+          ? parsed.parseMode
+          : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request) {
   let doc = null;
   let companyId = null;
@@ -43,6 +71,7 @@ export async function POST(request) {
     const title = form.get('title')?.toString()?.trim() || '';
     const folderIdRaw = form.get('folderId')?.toString()?.trim() || null;
     let folderId = folderIdRaw;
+    const xlsxOptions = parseXlsxOptions(form);
 
     if (!file || typeof file === 'string') {
       return uploadErrorResponse('missing file', '파일이 필요합니다.', 400);
@@ -53,7 +82,7 @@ export async function POST(request) {
     if (!fileType) {
       return uploadErrorResponse(
         `unsupported file type: ${originalFileName}`,
-        'PDF, DOCX, TXT 파일만 업로드할 수 있습니다.',
+        'PDF, DOCX, TXT, XLSX, XLS 파일만 업로드할 수 있습니다.',
         400
       );
     }
@@ -74,7 +103,6 @@ export async function POST(request) {
       supersedes = prev.id;
       await deactivateDocument(prev.id, companyId);
       if (!folderId && prev.folder_id) {
-        // 개정판은 기존 문서 폴더 유지
         folderId = prev.folder_id;
       }
     }
@@ -94,6 +122,7 @@ export async function POST(request) {
       file_name: doc.file_name,
       file_path: doc.file_path,
       version: doc.version,
+      fileType,
     });
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -110,6 +139,17 @@ export async function POST(request) {
       return uploadErrorResponse(rawMessage, toUploadUserMessage(rawMessage), 500, {
         public: { documentId: doc.id },
         context: { file_path: doc.file_path, file_name: doc.file_name },
+      });
+    }
+
+    // 엑셀 시트 모드 선택은 work JSON에만 보관 (DB 컬럼 추가 없음, 추출 후 삭제)
+    if (isExcelFileType(fileType)) {
+      await uploadWorkJson(companyId, doc.id, doc.version, {
+        pages: [],
+        nextPage: 1,
+        totalPages: null,
+        extractMethod: 'xlsx',
+        xlsxOptions: xlsxOptions || { useRecommended: true },
       });
     }
 

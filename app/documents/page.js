@@ -19,7 +19,8 @@ import ModalShell, { ModalFooterActions } from '../../components/ModalShell';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { getCompanyId } from '../../lib/company';
 import { supabase } from '../../lib/supabase';
-import { ALLOWED_EXTENSIONS } from '../../lib/documents/constants';
+import { ALLOWED_ACCEPT, ALLOWED_EXTENSIONS, detectFileType, isExcelFileType } from '../../lib/documents/constants';
+import ExcelUploadOptions from '../../components/ExcelUploadOptions';
 import {
   buildFolderTree,
   folderBreadcrumb,
@@ -614,6 +615,9 @@ export default function KnowledgeDocumentsPage() {
     form.append('isRevision', options.isRevision ? 'true' : 'false');
     if (options.supersedesId) form.append('supersedesId', options.supersedesId);
     if (options.folderId) form.append('folderId', options.folderId);
+    if (options.xlsxOptions) {
+      form.append('xlsxOptions', JSON.stringify(options.xlsxOptions));
+    }
 
     const res = await fetch('/api/documents/upload', { method: 'POST', body: form });
     const json = await res.json().catch(() => ({}));
@@ -628,27 +632,39 @@ export default function KnowledgeDocumentsPage() {
     return json.existing;
   }
 
-  async function processUploadQueue(files, startIndex = 0, options = {}) {
+  async function processUploadQueue(items, startIndex = 0, options = {}) {
     const folderId = selectedFolderId || '';
-    for (let i = startIndex; i < files.length; i += 1) {
-      const file = files[i];
+    for (let i = startIndex; i < items.length; i += 1) {
+      const item = items[i];
+      const file = item.file || item;
+      const fileName = item.name || file.name;
       setUploadQueue((q) =>
-        q.map((item) => (item.name === file.name ? { ...item, status: 'uploading' } : item))
+        q.map((row) => (row.name === fileName ? { ...row, status: 'uploading' } : row))
       );
       try {
         const existing = await checkDuplicate(file.name);
         if (existing && !options.skipDuplicateCheck) {
-          setRevisionPrompt({ file, existing, files, index: i, folderId });
+          setRevisionPrompt({
+            file,
+            existing,
+            files: items,
+            index: i,
+            folderId,
+            xlsxOptions: item.xlsxOptions,
+          });
           return;
         }
-        await uploadOne(file, { isRevision: false, folderId });
+        const xlsxOptions = isExcelFileType(detectFileType(file.name))
+          ? item.xlsxOptions || { useRecommended: true }
+          : undefined;
+        await uploadOne(file, { isRevision: false, folderId, xlsxOptions });
         setUploadQueue((q) =>
-          q.map((item) => (item.name === file.name ? { ...item, status: 'done' } : item))
+          q.map((row) => (row.name === fileName ? { ...row, status: 'done' } : row))
         );
       } catch (err) {
         setUploadQueue((q) =>
-          q.map((item) =>
-            item.name === file.name ? { ...item, status: 'error', error: err.message } : item
+          q.map((row) =>
+            row.name === fileName ? { ...row, status: 'error', error: err.message } : row
           )
         );
       }
@@ -664,25 +680,60 @@ export default function KnowledgeDocumentsPage() {
       const merged = [...prev];
       for (const file of incoming) {
         if (!names.has(file.name)) {
-          merged.push({ name: file.name, file, status: 'pending' });
+          merged.push({
+            name: file.name,
+            file,
+            status: 'pending',
+            xlsxOptions: isExcelFileType(detectFileType(file.name))
+              ? { useRecommended: true }
+              : null,
+          });
         }
       }
       return merged;
     });
   }
 
+  function updateQueueXlsxOptions(fileName, xlsxOptions) {
+    setUploadQueue((q) =>
+      q.map((item) => (item.name === fileName ? { ...item, xlsxOptions } : item))
+    );
+  }
+
+  async function uploadWithRecommended(file) {
+    updateQueueXlsxOptions(file.name, { useRecommended: true });
+    setUploadQueue((q) =>
+      q.map((item) => (item.name === file.name ? { ...item, status: 'uploading' } : item))
+    );
+    try {
+      const folderId = selectedFolderId || '';
+      await uploadOne(file, {
+        isRevision: false,
+        folderId,
+        xlsxOptions: { useRecommended: true },
+      });
+      setUploadQueue((q) =>
+        q.map((item) => (item.name === file.name ? { ...item, status: 'done' } : item))
+      );
+      fetchAll();
+    } catch (err) {
+      setUploadQueue((q) =>
+        q.map((item) =>
+          item.name === file.name ? { ...item, status: 'error', error: err.message } : item
+        )
+      );
+    }
+  }
+
   async function startUploads() {
     const pending = uploadQueue.filter((q) => q.status === 'pending' || q.status === 'error');
     if (!pending.length) return;
-    await processUploadQueue(
-      pending.map((p) => p.file),
-      0
-    );
+    await processUploadQueue(pending, 0);
   }
 
   async function handleRevisionChoice(isRevision) {
     if (!revisionPrompt) return;
-    const { file, existing, files, index, folderId } = revisionPrompt;
+    const { file, existing, files, index, folderId, xlsxOptions } = revisionPrompt;
     setRevisionPrompt(null);
     setUploadQueue((q) =>
       q.map((item) => (item.name === file.name ? { ...item, status: 'uploading' } : item))
@@ -692,6 +743,9 @@ export default function KnowledgeDocumentsPage() {
         isRevision,
         supersedesId: isRevision ? existing.id : undefined,
         folderId,
+        xlsxOptions: isExcelFileType(detectFileType(file.name))
+          ? xlsxOptions || { useRecommended: true }
+          : undefined,
       });
       setUploadQueue((q) =>
         q.map((item) => (item.name === file.name ? { ...item, status: 'done' } : item))
@@ -709,7 +763,15 @@ export default function KnowledgeDocumentsPage() {
   async function uploadRevision(file, doc) {
     if (!file) return;
     try {
-      await uploadOne(file, { isRevision: true, supersedesId: doc.id, folderId: doc.folder_id || '' });
+      const xlsxOptions = isExcelFileType(detectFileType(file.name))
+        ? { useRecommended: true }
+        : undefined;
+      await uploadOne(file, {
+        isRevision: true,
+        supersedesId: doc.id,
+        folderId: doc.folder_id || '',
+        xlsxOptions,
+      });
       fetchAll();
       setEditDoc(null);
     } catch (err) {
@@ -899,7 +961,7 @@ export default function KnowledgeDocumentsPage() {
                 ref={uploadInputRef}
                 type="file"
                 multiple
-                accept=".pdf,.docx,.txt"
+                accept={ALLOWED_ACCEPT}
                 className="hidden"
                 onChange={(e) => {
                   addUploadFiles(e.target.files);
@@ -908,29 +970,53 @@ export default function KnowledgeDocumentsPage() {
               />
             </div>
             {uploadQueue.length > 0 ? (
-              <ul className="mt-3 space-y-1">
+              <ul className="mt-3 space-y-3">
                 {uploadQueue.map((item) => (
-                  <li key={item.name} className="flex items-center justify-between text-xs">
-                    <span className="truncate text-text">{item.name}</span>
-                    <span
-                      className={
-                        item.status === 'done'
-                          ? 'text-good'
+                  <li key={item.name} className="text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-text">{item.name}</span>
+                      <span
+                        className={
+                          item.status === 'done'
+                            ? 'text-good'
+                            : item.status === 'error'
+                              ? 'text-danger'
+                              : item.status === 'uploading'
+                                ? 'text-warn'
+                                : 'text-muted'
+                        }
+                      >
+                        {item.status === 'done'
+                          ? '완료'
                           : item.status === 'error'
-                            ? 'text-danger'
+                            ? item.error || '실패'
                             : item.status === 'uploading'
-                              ? 'text-warn'
-                              : 'text-muted'
-                      }
-                    >
-                      {item.status === 'done'
-                        ? '완료'
-                        : item.status === 'error'
-                          ? item.error || '실패'
-                          : item.status === 'uploading'
-                            ? '업로드 중…'
-                            : '대기'}
-                    </span>
+                              ? '업로드 중…'
+                              : '대기'}
+                      </span>
+                    </div>
+                    {item.status === 'pending' &&
+                    isExcelFileType(detectFileType(item.name)) ? (
+                      <div className="mt-2">
+                        <div className="mb-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className={btnSecondary}
+                            onClick={() => uploadWithRecommended(item.file)}
+                          >
+                            추천값으로 진행
+                          </button>
+                          <span className="self-center text-[11px] text-muted">
+                            또는 아래에서 시트·모드를 고른 뒤 「업로드 시작」
+                          </span>
+                        </div>
+                        <ExcelUploadOptions
+                          file={item.file}
+                          value={item.xlsxOptions || { useRecommended: true }}
+                          onChange={(next) => updateQueueXlsxOptions(item.name, next)}
+                        />
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -1092,7 +1178,7 @@ export default function KnowledgeDocumentsPage() {
               <label className="mb-1 block text-xs font-medium text-muted">개정판 업로드</label>
               <input
                 type="file"
-                accept=".pdf,.docx,.txt"
+                accept={ALLOWED_ACCEPT}
                 className="text-sm"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

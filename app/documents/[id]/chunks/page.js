@@ -121,27 +121,61 @@ export default function DocumentChunksPage() {
       />
 
       <div className="space-y-8 px-4 pb-8 pt-4 md:px-8">
+        {(() => {
+          const imageIssues = issues.filter((i) => i.issue === 'image_not_parsed');
+          const imageSheetCount = imageIssues.length;
+          if (!imageSheetCount) return null;
+          return (
+            <div className="rounded-xl border border-warn/40 bg-warnSoft/40 px-4 py-3 text-sm text-text">
+              도면 {imageSheetCount}개 시트는 텍스트로 읽지 않았습니다. 측정 위치는 원본 기준서
+              도면을 참조하세요.
+            </div>
+          );
+        })()}
+
         <section>
           <h2 className="mb-3 text-sm font-semibold text-text">조각 목록</h2>
           <div className="space-y-3">
-            {chunks.map((chunk) => (
+            {chunks.map((chunk) => {
+              const isExcel =
+                chunk.page_from == null ||
+                /·\s*\d+-\d+행/.test(String(chunk.section_label || ''));
+              return (
               <div
                 key={chunk.id}
                 className="rounded-xl border border-border bg-surface p-4 text-sm"
               >
                 <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
                   <span className="font-medium text-text">#{chunk.chunk_index}</span>
-                  {chunk.page_from != null ? (
-                    <span>
-                      p.{chunk.page_from}
-                      {chunk.page_to != null && chunk.page_to !== chunk.page_from
-                        ? `–${chunk.page_to}`
-                        : ''}
-                    </span>
-                  ) : null}
-                  {chunk.section_label ? (
-                    <span className="rounded-full bg-accentSoft px-2 py-0.5 text-accent">
-                      {chunk.section_label}
+                  {isExcel ? (
+                    chunk.section_label ? (
+                      <span className="rounded-full bg-accentSoft px-2 py-0.5 text-accent">
+                        {chunk.section_label}
+                      </span>
+                    ) : (
+                      <span>엑셀 조각</span>
+                    )
+                  ) : (
+                    <>
+                      {chunk.page_from != null ? (
+                        <span>
+                          p.{chunk.page_from}
+                          {chunk.page_to != null && chunk.page_to !== chunk.page_from
+                            ? `–${chunk.page_to}`
+                            : ''}
+                        </span>
+                      ) : null}
+                      {chunk.section_label ? (
+                        <span className="rounded-full bg-accentSoft px-2 py-0.5 text-accent">
+                          {chunk.section_label}
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+                  {chunk.extract_method &&
+                  ['table', 'flow', 'mixed'].includes(chunk.extract_method) ? (
+                    <span className="rounded-full bg-surface2 px-2 py-0.5 text-muted">
+                      {chunk.extract_method}
                     </span>
                   ) : null}
                   {chunk.is_verified ? (
@@ -153,7 +187,8 @@ export default function DocumentChunksPage() {
                   본문 수정
                 </button>
               </div>
-            ))}
+              );
+            })}
             {!chunks.length ? (
               <p className="text-sm text-muted">조각이 없습니다. 처리가 완료될 때까지 기다려 주세요.</p>
             ) : null}
@@ -161,12 +196,16 @@ export default function DocumentChunksPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-sm font-semibold text-text">페이지 이슈</h2>
+          <h2 className="mb-3 text-sm font-semibold text-text">
+            {['xlsx', 'xls'].includes(doc.file_type) ? '시트 이슈' : '페이지 이슈'}
+          </h2>
           <div className="overflow-x-auto rounded-xl border border-border">
             <table className="min-w-full text-sm">
               <thead className="bg-surface2 text-left text-xs text-muted">
                 <tr>
-                  <th className="px-4 py-3">페이지</th>
+                  <th className="px-4 py-3">
+                    {['xlsx', 'xls'].includes(doc.file_type) ? '시트 순번' : '페이지'}
+                  </th>
                   <th className="px-4 py-3">이슈</th>
                   <th className="px-4 py-3">해결</th>
                   <th className="px-4 py-3">작업</th>
@@ -194,7 +233,7 @@ export default function DocumentChunksPage() {
                 {!issues.length ? (
                   <tr>
                     <td colSpan={4} className="px-4 py-8 text-center text-muted">
-                      기록된 페이지 이슈가 없습니다.
+                      기록된 이슈가 없습니다.
                     </td>
                   </tr>
                 ) : null}
