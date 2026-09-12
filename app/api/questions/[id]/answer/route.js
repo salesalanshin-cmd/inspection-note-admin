@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { resolveAskAuth } from '../../../../../lib/askAuth.js';
 import { insertKnowledgeFromAnswer } from '../../../../../lib/knowledgeStore.js';
 import { getFirstWorkerQuestion } from '../../../../../lib/questions.js';
+import { notifyAnswerPosted } from '../../../../../lib/push.js';
 import { supabase } from '../../../../../lib/supabase.js';
 
 export const dynamic = 'force-dynamic';
@@ -159,6 +160,18 @@ export async function POST(request, { params }) {
           embeddingError: knowledgeErr?.message || '지식 저장 실패',
         };
       }
+    }
+
+    // 질문 작성자에게 푸시 — 실패해도 답변 등록은 이미 완료
+    try {
+      await notifyAnswerPosted({
+        companyId,
+        threadId,
+        workerName: thread.created_by_worker,
+      });
+    } catch (pushErr) {
+      // eslint-disable-next-line no-console
+      console.error('[questions/answer] push failed', pushErr);
     }
 
     return jsonWithCors({

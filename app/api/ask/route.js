@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { askQuestion } from '../../../lib/askService.js';
 import { resolveAskAuth } from '../../../lib/askAuth.js';
+import { notifyQuestionEscalated } from '../../../lib/push.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -44,6 +45,8 @@ export async function POST(request) {
     return jsonWithCors({ error: 'question이 필요합니다.' }, { status: 400 });
   }
 
+  const threadId = body.threadId?.toString()?.trim() || null;
+
   try {
     const matchCount = Number(body.matchCount) || 5;
     const minSimilarity = Number(body.minSimilarity) || 0.43;
@@ -53,6 +56,24 @@ export async function POST(request) {
       matchCount,
       minSimilarity,
     });
+
+    // AI가 답을 못 찾아 이관 — 관리자 푸시 (실패해도 응답은 정상)
+    // 어드민 /ask 테스트(session)는 스팸 방지로 제외. 앱(api_key) 또는 threadId 있을 때만.
+    if (
+      result.status === 'no_source' &&
+      (auth.authMethod === 'api_key' || threadId)
+    ) {
+      try {
+        await notifyQuestionEscalated({
+          companyId: auth.companyId,
+          threadId,
+          questionText: question,
+        });
+      } catch (pushErr) {
+        // eslint-disable-next-line no-console
+        console.error('[api/ask] push failed', pushErr);
+      }
+    }
 
     const payload = {
       answer: result.answer,

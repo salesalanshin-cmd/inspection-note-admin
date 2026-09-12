@@ -11,6 +11,8 @@ function isPublicPath(pathname) {
   if (pathname === '/api/ask' || pathname.startsWith('/api/ask/')) return true;
   // 앱 관리자 답변 — 라우트 내부에서 세션 또는 x-company-key 검증
   if (/^\/api\/questions\/[^/]+\/answer\/?$/.test(pathname)) return true;
+  // 앱 푸시 발송 요청 — 라우트 내부에서 세션 또는 x-company-key 검증
+  if (pathname === '/api/push/send' || pathname.startsWith('/api/push/')) return true;
   // Vercel Cron — 라우트 내부에서 CRON_SECRET 검증
   if (pathname.startsWith('/api/cron')) return true;
   if (pathname.startsWith('/_next')) return true;
