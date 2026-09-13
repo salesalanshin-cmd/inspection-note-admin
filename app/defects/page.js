@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { defectLabel, DEFECT_CODE_LABELS } from '../../lib/constants';
 import { parseMarkingData } from '../../lib/markingData';
@@ -14,11 +14,6 @@ import {
   downloadImagesAsZip,
 } from '../../lib/downloadImages';
 import { countPendingDefectNotifications } from '../../lib/defectNotificationQueue';
-import {
-  DEFECT_ACTION_STATUS,
-  DEFECT_ACTION_STATUS_LABELS,
-  fetchDefectActionSummaries,
-} from '../../lib/defectActions';
 import { supabase } from '../../lib/supabase';
 import { getCompanyId } from '../../lib/company';
 import {
@@ -35,55 +30,6 @@ import GalleryFloatingBar from '../../components/GalleryFloatingBar';
 import { MarkingCountBadge } from '../../components/MarkingCountBadge';
 import DateRangePicker from '../../components/DateRangePicker';
 import FilterToolbar from '../../components/FilterToolbar';
-
-const ACTION_FILTERS = [
-  { value: 'all', label: '전체' },
-  { value: 'needs_action', label: '조치 필요' },
-  { value: DEFECT_ACTION_STATUS.none, label: DEFECT_ACTION_STATUS_LABELS.none },
-  { value: DEFECT_ACTION_STATUS.pending, label: DEFECT_ACTION_STATUS_LABELS.pending },
-  { value: DEFECT_ACTION_STATUS.resolved, label: DEFECT_ACTION_STATUS_LABELS.resolved },
-  { value: DEFECT_ACTION_STATUS.unresolved, label: DEFECT_ACTION_STATUS_LABELS.unresolved },
-];
-
-function ActionStatusBadge({ summary }) {
-  const status = summary?.status || DEFECT_ACTION_STATUS.none;
-  const stale = Boolean(summary?.stale);
-  const label = DEFECT_ACTION_STATUS_LABELS[status] || DEFECT_ACTION_STATUS_LABELS.none;
-
-  if (status === DEFECT_ACTION_STATUS.unresolved) {
-    return (
-      <span className="inline-flex rounded-full bg-dangerSoft px-2 py-0.5 text-[10px] font-semibold text-danger ring-1 ring-danger/40">
-        {label}
-      </span>
-    );
-  }
-  if (status === DEFECT_ACTION_STATUS.pending && stale) {
-    return (
-      <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-semibold text-warn ring-1 ring-warn/50">
-        {label} · 24h+
-      </span>
-    );
-  }
-  if (status === DEFECT_ACTION_STATUS.pending) {
-    return (
-      <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
-        {label}
-      </span>
-    );
-  }
-  if (status === DEFECT_ACTION_STATUS.resolved) {
-    return (
-      <span className="inline-flex rounded-full bg-goodSoft px-2 py-0.5 text-[10px] font-medium text-good">
-        {label}
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex rounded-full bg-surface2 px-2 py-0.5 text-[10px] font-medium text-muted">
-      {label}
-    </span>
-  );
-}
 
 import {
   exportToExcel,
@@ -123,25 +69,8 @@ export default function DefectsPage() {
   const [trashConfirm, setTrashConfirm] = useState(false);
   const [trashLoading, setTrashLoading] = useState(false);
   const [pendingNotifyCount, setPendingNotifyCount] = useState(0);
-  const [actionFilter, setActionFilter] = useState('all');
-  const [actionSummaries, setActionSummaries] = useState(() => new Map());
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
     useGalleryBatchSelect();
-
-  const refreshActionSummaries = useCallback(async (rows) => {
-    const ids = (rows || []).map((d) => d.id).filter(Boolean);
-    if (!ids.length) {
-      setActionSummaries(new Map());
-      return;
-    }
-    try {
-      const map = await fetchDefectActionSummaries(ids);
-      setActionSummaries(map);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[defects] action summary load failed', err);
-    }
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,10 +91,6 @@ export default function DefectsPage() {
     () => filterDefectsForDisplay(defects, workerDirectory),
     [defects, workerDirectory]
   );
-
-  useEffect(() => {
-    refreshActionSummaries(visibleDefects);
-  }, [visibleDefects, refreshActionSummaries]);
 
   const displayMap = useMemo(
     () => buildWorkerDisplayNameMap(workerDirectory),
@@ -209,22 +134,12 @@ export default function DefectsPage() {
     [visibleDefects]
   );
 
-  const filtered = dateFilteredDefects.filter((d) => {
-    if (worker !== 'all' && d.worker_name !== worker) return false;
-    if (type !== 'all' && defectLabel(d) !== type) return false;
-    if (product !== 'all' && (d.product_name || '') !== product) return false;
-
-    const summary = actionSummaries.get(d.id);
-    const status = summary?.status || DEFECT_ACTION_STATUS.none;
-    if (actionFilter === 'all') return true;
-    if (actionFilter === 'needs_action') {
-      return (
-        status === DEFECT_ACTION_STATUS.none ||
-        status === DEFECT_ACTION_STATUS.unresolved
-      );
-    }
-    return status === actionFilter;
-  });
+  const filtered = dateFilteredDefects.filter(
+    (d) =>
+      (worker === 'all' || d.worker_name === worker) &&
+      (type === 'all' || defectLabel(d) === type) &&
+      (product === 'all' || (d.product_name || '') === product)
+  );
 
   useEffect(() => {
     if (product !== 'all' && !products.includes(product)) {
@@ -394,33 +309,6 @@ export default function DefectsPage() {
 
       <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
         <div className="shrink-0 space-y-3 bg-bg pb-4">
-          <div className="flex flex-wrap gap-2">
-            {ACTION_FILTERS.map((chip) => {
-              const active = actionFilter === chip.value;
-              const emphasize =
-                chip.value === 'needs_action' ||
-                chip.value === DEFECT_ACTION_STATUS.unresolved;
-              return (
-                <button
-                  key={chip.value}
-                  type="button"
-                  onClick={() => setActionFilter(chip.value)}
-                  className={`min-h-[36px] rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                    active
-                      ? emphasize
-                        ? 'bg-danger text-white'
-                        : 'bg-accent text-white'
-                      : emphasize
-                        ? 'border border-danger/30 bg-dangerSoft text-danger hover:bg-danger/10'
-                        : 'border border-border bg-surface text-muted hover:bg-surface2 hover:text-text'
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              );
-            })}
-          </div>
-
           <FilterToolbar primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}>
             <select
               value={worker}
@@ -559,12 +447,8 @@ export default function DefectsPage() {
                   </button>
                 </div>
                 <div className="p-2.5 text-[11px] md:text-xs">
-                  <div className="flex items-start justify-between gap-1">
-                    <div className="min-w-0 font-medium text-text">
-                      {(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) ||
-                        '작업자 미상'}
-                    </div>
-                    <ActionStatusBadge summary={actionSummaries.get(d.id)} />
+                  <div className="font-medium text-text">
+                    {(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '작업자 미상'}
                   </div>
                   {d.product_name ? (
                     <div className="mt-0.5 truncate text-muted" title={d.product_name}>
@@ -593,7 +477,6 @@ export default function DefectsPage() {
           productNameOptions={productNameOptions}
           onClose={() => setSelected(null)}
           onSaved={() => refetch()}
-          onActionSent={() => refreshActionSummaries(visibleDefects)}
         />
       )}
 

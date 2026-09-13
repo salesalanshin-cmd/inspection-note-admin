@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCompanyId } from '../../../../lib/company';
 import { authorizeCron } from '../../../../lib/cronAuth';
+import { processRecurredPushNotifications } from '../../../../lib/defectActions';
 import { processNextDocument } from '../../../../lib/documents/process';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,20 @@ export async function GET(request) {
   try {
     const companyId = await getCompanyId();
     const result = await processNextDocument(companyId);
-    return NextResponse.json(result);
+
+    let recurred = null;
+    try {
+      recurred = await processRecurredPushNotifications(companyId);
+    } catch (recurredErr) {
+      // eslint-disable-next-line no-console
+      console.error('[process-documents] recurred push', recurredErr);
+      recurred = {
+        ok: false,
+        error: recurredErr?.message || String(recurredErr),
+      };
+    }
+
+    return NextResponse.json({ ...result, recurred });
   } catch (err) {
     console.error('[process-documents]', err);
     return NextResponse.json(
