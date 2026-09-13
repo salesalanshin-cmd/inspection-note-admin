@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { getCompanyId } from '../lib/company';
 import { DEFECT_CODE_LABELS, defectLabel } from '../lib/constants';
@@ -17,6 +17,13 @@ import {
   insertAiCorrectionLog,
   resolveWasAiAccepted,
 } from '../lib/aiCorrectionLog';
+import {
+  fetchDefectActionMessages,
+  findDefectThread,
+  getActionOutcome,
+  getIneffectiveActions,
+  sendDefectAction,
+} from '../lib/defectActions';
 import AiClassifyStatus from './AiClassifyStatus';
 import AiMismatchDialog from './AiMismatchDialog';
 import AiSuggestionBanner from './AiSuggestionBanner';
@@ -50,12 +57,52 @@ function normalizeDefectCode(raw) {
   );
 }
 
+function formatDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('ko-KR');
+}
+
+function ActionOutcomeBadge({ outcome }) {
+  if (outcome === 'effective') {
+    return (
+      <span className="inline-flex rounded-full bg-goodSoft px-2 py-0.5 text-[11px] font-medium text-good">
+        해결됨
+      </span>
+    );
+  }
+  if (outcome === 'ineffective') {
+    return (
+      <span className="inline-flex rounded-full bg-dangerSoft px-2 py-0.5 text-[11px] font-medium text-danger">
+        미해결
+      </span>
+    );
+  }
+  if (outcome === 'unknown') {
+    return (
+      <span className="inline-flex rounded-full bg-surface2 px-2 py-0.5 text-[11px] font-medium text-muted">
+        결과 대기
+      </span>
+    );
+  }
+  return null;
+}
+
+function pickManagerWorker(workerDirectory) {
+  const managers = (workerDirectory || []).filter(
+    (w) => w?.role === 'manager' && w?.worker_name && !w.removed
+  );
+  return managers[0]?.worker_name || '관리자';
+}
+
 export default function DefectEditModal({
   report,
   workerDirectory,
   productNameOptions = [],
   onClose,
   onSaved,
+  onActionSent,
 }) {
   const [code, setCode] = useState(() => resolveInitialCode(report));
   const [productName, setProductName] = useState(() =>
@@ -84,12 +131,62 @@ export default function DefectEditModal({
   aiSuggestionRef.current = aiSuggestion;
   correctionReasonRef.current = correctionReason;
 
+  const [actionText, setActionText] = useState('');
+  const [notifyWorker, setNotifyWorker] = useState(true);
+  const [actionSending, setActionSending] = useState(false);
+  const [actionError, setActionError] = useState(null);
+  const [actionInfo, setActionInfo] = useState(null);
+  const [actionLoading, setActionLoading] = useState(true);
+  const [actionMessages, setActionMessages] = useState([]);
+
   const productDatalistId = `defect-product-names-${report.id}`;
 
   const aspectRatio =
     report.image_width > 0 && report.image_height > 0
       ? report.image_width / report.image_height
       : 4 / 3;
+
+  const loadActionHistory = useCallback(async () => {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const companyId = await getCompanyId();
+      const thread = await findDefectThread(report.id, companyId);
+      if (!thread) {
+        setActionMessages([]);
+        return;
+      }
+      const messages = await fetchDefectActionMessages(thread.id, companyId);
+      setActionMessages(messages);
+    } catch (err) {
+      setActionError(err.message || '조치 이력을 불러오지 못했습니다.');
+      setActionMessages([]);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [report.id]);
+
+  useEffect(() => {
+    loadActionHistory();
+  }, [loadActionHistory]);
+
+  const historyItems = useMemo(() => {
+    return (actionMessages || []).filter((m) => {
+      if (m.msg_type === 'action' && m.author_role === 'manager') return true;
+      if (m.author_role === 'worker' && (m.msg_type === 'result' || m.meta?.outcome)) {
+        return true;
+      }
+      return false;
+    });
+  }, [actionMessages]);
+
+  const ineffectiveActions = useMemo(
+    () => getIneffectiveActions(actionMessages),
+    [actionMessages]
+  );
+  const latestIneffective = ineffectiveActions.length
+    ? ineffectiveActions[ineffectiveActions.length - 1]
+    : null;
 
   function handleResetMarkings() {
     const restored = cloneMarkingData(originalMarkers.current);
@@ -119,13 +216,8 @@ export default function DefectEditModal({
       setAiSuggestion(suggestion);
       setAiCompletedAt(new Date());
 
-      // labels에 없는 코드면 드롭다운에 넣을 수 없음 — 배너만 표시
       if (!normalized) return;
-
-      // 현재 폼 값과 같으면 바로 안내만 (팝업 없음)
       if (normalized === codeRef.current) return;
-
-      // 다르면 덮어쓰지 않고 확인 팝업
       setPendingAi(suggestion);
     } catch (err) {
       setError(err.message);
@@ -171,6 +263,39 @@ export default function DefectEditModal({
       setError(err.message || '이미지 다운로드에 실패했습니다.');
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function handleSendAction() {
+    setActionError(null);
+    setActionInfo(null);
+    const text = actionText.trim();
+    if (!text) {
+      setActionError('조치 내용을 입력하세요.');
+      return;
+    }
+
+    setActionSending(true);
+    try {
+      await sendDefectAction({
+        report: {
+          ...report,
+          defect_code: codeRef.current || report.defect_code,
+          defect_type: DEFECT_CODE_LABELS[codeRef.current] || report.defect_type,
+          product_name: String(productNameRef.current || '').trim() || report.product_name,
+        },
+        actionText: text,
+        notifyWorker,
+        managerWorker: pickManagerWorker(workerDirectory),
+      });
+      setActionText('');
+      setActionInfo(notifyWorker ? '조치를 등록하고 알림을 보냈습니다.' : '조치를 등록했습니다.');
+      await loadActionHistory();
+      onActionSent?.();
+    } catch (err) {
+      setActionError(err.message || '조치 등록에 실패했습니다.');
+    } finally {
+      setActionSending(false);
     }
   }
 
@@ -237,7 +362,6 @@ export default function DefectEditModal({
       return;
     }
 
-    // 이번 세션에서 AI 판정을 실행한 경우만 이력에 AI 필드 기록
     const sessionAi = nextAi;
     const wasAiAccepted = resolveWasAiAccepted(!!sessionAi, sessionAi?.code, nextCode);
     await insertAiCorrectionLog({
@@ -265,7 +389,7 @@ export default function DefectEditModal({
       onConfirm={handleSave}
       cancelLabel="취소"
       confirmLabel={saving ? '저장 중...' : '저장'}
-      confirmDisabled={saving || classifying || !!pendingAi}
+      confirmDisabled={saving || classifying || !!pendingAi || actionSending}
     />
   );
 
@@ -278,6 +402,7 @@ export default function DefectEditModal({
       eyebrow="불량 기록 수정"
       onClose={onClose}
       ariaLabel="불량 기록 수정"
+      maxWidthClass="md:max-w-5xl"
       footer={<div className="md:hidden">{footerButtons}</div>}
     >
       <div className="flex flex-col md:flex-row md:overflow-hidden">
@@ -427,6 +552,109 @@ export default function DefectEditModal({
           </div>
 
           <div className="mt-6 hidden justify-end gap-2 md:flex">{footerButtons}</div>
+        </div>
+      </div>
+
+      <div className="border-t border-border p-4 md:p-5">
+        <h3 className="text-sm font-semibold text-text">조치 보내기</h3>
+        <p className="mt-1 text-xs text-muted">
+          조치를 등록하면 대화방이 생성되고, 작업자가 결과를 남길 수 있습니다.
+        </p>
+
+        {latestIneffective ? (
+          <div className="mt-3 rounded-xl border border-danger/30 bg-dangerSoft px-3 py-2.5 text-xs text-danger">
+            <div className="font-medium">이전 조치가 효과가 없었습니다</div>
+            <p className="mt-1 whitespace-pre-wrap text-danger/90">
+              {latestIneffective.body_ko || latestIneffective.body || ''}
+            </p>
+            <p className="mt-1 text-[11px] text-danger/80">같은 조치를 다시 보내지 마세요.</p>
+          </div>
+        ) : null}
+
+        <div className="mt-3 space-y-2">
+          <label className="block text-xs text-muted" htmlFor={`defect-action-${report.id}`}>
+            조치 내용
+          </label>
+          <textarea
+            id={`defect-action-${report.id}`}
+            value={actionText}
+            onChange={(e) => setActionText(e.target.value)}
+            rows={3}
+            placeholder="작업자에게 전달할 조치 내용을 입력하세요"
+            className={inputClass}
+            disabled={actionSending}
+          />
+          <label className="flex min-h-[44px] items-center gap-2 text-sm text-text md:min-h-0">
+            <input
+              type="checkbox"
+              checked={notifyWorker}
+              onChange={(e) => setNotifyWorker(e.target.checked)}
+              className="h-4 w-4 accent-accent"
+              disabled={actionSending}
+            />
+            작업자에게 알림
+          </label>
+          <button
+            type="button"
+            onClick={handleSendAction}
+            disabled={actionSending || !report.worker_name}
+            className="min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
+          >
+            {actionSending ? '등록 중...' : '조치 등록'}
+          </button>
+          {!report.worker_name ? (
+            <p className="text-xs text-danger">작업자가 없어 조치를 보낼 수 없습니다.</p>
+          ) : null}
+          {actionError ? (
+            <div className="rounded-xl bg-dangerSoft px-3 py-2 text-xs text-danger">{actionError}</div>
+          ) : null}
+          {actionInfo ? (
+            <div className="rounded-xl bg-goodSoft px-3 py-2 text-xs text-good">{actionInfo}</div>
+          ) : null}
+        </div>
+
+        <div className="mt-5">
+          <h4 className="text-xs font-medium text-muted">조치 이력</h4>
+          {actionLoading ? (
+            <p className="mt-2 text-xs text-muted">불러오는 중...</p>
+          ) : historyItems.length === 0 ? (
+            <p className="mt-2 text-xs text-muted">아직 등록된 조치가 없습니다.</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {historyItems.map((m) => {
+                const isManagerAction =
+                  m.author_role === 'manager' && m.msg_type === 'action';
+                const outcome = isManagerAction ? getActionOutcome(m) : m.meta?.outcome;
+                const roleLabel = isManagerAction
+                  ? '관리자 조치'
+                  : outcome === 'effective'
+                    ? '작업자 결과 · O'
+                    : outcome === 'ineffective'
+                      ? '작업자 결과 · X'
+                      : '작업자 결과';
+                return (
+                  <li
+                    key={m.id}
+                    className="rounded-xl border border-border bg-surface2/60 px-3 py-2.5"
+                  >
+                    <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                      <span className="font-medium text-text">{roleLabel}</span>
+                      {m.author_worker ? <span>{m.author_worker}</span> : null}
+                      <span>{formatDateTime(m.created_at)}</span>
+                      {isManagerAction ? <ActionOutcomeBadge outcome={outcome} /> : null}
+                      {!isManagerAction &&
+                      (outcome === 'effective' || outcome === 'ineffective') ? (
+                        <ActionOutcomeBadge outcome={outcome} />
+                      ) : null}
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm text-text">
+                      {m.body_ko || m.body || ''}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </div>
     </ModalShell>
