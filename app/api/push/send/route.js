@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { resolveAskAuth } from '../../../../lib/askAuth.js';
 import {
+  checkDuplicatePushAndLog,
   notifyAnswerPosted,
   notifyQuestionEscalated,
+  pushTypeFromKind,
   sendPush,
 } from '../../../../lib/push.js';
 import { supabase } from '../../../../lib/supabase.js';
@@ -35,6 +37,9 @@ export async function OPTIONS() {
  *   - question_escalated: 관리자 전원
  *   - answer_posted | manager_answered: thread 작성자에게
  *   - custom: workerNames + title/body
+ *
+ * 중복 방어: threadId + type 기준 최근 60초 push_sent 있으면
+ * 발송하지 않고 200 + push_skipped(duplicate). 에러 응답 금지.
  */
 export async function POST(request) {
   const auth = await resolveAskAuth(request);
@@ -52,14 +57,41 @@ export async function POST(request) {
   const kind = body.kind?.toString()?.trim() || '';
   const threadId = body.threadId?.toString()?.trim() || null;
   const companyId = auth.companyId;
+  const pushType =
+    kind === 'custom' && body.data?.type
+      ? String(body.data.type)
+      : pushTypeFromKind(kind);
 
   // eslint-disable-next-line no-console
   console.info('[api/push/send] 요청 수신', {
     kind,
+    pushType,
     threadId,
     companyId,
     authMethod: auth.authMethod,
+    hasThreadId: Boolean(threadId),
   });
+
+  if (!threadId) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[api/push/send] threadId 없음 — 중복 방어 불가. body에 threadId를 포함해야 합니다.'
+    );
+  } else if (pushType) {
+    const { duplicate } = await checkDuplicatePushAndLog({
+      companyId,
+      threadId,
+      pushType,
+    });
+    if (duplicate) {
+      return jsonWithCors({
+        ok: true,
+        skipped: true,
+        deduped: true,
+        reason: 'duplicate',
+      });
+    }
+  }
 
   try {
     if (kind === 'question_escalated') {
