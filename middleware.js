@@ -3,21 +3,34 @@ import { isValidSessionEdge, SESSION_COOKIE_NAME } from './lib/session.edge';
 
 const PUBLIC_PATHS = ['/login', '/api/login', '/api/logout'];
 
+/**
+ * trailing slash 정규화: /api/push/send/ → /api/push/send
+ */
+function normalizePath(pathname) {
+  if (!pathname || pathname === '/') return '/';
+  return pathname.replace(/\/+$/, '') || '/';
+}
+
 function isPublicPath(pathname) {
-  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+  const path = normalizePath(pathname);
+
+  if (PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`))) {
     return true;
   }
-  // 앱 /api/ask — 라우트 내부에서 세션 또는 x-company-key 검증
-  if (pathname === '/api/ask' || pathname.startsWith('/api/ask/')) return true;
-  // 앱 관리자 답변 — 라우트 내부에서 세션 또는 x-company-key 검증
-  if (/^\/api\/questions\/[^/]+\/answer\/?$/.test(pathname)) return true;
-  // 앱 푸시 발송 요청 — 라우트 내부에서 세션 또는 x-company-key 검증
-  if (pathname === '/api/push/send' || pathname.startsWith('/api/push/')) return true;
+
+  // 앱 API — 라우트 내부에서 세션 또는 x-company-key 검증
+  // ★ /api/ask 와 동일한 startsWith 패턴 (정확한 일치만 쓰지 않음)
+  if (path === '/api/ask' || path.startsWith('/api/ask/')) return true;
+  if (path === '/api/push' || path.startsWith('/api/push/')) return true;
+
+  // 앱 관리자 답변
+  if (/^\/api\/questions\/[^/]+\/answer$/.test(path)) return true;
+
   // Vercel Cron — 라우트 내부에서 CRON_SECRET 검증
-  if (pathname.startsWith('/api/cron')) return true;
-  if (pathname.startsWith('/_next')) return true;
-  if (pathname.startsWith('/favicon')) return true;
-  if (/\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/i.test(pathname)) return true;
+  if (path.startsWith('/api/cron')) return true;
+  if (path.startsWith('/_next')) return true;
+  if (path.startsWith('/favicon')) return true;
+  if (/\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/i.test(path)) return true;
   return false;
 }
 
@@ -32,6 +45,10 @@ export async function middleware(request) {
   const valid = await isValidSessionEdge(token);
 
   if (!valid) {
+    // API는 로그인 페이지로 307 하면 앱이 /login 405를 받음 → JSON 401
+    if (normalizePath(pathname).startsWith('/api/')) {
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
+    }
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }
