@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { resolveAskAuth } from '../../../lib/askAuth.js';
+import { resolveAskAuth } from '../../../../lib/askAuth.js';
 import {
   notifyAnswerPosted,
   notifyQuestionEscalated,
   sendPush,
-} from '../../../lib/push.js';
-import { supabase } from '../../../lib/supabase.js';
+} from '../../../../lib/push.js';
+import { supabase } from '../../../../lib/supabase.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
