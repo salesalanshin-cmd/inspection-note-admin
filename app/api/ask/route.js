@@ -59,10 +59,19 @@ export async function POST(request) {
 
     // AI가 답을 못 찾아 이관 — 관리자 푸시 (실패해도 응답은 정상)
     // 어드민 /ask 테스트(session)는 스팸 방지로 제외. 앱(api_key) 또는 threadId 있을 때만.
-    if (
+    const shouldNotify =
       result.status === 'no_source' &&
-      (auth.authMethod === 'api_key' || threadId)
-    ) {
+      (auth.authMethod === 'api_key' || Boolean(threadId));
+
+    // eslint-disable-next-line no-console
+    console.info('[api/ask] push gate', {
+      status: result.status,
+      authMethod: auth.authMethod,
+      threadId,
+      shouldNotify,
+    });
+
+    if (shouldNotify) {
       try {
         await notifyQuestionEscalated({
           companyId: auth.companyId,

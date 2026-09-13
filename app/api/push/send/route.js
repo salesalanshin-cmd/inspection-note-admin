@@ -53,6 +53,14 @@ export async function POST(request) {
   const threadId = body.threadId?.toString()?.trim() || null;
   const companyId = auth.companyId;
 
+  // eslint-disable-next-line no-console
+  console.info('[api/push/send] 요청 수신', {
+    kind,
+    threadId,
+    companyId,
+    authMethod: auth.authMethod,
+  });
+
   try {
     if (kind === 'question_escalated') {
       const questionPreview =

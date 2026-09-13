@@ -163,6 +163,11 @@ export async function POST(request, { params }) {
     }
 
     // 질문 작성자에게 푸시 — 실패해도 답변 등록은 이미 완료
+    // eslint-disable-next-line no-console
+    console.info('[questions/answer] push before notify', {
+      threadId,
+      created_by_worker: thread.created_by_worker || null,
+    });
     try {
       await notifyAnswerPosted({
         companyId,
