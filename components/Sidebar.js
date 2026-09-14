@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { fetchWaitManagerCount } from '../lib/questions';
 
 /** 상시 — 매일 확인 */
@@ -38,11 +38,6 @@ const SETTINGS_NAV = [
   { href: '/trash', label: '휴지통', code: '11' },
   { href: '/master', label: 'MES 기준정보', code: '12' },
 ];
-
-const INSIGHT_LAB_NAV = {
-  href: '/insight-lab',
-  label: '인사이트 랩',
-};
 
 function isActive(pathname, href) {
   return pathname?.startsWith(href);
@@ -121,33 +116,6 @@ function SettingsGroup({ pathname, onNavigate }) {
   );
 }
 
-function InsightLabNavLink({ active, onNavigate, mobile = false }) {
-  return (
-    <Link
-      href={INSIGHT_LAB_NAV.href}
-      onClick={onNavigate}
-      className={`group ${mobile ? 'flex' : 'relative flex'} items-center gap-2.5 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-        active
-          ? 'bg-gradient-to-r from-accent/20 to-accent/0 text-accent'
-          : 'bg-gradient-to-r from-accent/10 to-accent/0 text-text hover:from-accent/20'
-      }`}
-    >
-      {!mobile ? (
-        <span
-          className={`absolute bottom-1 left-0 top-1 w-1 rounded-full bg-accent ${
-            active ? 'opacity-100' : 'opacity-80 group-hover:opacity-100'
-          }`}
-        />
-      ) : null}
-      <Sparkles
-        className={`ml-1 h-4 w-4 shrink-0 ${active ? 'text-accent' : 'text-accent group-hover:text-accent'}`}
-        strokeWidth={2}
-      />
-      <span>{INSIGHT_LAB_NAV.label}</span>
-    </Link>
-  );
-}
-
 function MainNav({ pathname, onNavigate, questionBadge }) {
   const weeklyItems = [...WEEKLY_NAV, ...DEV_NAV];
 
@@ -183,6 +151,26 @@ function MainNav({ pathname, onNavigate, questionBadge }) {
   );
 }
 
+function SidebarFooter({ onLogout, loggingOut }) {
+  return (
+    <div className="space-y-3 border-t border-border px-5 py-4">
+      <button
+        type="button"
+        onClick={onLogout}
+        disabled={loggingOut}
+        className="w-full rounded-xl border border-border px-3 py-2 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
+      >
+        {loggingOut ? '로그아웃 중...' : '로그아웃'}
+      </button>
+      <div className="text-xs leading-relaxed text-muted">
+        INSPECTION NOTE
+        <br />
+        ADMIN CONSOLE v0.1
+      </div>
+    </div>
+  );
+}
+
 function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut, questionBadge }) {
   return (
     <>
@@ -193,39 +181,7 @@ function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut, questionBadg
       <nav className="min-h-0 flex-1 px-3 py-2">
         <MainNav pathname={pathname} onNavigate={onNavigate} questionBadge={questionBadge} />
       </nav>
-
-      <div className="shrink-0 px-3 pb-3">
-        <div className="border-t border-border pt-3">
-          <div className="flex items-center gap-1.5 px-3 pb-2">
-            <span className="rounded-full bg-accent px-1.5 py-0.5 text-[8px] font-bold leading-none text-white shadow-sm">
-              AI
-            </span>
-            <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
-              인사이트 랩
-            </span>
-          </div>
-          <InsightLabNavLink
-            active={isActive(pathname, INSIGHT_LAB_NAV.href)}
-            onNavigate={onNavigate}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-3 border-t border-border px-5 py-4">
-        <button
-          type="button"
-          onClick={onLogout}
-          disabled={loggingOut}
-          className="w-full rounded-xl border border-border px-3 py-2 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-        >
-          {loggingOut ? '로그아웃 중...' : '로그아웃'}
-        </button>
-        <div className="text-xs leading-relaxed text-muted">
-          INSPECTION NOTE
-          <br />
-          ADMIN CONSOLE v0.1
-        </div>
-      </div>
+      <SidebarFooter onLogout={onLogout} loggingOut={loggingOut} />
     </>
   );
 }
@@ -242,39 +198,7 @@ function MobileSidebarPanel({ pathname, onNavigate, onLogout, loggingOut, questi
         <MainNav pathname={pathname} onNavigate={onNavigate} questionBadge={questionBadge} />
       </nav>
 
-      <div className="px-3 pb-3">
-        <div className="border-t border-border pt-3">
-          <div className="flex items-center gap-1.5 px-3 pb-2">
-            <span className="rounded-full bg-accent px-1.5 py-0.5 text-[8px] font-bold leading-none text-white shadow-sm">
-              AI
-            </span>
-            <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
-              인사이트 랩
-            </span>
-          </div>
-          <InsightLabNavLink
-            mobile
-            active={isActive(pathname, INSIGHT_LAB_NAV.href)}
-            onNavigate={onNavigate}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-3 border-t border-border px-5 py-4">
-        <button
-          type="button"
-          onClick={onLogout}
-          disabled={loggingOut}
-          className="w-full rounded-xl border border-border px-3 py-2 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
-        >
-          {loggingOut ? '로그아웃 중...' : '로그아웃'}
-        </button>
-        <div className="text-xs leading-relaxed text-muted">
-          INSPECTION NOTE
-          <br />
-          ADMIN CONSOLE v0.1
-        </div>
-      </div>
+      <SidebarFooter onLogout={onLogout} loggingOut={loggingOut} />
     </div>
   );
 }
