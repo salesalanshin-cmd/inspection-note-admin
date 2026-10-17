@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { DOC_ERROR_CODES, docLabel } from '../../lib/constants';
+import { OCR_DOC_TYPES, ocrDocTypeLabel } from '../../lib/ocrDocTypes';
 import { buildWorkerDisplayNameMap } from '../../lib/analytics';
 import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
@@ -45,6 +46,7 @@ export default function DocumentsPage() {
   const [worker, setWorker] = useState('all');
   const [docType, setDocType] = useState('all');
   const [errorCode, setErrorCode] = useState('all');
+  const [needsReviewFilter, setNeedsReviewFilter] = useState('all');
   const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
   const [selected, setSelected] = useState(null);
   const [trashConfirm, setTrashConfirm] = useState(false);
@@ -94,7 +96,11 @@ export default function DocumentsPage() {
     if (worker !== 'all' && d.worker_name !== worker) return false;
     if (docType !== 'all' && d.doc_type !== docType) return false;
     if (errorCode === 'none' && d.doc_error_code) return false;
-    if (errorCode !== 'all' && errorCode !== 'none' && d.doc_error_code !== errorCode) return false;
+    if (errorCode !== 'all' && errorCode !== 'none' && d.doc_error_code !== errorCode) {
+      return false;
+    }
+    if (needsReviewFilter === 'yes' && d.needs_review !== true) return false;
+    if (needsReviewFilter === 'no' && d.needs_review === true) return false;
     return true;
   });
 
@@ -159,7 +165,7 @@ export default function DocumentsPage() {
   function handleExportExcel() {
     const rows = filtered.map((d) => ({
       작업자: (d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '',
-      문서유형: d.doc_type || '',
+      문서유형: ocrDocTypeLabel(d.doc_type),
       오류코드: d.doc_error_code || '',
       오류내용: d.doc_error_code ? DOC_ERROR_CODES[d.doc_error_code] || '' : '',
       오류메모: d.doc_error_note || '',
@@ -211,11 +217,27 @@ export default function DocumentsPage() {
             </select>
             <select value={docType} onChange={(e) => setDocType(e.target.value)} className={selectClass}>
               <option value="all">전체 문서유형</option>
-              {docTypes.map((t) => (
+              {OCR_DOC_TYPES.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {ocrDocTypeLabel(t)}
                 </option>
               ))}
+              {docTypes
+                .filter((t) => !OCR_DOC_TYPES.includes(t))
+                .map((t) => (
+                  <option key={t} value={t}>
+                    {ocrDocTypeLabel(t)}
+                  </option>
+                ))}
+            </select>
+            <select
+              value={needsReviewFilter}
+              onChange={(e) => setNeedsReviewFilter(e.target.value)}
+              className={selectClass}
+            >
+              <option value="all">검수 전체</option>
+              <option value="yes">검수 필요</option>
+              <option value="no">검수 불필요</option>
             </select>
             <select
               value={errorCode}
@@ -313,7 +335,15 @@ export default function DocumentsPage() {
               </div>
               <div className="p-2.5 text-[11px] md:text-xs">
                 <div className="truncate font-medium text-text">
-                  {d.doc_title || d.doc_type || '문서'}
+                  {d.doc_title || ocrDocTypeLabel(d.doc_type)}
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-muted">
+                  <span>{ocrDocTypeLabel(d.doc_type)}</span>
+                  {d.needs_review === true ? (
+                    <span className="rounded-full bg-warnSoft px-1.5 py-0.5 text-[10px] font-medium text-warn">
+                      검수 필요
+                    </span>
+                  ) : null}
                 </div>
                 <div className="mt-0.5 text-muted">
                   {(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) ||

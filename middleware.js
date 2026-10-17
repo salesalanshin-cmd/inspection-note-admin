@@ -27,8 +27,9 @@ function isPublicPath(pathname) {
   // 앱 관리자 답변
   if (/^\/api\/questions\/[^/]+\/answer$/.test(path)) return true;
 
-  // Vercel Cron — 라우트 내부에서 CRON_SECRET 검증
+  // Vercel Cron / OCR 배치 — 라우트 내부에서 CRON_SECRET 또는 관리자 세션 검증
   if (path.startsWith('/api/cron')) return true;
+  if (path === '/api/ocr' || path.startsWith('/api/ocr/')) return true;
   if (path.startsWith('/_next')) return true;
   if (path.startsWith('/favicon')) return true;
   if (/\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/i.test(path)) return true;
