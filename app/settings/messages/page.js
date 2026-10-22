@@ -17,6 +17,7 @@ import PageHeader from '../../../components/PageHeader';
 import DateRangePicker from '../../../components/DateRangePicker';
 import NotifyReviewModal from '../../../components/NotifyReviewModal';
 import ProcessFilterSelect from '../../../components/ProcessFilterSelect';
+import AttendanceMailRecipients from '../../../components/AttendanceMailRecipients';
 
 const PREVIEW_LIMIT = 4;
 
@@ -60,6 +61,13 @@ const AUTO_SETTING_DEFS = [
     description:
       '토글은 저장되지만 실제 자동화 로직은 아직 없습니다. 준비 중입니다.',
     ready: false,
+  },
+  {
+    key: 'attendance_fives_nudge',
+    title: '근태 · 3정5S 미기록 독촉',
+    description:
+      '매일 오전 10시(KST) 3정5S 기록이 없는 활성 작업자에게 알림톡을 보냅니다. 기본 OFF.',
+    ready: true,
   },
 ];
 
@@ -783,6 +791,8 @@ export default function MessagesSettingsPage() {
             </div>
           )}
         </section>
+
+        <AttendanceMailRecipients />
 
         {/* 발송 이력 */}
         <section>

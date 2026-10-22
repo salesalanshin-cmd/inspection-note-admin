@@ -13,6 +13,7 @@ const DAILY_NAV = [
   { href: '/frequent-check', label: '자주검사', code: '03' },
   { href: '/fives', label: '3정5S', code: '04' },
   { href: '/defects', label: '불량기록', code: '05' },
+  { href: '/attendance', label: '근태', code: '14' },
   { href: '/questions', label: '질문 답변', code: '13', badgeKey: 'questions' },
   { href: '/notices', label: '공지사항', code: '09' },
 ];
