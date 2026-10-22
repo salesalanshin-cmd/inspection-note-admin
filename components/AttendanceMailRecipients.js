@@ -17,6 +17,8 @@ export default function AttendanceMailRecipients() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,6 +105,34 @@ export default function AttendanceMailRecipients() {
     }
   }
 
+  async function handleTestMail() {
+    setTesting(true);
+    setError(null);
+    setTestMsg(null);
+    try {
+      const res = await fetch('/api/attendance/test-mail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || '시험 발송 실패');
+      }
+      setTestMsg(
+        data.to
+          ? `시험 메일 발송됨 → ${data.to}`
+          : '시험 메일 발송됨'
+      );
+    } catch (err) {
+      setError(err?.message || '시험 발송 실패');
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  const firstActive = rows.find((r) => r.is_active);
+
   return (
     <section>
       <h2 className="mb-1 text-sm font-semibold text-text">근태 메일 수신자</h2>
@@ -111,6 +141,9 @@ export default function AttendanceMailRecipients() {
       </p>
       {error ? (
         <p className="mb-2 text-xs text-danger">{error}</p>
+      ) : null}
+      {testMsg ? (
+        <p className="mb-2 text-xs text-accent">{testMsg}</p>
       ) : null}
       <form onSubmit={handleAdd} className="mb-3 flex flex-wrap gap-2">
         <input
@@ -131,7 +164,25 @@ export default function AttendanceMailRecipients() {
         <button type="submit" className={btnClass} disabled={saving}>
           {saving ? '저장…' : '추가'}
         </button>
+        <button
+          type="button"
+          className={btnClass}
+          disabled={testing || !firstActive}
+          onClick={handleTestMail}
+          title={
+            firstActive
+              ? `활성 목록 첫 주소(${firstActive.email})로만 시험 발송`
+              : '활성 수신자가 필요합니다'
+          }
+        >
+          {testing ? '보내는 중…' : '테스트 메일 보내기'}
+        </button>
       </form>
+      {firstActive ? (
+        <p className="mb-3 text-[11px] text-muted">
+          시험 발송은 활성 수신자 중 첫 번째({firstActive.email})로만 갑니다.
+        </p>
+      ) : null}
       {loading ? (
         <p className="text-sm text-muted">불러오는 중…</p>
       ) : (
