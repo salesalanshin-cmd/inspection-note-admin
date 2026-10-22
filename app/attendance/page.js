@@ -25,6 +25,8 @@ const SIGNAL_LABELS = {
   fives: '3정5S',
   frequent: '자주검사',
   defect: '불량',
+  lot_move: 'LOT이동',
+  production: '실적',
   lot: 'LOT',
 };
 

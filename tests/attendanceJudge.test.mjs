@@ -3,6 +3,10 @@ import { describe, it } from 'node:test';
 import { judgeAttendance, wallTimeOnWorkDate } from '../lib/attendance/judge.js';
 import { summarizeSignals } from '../lib/attendance/signalUtils.js';
 import { resolvePolicyForWorker } from '../lib/attendance/policy.js';
+import {
+  buildWorkerDirIndex,
+  resolveWorkerName,
+} from '../lib/attendance/lotSources.js';
 
 const POLICY_DAY = {
   work_start_time: '08:00',
@@ -69,16 +73,39 @@ describe('judgeAttendance', () => {
   });
 
   it('교차 시간: 근무일 경계 직전 신호는 전날 근무일로 분류되는 전제', () => {
-    // 07:30 KST on calendar 10/22 → work date 10/21 (08:00 boundary)
     // 여기서는 신호 시각만 판정 입력으로 쓰고, 근무일 귀속은 getWorkDateForRecord 책임
     const sig = wallTimeOnWorkDate(WORK_DATE, '23:00').toISOString();
     const r = judgeAttendance({
       workDate: WORK_DATE,
-      signals: [{ type: 'lot', at: sig }],
+      signals: [{ type: 'lot_move', at: sig }],
       policy: POLICY_DAY,
     });
     assert.equal(r.judgment, 'present');
     assert.equal(r.isOt, true);
+  });
+
+  it('3정5S 없이 LOT 스캔(lot_move)만 있어도 출근', () => {
+    const at = wallTimeOnWorkDate(WORK_DATE, '10:30').toISOString();
+    const r = judgeAttendance({
+      workDate: WORK_DATE,
+      signals: [{ type: 'lot_move', at, sourceId: 'm1' }],
+      policy: POLICY_DAY,
+    });
+    assert.equal(r.judgment, 'present');
+    assert.equal(r.isOt, false);
+    assert.equal(r.signalKinds[0].type, 'lot_move');
+    assert.equal(r.estimatedClockIn, wallTimeOnWorkDate(WORK_DATE, '08:00').toISOString());
+  });
+
+  it('실적(production)만 있어도 출근', () => {
+    const at = wallTimeOnWorkDate(WORK_DATE, '11:00').toISOString();
+    const r = judgeAttendance({
+      workDate: WORK_DATE,
+      signals: [{ type: 'production', at, eventType: 'start' }],
+      policy: POLICY_DAY,
+    });
+    assert.equal(r.judgment, 'present');
+    assert.equal(r.signalKinds[0].type, 'production');
   });
 });
 
@@ -99,5 +126,16 @@ describe('summarizeSignals / policy', () => {
     ];
     assert.equal(resolvePolicyForWorker(policies, '주조').work_end_time, '20:00');
     assert.equal(resolvePolicyForWorker(policies, '가공').work_end_time, '17:00');
+  });
+
+  it('worker_directory 이름/표시명 매칭, 실패는 unmatched', () => {
+    const idx = buildWorkerDirIndex([
+      { worker_name: '김작업', display_name: 'Kim' },
+    ]);
+    const unmatched = [];
+    assert.equal(resolveWorkerName('김작업', idx, unmatched), '김작업');
+    assert.equal(resolveWorkerName('Kim', idx, unmatched), '김작업');
+    assert.equal(resolveWorkerName('모르는사람', idx, unmatched), null);
+    assert.deepEqual(unmatched, ['모르는사람']);
   });
 });
