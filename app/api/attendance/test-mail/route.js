@@ -52,11 +52,15 @@ export async function POST(request) {
         { status: 400 }
       );
     }
-    if (result.skipped && result.reason === 'mail_not_configured') {
+    if (
+      result.skipped &&
+      typeof result.reason === 'string' &&
+      (result.reason.includes('RESEND_API_KEY 없음') ||
+        result.reason.includes('MAIL_FROM 없음'))
+    ) {
       return NextResponse.json(
         {
-          error:
-            '메일 미설정: RESEND_API_KEY / MAIL_FROM 환경 변수를 확인하세요.',
+          error: result.reason,
           ...result,
         },
         { status: 503 }
