@@ -11,6 +11,7 @@ import {
 } from '../../lib/attendance/signalUtils';
 import {
   formatJudgmentRationaleSummary,
+  hasNeedsReviewFlag,
   shiftLabel,
 } from '../../lib/attendance/shift';
 import { getCompanyId } from '../../lib/company';
@@ -94,7 +95,7 @@ export default function AttendancePage() {
       if (filter === 'present') return r.judgment === 'present';
       if (filter === 'unreviewed') return r.reviewed !== true;
       if (filter === 'needs_review') {
-        return Array.isArray(r.flags) && r.flags.includes('확인 필요');
+        return hasNeedsReviewFlag(r.flags);
       }
       return true;
     });

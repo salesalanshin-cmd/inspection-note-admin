@@ -6,8 +6,10 @@ import {
   resolvePolicyForWorker,
 } from '../lib/attendance/policy.js';
 import {
+  FLAG_KOREAN_NIGHT_SIGNALS_REVIEW,
   FLAG_NATIONALITY_UNSET,
-  FLAG_NEEDS_REVIEW,
+  RATIONALE_NATIONALITY_UNSET,
+  RULE_KOREAN_DAY_FIXED,
   isAttendanceExcludedWorker,
   resolveAttendanceShift,
   selectSignalsForShift,
@@ -130,33 +132,70 @@ describe('resolveAttendanceShift priority & windows', () => {
     assert.equal(dayOfNext.length, 1);
   });
 
-  it('한국인 + 야간 신호만 → 주간 유지 + 확인 필요', () => {
+  it('내국인, default_shift 없음, 07:55 신호 → day', () => {
     const r = resolveAttendanceShift({
       workDate: WORK_DATE,
-      signals: [sig('21:00'), sig('03:00', 'fives', 1)],
+      signals: [sig('07:55')],
       dayPolicy: DAY_POL,
       nightPolicy: NIGHT_POL,
       nationality: '한국',
       defaultShift: null,
     });
     assert.equal(r.shift, SHIFT_DAY);
-    assert.ok(r.flags.includes(FLAG_NEEDS_REVIEW));
+    assert.equal(r.rule, RULE_KOREAN_DAY_FIXED);
+    assert.ok(!r.flags.includes(FLAG_KOREAN_NIGHT_SIGNALS_REVIEW));
   });
 
-  it('한국인 + default_shift=night → 주간 + 확인 필요', () => {
+  it('내국인, 야간 신호만(20:00+익일 07:50) → day + 확인 필요 플래그', () => {
     const r = resolveAttendanceShift({
       workDate: WORK_DATE,
-      signals: [sig('21:00')],
+      signals: [sig('20:00'), sig('07:50', 'fives', 1)],
+      dayPolicy: DAY_POL,
+      nightPolicy: NIGHT_POL,
+      nationality: '한국',
+      defaultShift: null,
+    });
+    assert.equal(r.shift, SHIFT_DAY);
+    assert.equal(r.rule, RULE_KOREAN_DAY_FIXED);
+    assert.ok(r.flags.includes(FLAG_KOREAN_NIGHT_SIGNALS_REVIEW));
+  });
+
+  it('내국인, default_shift=night, 야간 신호 → night', () => {
+    const r = resolveAttendanceShift({
+      workDate: WORK_DATE,
+      signals: [sig('20:00'), sig('07:50', 'fives', 1)],
       dayPolicy: DAY_POL,
       nightPolicy: NIGHT_POL,
       nationality: '한국',
       defaultShift: 'night',
     });
-    assert.equal(r.shift, SHIFT_DAY);
-    assert.ok(r.flags.includes(FLAG_NEEDS_REVIEW));
+    assert.equal(r.shift, SHIFT_NIGHT);
+    assert.equal(r.rule, 'directory_default_shift');
+    assert.ok(!r.flags.includes(FLAG_KOREAN_NIGHT_SIGNALS_REVIEW));
   });
 
-  it('국적 미설정 플래그', () => {
+  it('외국인(김다운/압둘 유형) default_shift=night → night 유지', () => {
+    const kim = resolveAttendanceShift({
+      workDate: WORK_DATE,
+      signals: [sig('08:00'), sig('19:53'), sig('00:01', 'fives', 1)],
+      dayPolicy: DAY_POL,
+      nightPolicy: NIGHT_POL,
+      nationality: '태국',
+      defaultShift: 'night',
+    });
+    assert.equal(kim.shift, SHIFT_NIGHT);
+    const abdul = resolveAttendanceShift({
+      workDate: WORK_DATE,
+      signals: [sig('20:02'), sig('20:09')],
+      dayPolicy: DAY_POL,
+      nightPolicy: NIGHT_POL,
+      nationality: '우즈베키스탄',
+      defaultShift: 'night',
+    });
+    assert.equal(abdul.shift, SHIFT_NIGHT);
+  });
+
+  it('국적 미설정 플래그·rationale', () => {
     const r = resolveAttendanceShift({
       workDate: WORK_DATE,
       signals: [sig('20:00')],
@@ -166,6 +205,7 @@ describe('resolveAttendanceShift priority & windows', () => {
       defaultShift: 'night',
     });
     assert.ok(r.flags.includes(FLAG_NATIONALITY_UNSET));
+    assert.equal(r.nationalityStatus, RATIONALE_NATIONALITY_UNSET);
     assert.equal(r.shift, SHIFT_NIGHT);
   });
 
