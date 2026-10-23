@@ -5,6 +5,14 @@ import PageHeader from '../../components/PageHeader';
 import { buildWorkerDisplayNameMap } from '../../lib/analytics';
 import { judgmentLabel } from '../../lib/attendance/judge';
 import { attendanceRowsForExcel } from '../../lib/attendance/excel';
+import {
+  formatSignalListLabel,
+  signalRawMergedCounts,
+} from '../../lib/attendance/signalUtils';
+import {
+  formatJudgmentRationaleSummary,
+  shiftLabel,
+} from '../../lib/attendance/shift';
 import { getCompanyId } from '../../lib/company';
 import {
   exportToExcel,
@@ -21,19 +29,16 @@ const btnClass =
 const primaryBtn =
   'min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 md:min-h-0';
 
-const SIGNAL_LABELS = {
-  fives: '3정5S',
-  frequent: '자주검사',
-  defect: '불량',
-  lot_move: 'LOT이동',
-  production: '실적',
-  lot: 'LOT',
-};
-
 function signalSummary(kinds) {
-  if (!Array.isArray(kinds) || !kinds.length) return '—';
-  const types = [...new Set(kinds.map((k) => k.type).filter(Boolean))];
-  return types.map((t) => SIGNAL_LABELS[t] || t).join(', ');
+  const counts = signalRawMergedCounts(kinds);
+  const list = formatSignalListLabel(kinds);
+  const countLabel =
+    counts.raw || counts.merged
+      ? `신호 ${counts.raw}/${counts.merged}`
+      : '';
+  const mergeLabel = counts.hadMerge ? ' · 중복 촬영 병합' : '';
+  if (!countLabel && list === '—') return '—';
+  return `${countLabel}${mergeLabel}${list !== '—' ? ` · ${list}` : ''}`;
 }
 
 export default function AttendancePage() {
@@ -65,7 +70,7 @@ export default function AttendancePage() {
           .order('worker_name'),
         supabase
           .from('worker_directory')
-          .select('worker_name, display_name, process')
+          .select('worker_name, display_name, process, nationality')
           .eq('company_id', companyId),
       ]);
       if (attRes.error) throw new Error(attRes.error.message);
@@ -88,6 +93,9 @@ export default function AttendancePage() {
       if (filter === 'unconfirmed') return r.judgment === 'unconfirmed';
       if (filter === 'present') return r.judgment === 'present';
       if (filter === 'unreviewed') return r.reviewed !== true;
+      if (filter === 'needs_review') {
+        return Array.isArray(r.flags) && r.flags.includes('확인 필요');
+      }
       return true;
     });
   }, [rows, filter]);
@@ -159,7 +167,7 @@ export default function AttendancePage() {
       <PageHeader
         eyebrow="ATTENDANCE"
         title="근태"
-        description="신호 합집합 기반 출근 판정 · 관리자 검수"
+        description="신호 합집합 기반 출근·교대 판정 · 관리자 검수"
       />
 
       <div className="space-y-4 px-4 pb-8 pt-4 md:px-8">
@@ -185,6 +193,7 @@ export default function AttendancePage() {
             <option value="present">출근</option>
             <option value="unconfirmed">미확인</option>
             <option value="unreviewed">미검수</option>
+            <option value="needs_review">확인 필요</option>
           </select>
           <button
             type="button"
@@ -213,11 +222,12 @@ export default function AttendancePage() {
               <thead className="border-b border-border bg-surface2 text-xs text-muted">
                 <tr>
                   <th className="px-3 py-2">작업자</th>
+                  <th className="px-3 py-2">조</th>
                   <th className="px-3 py-2">판정</th>
                   <th className="px-3 py-2">추정 출근</th>
                   <th className="px-3 py-2">추정 퇴근</th>
                   <th className="px-3 py-2">OT</th>
-                  <th className="px-3 py-2">신호</th>
+                  <th className="px-3 py-2">신호(원본/병합)·근거</th>
                   <th className="px-3 py-2">검수</th>
                   <th className="px-3 py-2">저장</th>
                 </tr>
@@ -234,7 +244,7 @@ export default function AttendancePage() {
                 ))}
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-8 text-center text-xs text-muted">
+                    <td colSpan={9} className="px-3 py-8 text-center text-xs text-muted">
                       데이터 없음 — 재계산을 실행하세요
                     </td>
                   </tr>
@@ -250,6 +260,7 @@ export default function AttendancePage() {
 
 function AttendanceRow({ row, displayName, saving, onSave }) {
   const [judgment, setJudgment] = useState(row.judgment);
+  const [shift, setShift] = useState(row.shift || 'day');
   const [clockIn, setClockIn] = useState(toLocalInput(row.estimated_clock_in));
   const [clockOut, setClockOut] = useState(toLocalInput(row.estimated_clock_out));
   const [isOt, setIsOt] = useState(Boolean(row.is_ot));
@@ -257,15 +268,31 @@ function AttendanceRow({ row, displayName, saving, onSave }) {
 
   useEffect(() => {
     setJudgment(row.judgment);
+    setShift(row.shift || 'day');
     setClockIn(toLocalInput(row.estimated_clock_in));
     setClockOut(toLocalInput(row.estimated_clock_out));
     setIsOt(Boolean(row.is_ot));
     setReviewed(Boolean(row.reviewed));
   }, [row]);
 
+  const flags = Array.isArray(row.flags) ? row.flags : [];
+
   return (
     <tr className="border-b border-border last:border-0">
       <td className="px-3 py-2 font-medium text-text">{displayName}</td>
+      <td className="px-3 py-2">
+        <select
+          value={shift}
+          onChange={(e) => {
+            setShift(e.target.value);
+            setReviewed(true);
+          }}
+          className={selectClass}
+        >
+          <option value="day">{shiftLabel('day')}</option>
+          <option value="night">{shiftLabel('night')}</option>
+        </select>
+      </td>
       <td className="px-3 py-2">
         <select
           value={judgment}
@@ -308,6 +335,12 @@ function AttendanceRow({ row, displayName, saving, onSave }) {
           {' ~ '}
           {row.last_signal_at ? formatExportDateTime(row.last_signal_at) : '—'}
         </div>
+        <div className="mt-0.5 text-text">
+          {formatJudgmentRationaleSummary(row.judgment_rationale)}
+        </div>
+        {flags.length ? (
+          <div className="mt-0.5 text-danger">{flags.join(' · ')}</div>
+        ) : null}
       </td>
       <td className="px-3 py-2">
         <input
@@ -324,10 +357,19 @@ function AttendanceRow({ row, displayName, saving, onSave }) {
           onClick={() =>
             onSave(row, {
               judgment,
+              shift,
               estimated_clock_in: fromLocalInput(clockIn),
               estimated_clock_out: fromLocalInput(clockOut),
               is_ot: isOt,
               reviewed,
+              judgment_rationale: {
+                ...(row.judgment_rationale || {}),
+                shift,
+                rule:
+                  shift !== row.shift
+                    ? 'manual_override'
+                    : row.judgment_rationale?.rule || 'manual_override',
+              },
             })
           }
         >

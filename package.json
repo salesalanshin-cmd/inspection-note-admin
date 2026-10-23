@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --test tests/ocrClassify.test.mjs tests/attendanceJudge.test.mjs tests/mailEnv.test.mjs"
+    "test": "node --test tests/ocrClassify.test.mjs tests/attendanceJudge.test.mjs tests/attendanceShift.test.mjs tests/signalMerge.test.mjs tests/mailEnv.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

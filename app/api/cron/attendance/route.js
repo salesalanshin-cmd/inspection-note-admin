@@ -8,6 +8,7 @@ import {
   previousMonthRange,
   previousWeekRange,
   previousWorkDate,
+  workDateDaysAgo,
 } from '../../../../lib/attendance/compute';
 import {
   retryFailedMails,
@@ -22,7 +23,7 @@ export const maxDuration = 60;
 
 /**
  * 근태 일일 계산 + 메일 리포트
- * - 매일: 전일 근태
+ * - 매일: 전일 + 전전일 재계산(늦게 들어온 신호 반영)
  * - 월요일: 전주 추가
  * - 매월 1일: 전월 추가
  */
@@ -35,7 +36,13 @@ export async function GET(request) {
     const companyId = await getCompanyId();
     const now = new Date();
     const workDate = previousWorkDate(now);
+    const workDatePrev2 = workDateDaysAgo(now, 2);
 
+    const computePrev2 = await computeAttendanceForWorkDate(
+      supabase,
+      companyId,
+      workDatePrev2
+    );
     const computeResult = await computeAttendanceForWorkDate(
       supabase,
       companyId,
@@ -130,6 +137,7 @@ export async function GET(request) {
     return NextResponse.json({
       ok: true,
       compute: computeResult,
+      computePrev2,
       mails,
       retries,
     });
