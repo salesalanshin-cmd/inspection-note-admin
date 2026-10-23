@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { buildWorkerDisplayNameMap } from '../../../../lib/analytics';
 import { sendTestAttendanceMail } from '../../../../lib/attendance/mail';
+import { safeTrim } from '../../../../lib/attendance/mailEnv';
 import { getCompanyId } from '../../../../lib/company';
 import {
   isValidSession,
@@ -26,7 +27,7 @@ export async function POST(request) {
     body = {};
   }
 
-  const workDate = body.workDate?.toString()?.trim() || null;
+  const workDate = safeTrim(body?.workDate) || null;
   if (workDate && !/^\d{4}-\d{2}-\d{2}$/.test(workDate)) {
     return NextResponse.json({ error: 'invalid workDate' }, { status: 400 });
   }
@@ -46,29 +47,43 @@ export async function POST(request) {
       displayMap,
     });
 
-    if (result.skipped && result.error === 'no_recipients') {
+    const stage = result.stage || null;
+    const message = result.error || result.reason || null;
+
+    if (result.skipped && result.stage === 'recipient') {
       return NextResponse.json(
-        { error: '활성 수신자가 없습니다. 먼저 주소를 등록하세요.', ...result },
+        {
+          error: message || '수신자가 등록되지 않았습니다',
+          stage: 'recipient',
+        },
         { status: 400 }
+      );
+    }
+    if (result.skipped && result.stage === 'env') {
+      return NextResponse.json(
+        {
+          error: message || '메일 환경 변수 미설정',
+          stage: 'env',
+        },
+        { status: 503 }
       );
     }
     if (
       result.skipped &&
-      typeof result.reason === 'string' &&
-      (result.reason.includes('RESEND_API_KEY 없음') ||
-        result.reason.includes('MAIL_FROM 없음'))
+      typeof message === 'string' &&
+      message.includes('RESEND_API_KEY 없음')
     ) {
       return NextResponse.json(
-        {
-          error: result.reason,
-          ...result,
-        },
+        { error: message, stage: stage || 'env' },
         { status: 503 }
       );
     }
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.error || 'send failed', ...result },
+        {
+          error: message || 'send failed',
+          stage: stage || 'send',
+        },
         { status: 502 }
       );
     }
@@ -78,7 +93,10 @@ export async function POST(request) {
     // eslint-disable-next-line no-console
     console.error('[attendance/test-mail]', err);
     return NextResponse.json(
-      { error: err?.message || 'test mail failed' },
+      {
+        error: 'test mail failed',
+        stage: 'send',
+      },
       { status: 500 }
     );
   }
