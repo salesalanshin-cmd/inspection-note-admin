@@ -92,7 +92,7 @@ describe('resolveAttendanceShift priority & windows', () => {
     assert.equal(asDay.shift, SHIFT_DAY);
   });
 
-  it('한국인 16:52는 당일 주간, 다음날 07:57은 당일 야간 구간에만(주간 강제)', () => {
+  it('한국인 16:52는 당일 주간, 저녁 신호 없는 다음날 07:57은 야간 선택에서 빠진다', () => {
     const daySignals = [sig('16:52')];
     const nextMorning = [sig('07:57', 'fives', 1)];
     const d = resolveAttendanceShift({
@@ -120,7 +120,7 @@ describe('resolveAttendanceShift priority & windows', () => {
       DAY_POL,
       NIGHT_POL
     );
-    assert.equal(nightOfD.length, 1);
+    assert.equal(nightOfD.length, 0);
 
     const dayOfNext = selectSignalsForShift(
       nextMorning,
@@ -225,6 +225,22 @@ describe('resolveAttendanceShift priority & windows', () => {
 });
 
 describe('judgeAttendance with windows', () => {
+  it('주간 확정 07:50 출근 + 22:00 퇴근 → 출근, 퇴근 22:00, OT', () => {
+    const r = judgeAttendance({
+      workDate: WORK_DATE,
+      signals: [sig('07:50'), sig('22:00')],
+      dayPolicy: DAY_POL,
+      nightPolicy: NIGHT_POL,
+      nationality: '한국',
+      defaultShift: 'day',
+    });
+    assert.equal(r.shift, SHIFT_DAY);
+    assert.equal(r.judgment, 'present');
+    assert.equal(r.isOt, true);
+    assert.equal(r.estimatedClockOut, sig('22:00').at);
+    assert.equal(r.clockOutConfirmed, true);
+  });
+
   it('외국인 야간 default → 추정 20:00~익일 08:00, 19:39 보정', () => {
     const r = judgeAttendance({
       workDate: WORK_DATE,

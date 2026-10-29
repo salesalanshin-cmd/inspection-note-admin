@@ -4,7 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import { buildWorkerDisplayNameMap } from '../../lib/analytics';
 import { judgmentLabel } from '../../lib/attendance/judge';
-import { attendanceRowsForExcel } from '../../lib/attendance/excel';
+import {
+  attendanceRecomputeNotice,
+  attendanceRowsForExcel,
+  describeAttendanceExportRange,
+  filterAttendanceExportRows,
+  missingAttendanceWorkDates,
+  saveAttendanceRangeExcel,
+} from '../../lib/attendance/excel';
 import {
   formatSignalListLabel,
   signalRawMergedCounts,
@@ -51,11 +58,33 @@ export default function AttendancePage() {
   const [savingId, setSavingId] = useState(null);
   const [recomputing, setRecomputing] = useState(false);
   const [filter, setFilter] = useState('all'); // all | unconfirmed | present | unreviwed
+  const [rangeStart, setRangeStart] = useState(() => getRecentDaysRange(1).end);
+  const [rangeEnd, setRangeEnd] = useState(() => getRecentDaysRange(1).end);
+  const [exportWorker, setExportWorker] = useState('');
+  const [exportShift, setExportShift] = useState('');
+  const [rangeExporting, setRangeExporting] = useState(false);
+  const [rangeNotice, setRangeNotice] = useState('');
+
+  const rangeCheck = useMemo(
+    () => describeAttendanceExportRange({ start: rangeStart, end: rangeEnd }),
+    [rangeStart, rangeEnd]
+  );
 
   const displayMap = useMemo(
     () => buildWorkerDisplayNameMap(directory),
     [directory]
   );
+
+  const exportWorkers = useMemo(() => {
+    return [...directory]
+      .filter((worker) => worker.worker_name)
+      .sort((a, b) =>
+        (displayMap.get(a.worker_name) || a.worker_name).localeCompare(
+          displayMap.get(b.worker_name) || b.worker_name,
+          'ko'
+        )
+      );
+  }, [directory, displayMap]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +117,10 @@ export default function AttendancePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setRangeNotice('');
+  }, [rangeStart, rangeEnd, exportWorker, exportShift]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -157,6 +190,61 @@ export default function AttendancePage() {
     );
   }
 
+  async function handleRangeExport() {
+    const check = describeAttendanceExportRange({ start: rangeStart, end: rangeEnd });
+    if (!check.ok) return;
+    setRangeExporting(true);
+    setRangeNotice('');
+    try {
+      const companyId = await getCompanyId();
+      const { data, error: fetchError } = await supabase
+        .from('attendance_daily')
+        .select('*')
+        .eq('company_id', companyId)
+        .gte('work_date', rangeStart)
+        .lte('work_date', rangeEnd)
+        .order('work_date', { ascending: true })
+        .order('worker_name', { ascending: true });
+      if (fetchError) throw new Error(fetchError.message);
+
+      const stored = data || [];
+      const missing = missingAttendanceWorkDates(stored, {
+        start: rangeStart,
+        end: rangeEnd,
+      });
+      setRangeNotice(attendanceRecomputeNotice(missing));
+
+      const exportRows = filterAttendanceExportRows(stored, {
+        workerName: exportWorker,
+        shift: exportShift,
+      });
+      const workerLabel = exportWorker
+        ? displayMap.get(exportWorker) || exportWorker
+        : '전체';
+      const shiftText =
+        exportShift === 'day' || exportShift === 'night'
+          ? shiftLabel(exportShift)
+          : '전체';
+      saveAttendanceRangeExcel(
+        exportRows,
+        displayMap,
+        {
+          start: rangeStart,
+          end: rangeEnd,
+          dayCount: check.dayCount,
+          workerLabel,
+          shiftLabel: shiftText,
+          missingDates: missing,
+        },
+        `근태_${formatDateRangeForFilename(rangeStart, rangeEnd)}.xlsx`
+      );
+    } catch (err) {
+      setRangeNotice(err?.message || '다운로드 실패');
+    } finally {
+      setRangeExporting(false);
+    }
+  }
+
   function shiftDate(delta) {
     const d = new Date(`${date}T12:00:00+09:00`);
     d.setDate(d.getDate() + delta);
@@ -207,6 +295,74 @@ export default function AttendancePage() {
           <button type="button" className={btnClass} onClick={handleExport}>
             엑셀
           </button>
+        </div>
+
+        <div className="rounded-xl border border-border bg-surface px-3 py-3">
+          <div className="mb-2 text-xs font-medium text-text">기간 엑셀</div>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              시작일
+              <input
+                type="date"
+                value={rangeStart}
+                onChange={(e) => setRangeStart(e.target.value)}
+                className={selectClass}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              종료일
+              <input
+                type="date"
+                value={rangeEnd}
+                onChange={(e) => setRangeEnd(e.target.value)}
+                className={selectClass}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              작업자
+              <select
+                value={exportWorker}
+                onChange={(e) => setExportWorker(e.target.value)}
+                className={selectClass}
+              >
+                <option value="">전체</option>
+                {exportWorkers.map((worker) => (
+                  <option key={worker.worker_name} value={worker.worker_name}>
+                    {displayMap.get(worker.worker_name) || worker.worker_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              조
+              <select
+                value={exportShift}
+                onChange={(e) => setExportShift(e.target.value)}
+                className={selectClass}
+              >
+                <option value="">전체</option>
+                <option value="day">{shiftLabel('day')}</option>
+                <option value="night">{shiftLabel('night')}</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              className={primaryBtn}
+              onClick={handleRangeExport}
+              disabled={!rangeCheck.ok || rangeExporting}
+            >
+              {rangeExporting ? '만드는 중…' : '다운로드'}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            최대 31일. 저장된 판정만 받으며, 비어 있는 날은 자동으로 재계산하지 않습니다.
+          </p>
+          {rangeCheck.message ? (
+            <p className="mt-1 text-xs text-danger">{rangeCheck.message}</p>
+          ) : null}
+          {rangeNotice ? (
+            <p className="mt-1 text-xs text-text">{rangeNotice}</p>
+          ) : null}
         </div>
 
         {error ? (
