@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import { buildWorkerDisplayNameMap } from '../../lib/analytics';
 import { judgmentLabel } from '../../lib/attendance/judge';
@@ -28,6 +28,12 @@ import {
   formatExportDateTime,
 } from '../../lib/exportExcel';
 import { formatISODate, getRecentDaysRange } from '../../lib/dateRange';
+import {
+  attendanceRangeDates,
+  buildAttendanceRecomputeBody,
+  formatRangeJobStatus,
+  runAttendanceRangeRecompute,
+} from '../../lib/attendance/rangeJob';
 import { supabase } from '../../lib/supabase';
 
 const selectClass =
@@ -64,6 +70,8 @@ export default function AttendancePage() {
   const [exportShift, setExportShift] = useState('');
   const [rangeExporting, setRangeExporting] = useState(false);
   const [rangeNotice, setRangeNotice] = useState('');
+  const [rangeJob, setRangeJob] = useState(null);
+  const rangeAbortRef = useRef(null);
 
   const rangeCheck = useMemo(
     () => describeAttendanceExportRange({ start: rangeStart, end: rangeEnd }),
@@ -121,6 +129,10 @@ export default function AttendancePage() {
   useEffect(() => {
     setRangeNotice('');
   }, [rangeStart, rangeEnd, exportWorker, exportShift]);
+
+  useEffect(() => {
+    return () => rangeAbortRef.current?.abort();
+  }, []);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -190,11 +202,10 @@ export default function AttendancePage() {
     );
   }
 
-  async function handleRangeExport() {
+  async function downloadRangeExcel() {
     const check = describeAttendanceExportRange({ start: rangeStart, end: rangeEnd });
-    if (!check.ok) return;
+    if (!check.ok) return false;
     setRangeExporting(true);
-    setRangeNotice('');
     try {
       const companyId = await getCompanyId();
       const { data, error: fetchError } = await supabase
@@ -212,7 +223,8 @@ export default function AttendancePage() {
         start: rangeStart,
         end: rangeEnd,
       });
-      setRangeNotice(attendanceRecomputeNotice(missing));
+      const missingNotice = attendanceRecomputeNotice(missing);
+      setRangeNotice(missingNotice);
 
       const exportRows = filterAttendanceExportRows(stored, {
         workerName: exportWorker,
@@ -238,11 +250,76 @@ export default function AttendancePage() {
         },
         `근태_${formatDateRangeForFilename(rangeStart, rangeEnd)}.xlsx`
       );
+      return true;
     } catch (err) {
       setRangeNotice(err?.message || '다운로드 실패');
+      return false;
     } finally {
       setRangeExporting(false);
     }
+  }
+
+  async function runRangeRecompute() {
+    const plan = attendanceRangeDates(rangeStart, rangeEnd);
+    if (!plan.ok) return null;
+    rangeAbortRef.current?.abort();
+    const controller = new AbortController();
+    rangeAbortRef.current = controller;
+    setRangeJob({
+      phase: 'running',
+      index: 1,
+      total: plan.dates.length,
+      workDate: plan.dates[0] || '',
+      failed: [],
+      processed: 0,
+      cancelled: false,
+    });
+    const result = await runAttendanceRangeRecompute({
+      dates: plan.dates,
+      signal: controller.signal,
+      onProgress: (progress) => {
+        setRangeJob({
+          ...progress,
+          processed: Math.max(0, progress.index - 1),
+          cancelled: false,
+        });
+      },
+      recomputeDay: async (workDate, signal) => {
+        const res = await fetch('/api/attendance/recompute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildAttendanceRecomputeBody(workDate)),
+          signal,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || '재계산 실패');
+      },
+    });
+    setRangeJob({
+      phase: result.cancelled ? 'cancelled' : 'done',
+      index: result.processed,
+      total: result.total,
+      workDate: '',
+      failed: result.failed,
+      processed: result.processed,
+      cancelled: result.cancelled,
+    });
+    if (rangeStart <= date && date <= rangeEnd) await load();
+    return result;
+  }
+
+  function cancelRangeRecompute() {
+    rangeAbortRef.current?.abort();
+  }
+
+  async function handleRangeRecompute() {
+    await runRangeRecompute();
+  }
+
+  async function handleRecomputeThenExport() {
+    const result = await runRangeRecompute();
+    if (!result || result.cancelled) return;
+    await downloadRangeExcel();
   }
 
   function shiftDate(delta) {
@@ -288,7 +365,7 @@ export default function AttendancePage() {
             type="button"
             className={primaryBtn}
             onClick={handleRecompute}
-            disabled={recomputing}
+            disabled={recomputing || Boolean(rangeJob?.phase === 'running')}
           >
             {recomputing ? '재계산 중…' : '재계산'}
           </button>
@@ -298,7 +375,7 @@ export default function AttendancePage() {
         </div>
 
         <div className="rounded-xl border border-border bg-surface px-3 py-3">
-          <div className="mb-2 text-xs font-medium text-text">기간 엑셀</div>
+          <div className="mb-2 text-xs font-medium text-text">기간 재계산 · 엑셀</div>
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-xs text-muted">
               시작일
@@ -306,6 +383,7 @@ export default function AttendancePage() {
                 type="date"
                 value={rangeStart}
                 onChange={(e) => setRangeStart(e.target.value)}
+                disabled={rangeJob?.phase === 'running'}
                 className={selectClass}
               />
             </label>
@@ -315,6 +393,7 @@ export default function AttendancePage() {
                 type="date"
                 value={rangeEnd}
                 onChange={(e) => setRangeEnd(e.target.value)}
+                disabled={rangeJob?.phase === 'running'}
                 className={selectClass}
               />
             </label>
@@ -348,17 +427,41 @@ export default function AttendancePage() {
             <button
               type="button"
               className={primaryBtn}
-              onClick={handleRangeExport}
-              disabled={!rangeCheck.ok || rangeExporting}
+              onClick={handleRangeRecompute}
+              disabled={!rangeCheck.ok || rangeJob?.phase === 'running' || rangeExporting}
             >
-              {rangeExporting ? '만드는 중…' : '다운로드'}
+              기간 재계산
             </button>
+            <button
+              type="button"
+              className={btnClass}
+              onClick={downloadRangeExcel}
+              disabled={!rangeCheck.ok || rangeJob?.phase === 'running' || rangeExporting}
+            >
+              {rangeExporting ? '만드는 중…' : '엑셀 다운로드'}
+            </button>
+            <button
+              type="button"
+              className={btnClass}
+              onClick={handleRecomputeThenExport}
+              disabled={!rangeCheck.ok || rangeJob?.phase === 'running' || rangeExporting}
+            >
+              재계산 후 엑셀 다운로드
+            </button>
+            {rangeJob?.phase === 'running' ? (
+              <button type="button" className={btnClass} onClick={cancelRangeRecompute}>
+                중단
+              </button>
+            ) : null}
           </div>
           <p className="mt-2 text-xs text-muted">
-            최대 31일. 저장된 판정만 받으며, 비어 있는 날은 자동으로 재계산하지 않습니다.
+            최대 31일. 재계산은 날짜순으로 하루씩 호출하며, 확인 완료 행은 유지합니다. 엑셀 다운로드는 저장된 결과만 사용합니다.
           </p>
           {rangeCheck.message ? (
             <p className="mt-1 text-xs text-danger">{rangeCheck.message}</p>
+          ) : null}
+          {rangeJob ? (
+            <p className="mt-1 text-xs text-text">{formatRangeJobStatus(rangeJob)}</p>
           ) : null}
           {rangeNotice ? (
             <p className="mt-1 text-xs text-text">{rangeNotice}</p>
