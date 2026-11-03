@@ -102,6 +102,9 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
         code: result.code && DOC_ERROR_CODES[result.code] ? result.code : null,
         confidence: result.confidence,
         reason: result.reason,
+        similarCorrections: Array.isArray(result.similarCorrections)
+          ? result.similarCorrections
+          : [],
       };
       setAiSuggestion(suggestion);
       setAiCompletedAt(new Date());
@@ -219,6 +222,9 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
       wasAiAccepted,
       workerName: workerName.trim() || report.worker_name || null,
       correctionReason: wasAiAccepted === false ? correctionReasonRef.current : null,
+      productName: report.product_name,
+      itemId: report.item_id,
+      aiRunAt: sessionAi ? aiCompletedAt : null,
     });
 
     setSaving(false);
@@ -347,6 +353,7 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
                 confidence={aiSuggestion.confidence}
                 reason={aiSuggestion.reason}
                 codeSet="doc"
+                similarCorrections={aiSuggestion.similarCorrections}
               />
             ) : null}
 

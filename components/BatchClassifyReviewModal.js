@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import SignedImage from './SignedImage';
+import { SimilarCorrectionNotes } from './AiSuggestionBanner';
 import { CONFIDENCE_LABELS, getCodeLabel } from '../lib/constants';
 import { getDisplayName } from '../lib/analytics';
 import ModalShell, { ModalFooterActions } from './ModalShell';
@@ -71,6 +72,7 @@ export default function BatchClassifyReviewModal({
         ai_suggested_code: aiMeta[r.id]?.code ?? null,
         ai_confidence: aiMeta[r.id]?.confidence ?? null,
         ai_reason: aiMeta[r.id]?.reason ?? null,
+        aiRunAt: r.aiRunAt ?? null,
       }));
 
     if (!updates.length) {
@@ -169,7 +171,8 @@ export default function BatchClassifyReviewModal({
                     </span>
                   ) : null}
                 </div>
-                {r.reason ? <p className="text-[11px] text-muted">{r.reason}</p> : null}
+                {r.reason ? <p className="break-words text-[11px] leading-relaxed text-muted">{r.reason}</p> : null}
+                <SimilarCorrectionNotes codeSet={codeSet} items={r.similarCorrections} />
                 <select
                   value={selections[r.id] || ''}
                   onChange={(e) => setSelections((prev) => ({ ...prev, [r.id]: e.target.value }))}

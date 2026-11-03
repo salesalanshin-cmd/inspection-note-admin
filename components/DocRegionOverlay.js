@@ -114,6 +114,7 @@ function CodePopover({
               confidence={aiSuggestion.confidence}
               reason={aiSuggestion.reason}
               codeSet="doc"
+              similarCorrections={aiSuggestion.similarCorrections}
             />
           </div>
         ) : null}

@@ -166,7 +166,11 @@ export default function DefectsPage() {
   async function handleBatchClassify() {
     const items = selectedRecords
       .filter((d) => d.image_url)
-      .map((d) => ({ id: d.id, imageUrl: d.image_url }));
+      .map((d) => ({
+        id: d.id,
+        imageUrl: d.image_url,
+        productName: d.product_name ? String(d.product_name).trim() : undefined,
+      }));
 
     if (!items.length) {
       setBatchError('이미지가 있는 항목을 선택해 주세요.');
@@ -222,6 +226,9 @@ export default function DefectsPage() {
           finalNote: null,
           wasAiAccepted: resolveWasAiAccepted(true, u.ai_suggested_code, u.code),
           workerName: record?.worker_name || null,
+          productName: record?.product_name,
+          itemId: record?.item_id,
+          aiRunAt: u.aiRunAt,
         });
       })
     );

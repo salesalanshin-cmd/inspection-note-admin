@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CONFIDENCE_LABELS, getCodeLabel } from '../lib/constants';
+import { SimilarCorrectionNotes } from './AiSuggestionBanner';
 
 const inputClass =
   'w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
@@ -99,6 +100,11 @@ export default function AiMismatchDialog({
           </>
         ) : null}
       </p>
+      {pendingAi.similarCorrections?.length ? (
+        <div className="mt-2">
+          <SimilarCorrectionNotes codeSet={codeSet} items={pendingAi.similarCorrections} />
+        </div>
+      ) : null}
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <button
           type="button"

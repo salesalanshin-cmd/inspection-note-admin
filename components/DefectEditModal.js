@@ -78,6 +78,7 @@ export default function DefectEditModal({
   const markersRef = useRef(markers);
   const aiSuggestionRef = useRef(aiSuggestion);
   const correctionReasonRef = useRef(correctionReason);
+  const aiCompletedAtRef = useRef(null);
   codeRef.current = code;
   productNameRef.current = productName;
   markersRef.current = markers;
@@ -111,13 +112,18 @@ export default function DefectEditModal({
         productName: productNameRef.current,
       });
       const normalized = normalizeDefectCode(result.code);
+      const completedAt = new Date();
       const suggestion = {
         code: normalized,
         confidence: result.confidence,
         reason: result.reason,
+        similarCorrections: Array.isArray(result.similarCorrections)
+          ? result.similarCorrections
+          : [],
       };
       setAiSuggestion(suggestion);
-      setAiCompletedAt(new Date());
+      aiCompletedAtRef.current = completedAt;
+      setAiCompletedAt(completedAt);
 
       // labels에 없는 코드면 드롭다운에 넣을 수 없음 — 배너만 표시
       if (!normalized) return;
@@ -252,6 +258,9 @@ export default function DefectEditModal({
       wasAiAccepted,
       workerName: report.worker_name || null,
       correctionReason: wasAiAccepted === false ? correctionReasonRef.current : null,
+      productName: nextProductName,
+      itemId: report.item_id,
+      aiRunAt: sessionAi ? aiCompletedAtRef.current : null,
     });
 
     setSaving(false);
@@ -381,6 +390,7 @@ export default function DefectEditModal({
                 confidence={aiSuggestion.confidence}
                 reason={aiSuggestion.reason}
                 codeSet="defect"
+                similarCorrections={aiSuggestion.similarCorrections}
               />
             ) : null}
 

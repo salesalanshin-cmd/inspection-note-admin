@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { classifyPhoto } from '../../../lib/classifyService';
 import { fetchProductDefectStats } from '../../../lib/classifyPrompt';
+import { fetchRecentRejectedCorrections } from '../../../lib/aiCorrectionLog';
+import { aggregateSimilarCorrections } from '../../../lib/aiCorrectionSelect';
 
 export async function POST(request) {
   let body;
@@ -32,7 +34,20 @@ export async function POST(request) {
       productName: trimmedProduct || undefined,
       productDefectStats: trimmedProduct ? productDefectStats : undefined,
     });
-    return NextResponse.json(result);
+    let similarCorrections = [];
+    if (result.code) {
+      try {
+        const rows = await fetchRecentRejectedCorrections(codeSet);
+        similarCorrections = aggregateSimilarCorrections(rows, {
+          code: result.code,
+          productName: trimmedProduct,
+        });
+      } catch (similarErr) {
+        // eslint-disable-next-line no-console
+        console.error('[classify-photo] similar corrections', similarErr?.message || similarErr);
+      }
+    }
+    return NextResponse.json({ ...result, similarCorrections });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[classify-photo]', err);

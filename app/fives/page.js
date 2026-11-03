@@ -204,6 +204,9 @@ export default function FivesPage() {
           finalNote: record?.sos_error_note || null,
           wasAiAccepted: resolveWasAiAccepted(true, u.ai_suggested_code, u.code),
           workerName: record?.worker_name || null,
+          productName: record?.product_name,
+          itemId: record?.item_id,
+          aiRunAt: u.aiRunAt,
         });
       })
     );

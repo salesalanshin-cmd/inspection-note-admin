@@ -32,7 +32,7 @@ export async function POST(request) {
   }
 
   try {
-    // 배치 내 ai_correction_log 조회 1회 → 프롬프트 재사용
+    // 제품명이 있는 항목은 같은 제품 정정 사례를 우선하고, 없으면 기존 최근순을 유지한다.
     const results = await classifyPhotosBatch(items, codeSet);
     return NextResponse.json({ results });
   } catch (err) {

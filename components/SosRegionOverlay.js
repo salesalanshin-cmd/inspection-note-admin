@@ -141,6 +141,7 @@ function SosCodePopover({
               confidence={aiSuggestion.confidence}
               reason={aiSuggestion.reason}
               codeSet="sos"
+              similarCorrections={aiSuggestion.similarCorrections}
             />
           </div>
         ) : null}
