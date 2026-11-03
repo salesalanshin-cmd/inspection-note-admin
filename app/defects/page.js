@@ -6,6 +6,7 @@ import { defectLabel, DEFECT_CODE_LABELS } from '../../lib/constants';
 import { parseMarkingData } from '../../lib/markingData';
 import { buildWorkerDisplayNameMap, filterDefectsForDisplay } from '../../lib/analytics';
 import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
+import { filterDefectGallery } from '../../lib/defectFilters';
 import { requestClassifyPhotosBatch } from '../../lib/classifyClient';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
@@ -59,7 +60,7 @@ export default function DefectsPage() {
   const { loading, error, defects, refetch, workerDirectory } = useReports();
   const [worker, setWorker] = useState('all');
   const [type, setType] = useState('all');
-  const [product, setProduct] = useState('all');
+  const [productQuery, setProductQuery] = useState('');
   const [selected, setSelected] = useState(null);
   const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
   const [batchProgress, setBatchProgress] = useState(null);
@@ -110,17 +111,6 @@ export default function DefectsPage() {
     () => Array.from(new Set(dateFilteredDefects.map((d) => defectLabel(d)))).sort(),
     [dateFilteredDefects]
   );
-  const products = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          dateFilteredDefects
-            .map((d) => (d.product_name ? String(d.product_name).trim() : ''))
-            .filter(Boolean)
-        )
-      ).sort((a, b) => a.localeCompare(b, 'ko')),
-    [dateFilteredDefects]
-  );
   // 모달 자동완성: 날짜 필터와 무관하게 전체 표시 목록의 distinct 제품명
   const productNameOptions = useMemo(
     () =>
@@ -134,18 +124,16 @@ export default function DefectsPage() {
     [visibleDefects]
   );
 
-  const filtered = dateFilteredDefects.filter(
-    (d) =>
-      (worker === 'all' || d.worker_name === worker) &&
-      (type === 'all' || defectLabel(d) === type) &&
-      (product === 'all' || (d.product_name || '') === product)
+  const filtered = useMemo(
+    () =>
+      filterDefectGallery(dateFilteredDefects, {
+        worker,
+        type,
+        productQuery,
+        typeOf: defectLabel,
+      }),
+    [dateFilteredDefects, worker, type, productQuery]
   );
-
-  useEffect(() => {
-    if (product !== 'all' && !products.includes(product)) {
-      setProduct('all');
-    }
-  }, [product, products]);
 
   const canExport = isDateRangeValid(dateRange) && filtered.length > 0;
 
@@ -316,7 +304,41 @@ export default function DefectsPage() {
 
       <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
         <div className="shrink-0 space-y-3 bg-bg pb-4">
-          <FilterToolbar primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}>
+          <FilterToolbar
+            primary={<DateRangePicker value={dateRange} onChange={setDateRange} />}
+            pinned={
+              <>
+                <input
+                  type="search"
+                  value={productQuery}
+                  onChange={(e) => setProductQuery(e.target.value)}
+                  list="defect-product-search"
+                  placeholder="제품명 또는 품번"
+                  aria-label="제품명 또는 품번"
+                  className={`${selectClass} w-full md:w-56`}
+                />
+                <datalist id="defect-product-search">
+                  {productNameOptions.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  aria-label="불량 유형"
+                  className={`${selectClass} w-full md:w-auto`}
+                >
+                  <option value="all">전체 유형</option>
+                  {types.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-sm font-medium text-text md:min-w-[3rem]">{filtered.length}건</p>
+              </>
+            }
+          >
             <select
               value={worker}
               onChange={(e) => setWorker(e.target.value)}
@@ -326,30 +348,6 @@ export default function DefectsPage() {
               {workers.map((w) => (
                 <option key={w} value={w}>
                   {displayMap.get(w) || w}
-                </option>
-              ))}
-            </select>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className={selectClass}
-            >
-              <option value="all">전체 유형</option>
-              {types.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-            <select
-              value={product}
-              onChange={(e) => setProduct(e.target.value)}
-              className={selectClass}
-            >
-              <option value="all">전체 제품</option>
-              {products.map((p) => (
-                <option key={p} value={p}>
-                  {p}
                 </option>
               ))}
             </select>

@@ -20,6 +20,7 @@ const DAILY_NAV = [
 
 /** 보조 — 주 단위·필요 시 확인 */
 const WEEKLY_NAV = [
+  { href: '/ai-accuracy', label: 'AI 오진율', code: '15' },
   { href: '/document-scans', label: '스캔 문서 검수', code: '06' },
   { href: '/documents', label: '문서', code: '06b' },
   { href: '/knowledge', label: '지식 관리', code: '06d' },

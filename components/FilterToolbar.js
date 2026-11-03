@@ -7,9 +7,9 @@ const mobileTouchClass =
   '[&_button]:min-h-[44px] [&_select]:min-h-[44px] [&_input]:min-h-[44px]';
 
 /**
- * 데스크톱: 가로 배치 / 모바일: primary(날짜 네비 등) 고정 + 필터 아코디언
+ * 데스크톱: 가로 배치 / 모바일: primary·pinned는 항상 보이고 나머지는 필터 아코디언
  */
-export default function FilterToolbar({ primary, children, aside, className = '' }) {
+export default function FilterToolbar({ primary, pinned, children, aside, className = '' }) {
   const [open, setOpen] = useState(false);
   const hasFilters = Boolean(children) || Boolean(aside);
 
@@ -20,6 +20,7 @@ export default function FilterToolbar({ primary, children, aside, className = ''
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2 md:gap-3">
             {primary}
+            {pinned}
             {children}
           </div>
           {aside ? <div className="flex flex-wrap items-center justify-end gap-2">{aside}</div> : null}
@@ -29,6 +30,7 @@ export default function FilterToolbar({ primary, children, aside, className = ''
       {/* Mobile */}
       <div className={`md:hidden space-y-2 ${mobileTouchClass}`}>
         {primary ? <div className="w-full">{primary}</div> : null}
+        {pinned ? <div className="flex flex-col gap-2 [&>*]:w-full">{pinned}</div> : null}
         {hasFilters ? (
           <>
             <button
