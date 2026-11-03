@@ -8,6 +8,7 @@ import {
   TRASH_TABLES,
 } from '../../lib/trash';
 import PageHeader from '../../components/PageHeader';
+import ListTruncationNotice from '../../components/ListTruncationNotice';
 import SignedImage from '../../components/SignedImage';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { defectLabel, docLabel, fivesLabel } from '../../lib/constants';
@@ -33,7 +34,7 @@ function itemTitle(item) {
 }
 
 export default function TrashPage() {
-  const { loading, error, items, refetch, removeItems } = useTrash();
+  const { loading, error, truncated, items, refetch, removeItems } = useTrash();
   const [filter, setFilter] = useState('all');
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [restoreConfirm, setRestoreConfirm] = useState(false);
@@ -149,7 +150,7 @@ export default function TrashPage() {
     }
   }
 
-  if (loading) return <div className="p-8 text-muted text-sm">데이터 불러오는 중...</div>;
+  if (loading) return <div className="p-8 text-muted text-sm">기록을 불러오는 중...</div>;
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   return (
@@ -161,6 +162,7 @@ export default function TrashPage() {
       />
 
       <div className="p-8 space-y-6">
+        {truncated ? <ListTruncationNotice show /> : null}
         {oldCount > 0 ? (
           <div className="rounded-xl border border-warn/30 bg-warnSoft px-4 py-3 text-sm text-warn">
             30일 지난 항목 {oldCount}개 — 완전삭제를 권장합니다. (자동 삭제는 하지 않습니다)

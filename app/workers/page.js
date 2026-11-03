@@ -6,6 +6,7 @@ import { useReports } from '../../lib/useReports';
 import { FIVES_CYCLE_DAYS, INSPECTION_CYCLE_DAYS } from '../../lib/constants';
 import { startOfLocalDay as startOfDay } from '../../lib/dateRange';
 import PageHeader from '../../components/PageHeader';
+import ListTruncationNotice from '../../components/ListTruncationNotice';
 import FilterToolbar from '../../components/FilterToolbar';
 import WorkersSummarySection from '../../components/WorkersSummarySection';
 
@@ -22,7 +23,7 @@ function formatWorkDate(date) {
 }
 
 export default function WorkersPage() {
-  const { loading, error, defects, goods, fives, workerDirectory } = useReports();
+  const { loading, error, truncated, defects, goods, fives, workerDirectory } = useReports();
   const [endDate, setEndDate] = useState(() => startOfDay(new Date()));
 
   function shiftDay(delta) {
@@ -45,6 +46,7 @@ export default function WorkersPage() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
+        {truncated ? <div className="mb-4"><ListTruncationNotice show /></div> : null}
         <div className="mb-4 rounded-xl border border-accent/30 bg-accentSoft px-4 py-3 text-sm text-text">
           이 화면은{' '}
           <Link href="/daily-performance" className="font-medium text-accent underline-offset-2 hover:underline">

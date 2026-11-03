@@ -27,6 +27,7 @@ import {
   isWeekend,
 } from '../../lib/dateRange';
 import PageHeader from '../../components/PageHeader';
+import ListTruncationNotice from '../../components/ListTruncationNotice';
 import FilterToolbar from '../../components/FilterToolbar';
 import DateRangePicker from '../../components/DateRangePicker';
 import SignedImage from '../../components/SignedImage';
@@ -195,7 +196,7 @@ function TimelineThumb({ item }) {
 function WorkerDetailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { loading, error, defects, goods, fives, docs, workerDirectory } = useReports();
+  const { loading, error, truncated, defects, goods, fives, docs, workerDirectory } = useReports();
   const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
   const [selectedName, setSelectedName] = useState(() => searchParams.get('name') || '');
 
@@ -433,6 +434,7 @@ function WorkerDetailContent() {
       />
 
       <div className="space-y-5 p-4 md:p-8">
+        {truncated ? <ListTruncationNotice show /> : null}
         <FilterToolbar
           primary={
             <div className="flex flex-col gap-3 md:flex-row md:items-start">

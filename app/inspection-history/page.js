@@ -12,6 +12,7 @@ import {
 } from '../../lib/analytics';
 import { startOfLocalDay as startOfDay } from '../../lib/dateRange';
 import PageHeader from '../../components/PageHeader';
+import ListTruncationNotice from '../../components/ListTruncationNotice';
 import PageTableShell from '../../components/PageTableShell';
 import TrafficLightDots from '../../components/TrafficLightDots';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
@@ -77,7 +78,7 @@ function OverallBadge({ row }) {
 }
 
 export default function InspectionHistoryPage() {
-  const { loading, error, defects, goods, fives, workerDirectory } = useReports();
+  const { loading, error, truncated, defects, goods, fives, workerDirectory } = useReports();
   const [date, setDate] = useState(() => startOfDay(new Date()));
   const [modalWorker, setModalWorker] = useState(null);
 
@@ -129,6 +130,7 @@ export default function InspectionHistoryPage() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-8 pt-4 md:px-8">
+        {truncated ? <div className="mb-4"><ListTruncationNotice show /></div> : null}
         <div className="mb-4 rounded-xl border border-accent/30 bg-accentSoft px-4 py-3 text-sm text-text">
           이 화면은{' '}
           <Link href="/frequent-check" className="font-medium text-accent underline-offset-2 hover:underline">

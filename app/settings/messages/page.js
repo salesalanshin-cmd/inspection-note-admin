@@ -14,6 +14,7 @@ import { getRecentDaysRange, formatISODate, startOfLocalDay as startOfDay } from
 import { DEFAULT_PROCESS_FILTER } from '../../../lib/constants';
 import { useReports } from '../../../lib/useReports';
 import PageHeader from '../../../components/PageHeader';
+import ListTruncationNotice from '../../../components/ListTruncationNotice';
 import DateRangePicker from '../../../components/DateRangePicker';
 import NotifyReviewModal from '../../../components/NotifyReviewModal';
 import ProcessFilterSelect from '../../../components/ProcessFilterSelect';
@@ -150,6 +151,7 @@ export default function MessagesSettingsPage() {
     docs,
     loading: reportsLoading,
     error: reportsError,
+    truncated: reportsTruncated,
     refetch: refetchReports,
   } = useReports();
   const [logs, setLogs] = useState([]);
@@ -471,6 +473,7 @@ export default function MessagesSettingsPage() {
       />
 
       <div className="space-y-8 px-4 py-6 md:px-8">
+        {reportsTruncated ? <ListTruncationNotice show /> : null}
         {/* 날짜별 양호/미흡 현황 */}
         <section>
           <div className="mb-3 flex flex-col gap-3">

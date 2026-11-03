@@ -18,6 +18,7 @@ import { DEFAULT_PROCESS_FILTER, SHIFT_STAGES } from '../../lib/constants';
 import { isWeekend, shiftWorkDate, startOfLocalDay as startOfDay, toPreviousWeekday } from '../../lib/dateRange';
 import { sortRows, toggleSortKey } from '../../lib/tableSort';
 import PageHeader from '../../components/PageHeader';
+import ListTruncationNotice from '../../components/ListTruncationNotice';
 import NotifyReviewModal from '../../components/NotifyReviewModal';
 import WorkersSummarySection from '../../components/WorkersSummarySection';
 import TrafficLightDots from '../../components/TrafficLightDots';
@@ -366,7 +367,8 @@ function PriorityMissSection({ workers, displayMap, onSelectWorker, onRefresh })
 }
 
 export default function DailyPerformancePage() {
-  const { loading, error, defects, goods, fives, docs, workerDirectory, refetch } = useReports();
+  const { loading, error, truncated, defects, goods, fives, docs, workerDirectory, refetch } =
+    useReports();
   const [activeTab, setActiveTab] = useState('today');
   const [date, setDate] = useState(() => toPreviousWeekday(startOfDay(new Date())));
   const [includeHolidays, setIncludeHolidays] = useState(false);
@@ -625,6 +627,11 @@ export default function DailyPerformancePage() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 md:px-8">
+        {truncated ? (
+          <div className="pt-4">
+            <ListTruncationNotice show />
+          </div>
+        ) : null}
         {/* 날짜 네비만 sticky — 요약/우선순위 목록은 문서 흐름으로 스크롤 */}
         <div
           ref={dayNavRef}

@@ -27,6 +27,7 @@ import {
 } from '../../lib/analytics';
 import { DEFAULT_PROCESS_FILTER } from '../../lib/constants';
 import PageHeader from '../../components/PageHeader';
+import ListTruncationNotice from '../../components/ListTruncationNotice';
 import StatCard from '../../components/StatCard';
 import ProcessFilterSelect from '../../components/ProcessFilterSelect';
 
@@ -95,7 +96,7 @@ function ShiftStageStatCard({ item }) {
 }
 
 export default function DashboardPage() {
-  const { loading, error, defects, goods, fives, workerDirectory } = useReports();
+  const { loading, error, truncated, defects, goods, fives, workerDirectory } = useReports();
   const [processFilter, setProcessFilter] = useState(DEFAULT_PROCESS_FILTER);
 
   const excludedNames = useMemo(
@@ -221,6 +222,7 @@ export default function DashboardPage() {
       />
 
       <div className="p-8 space-y-8">
+        {truncated ? <ListTruncationNotice show /> : null}
         <ProcessFilterSelect value={processFilter} onChange={setProcessFilter} />
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <StatCard label="총 검사 건수" value={total} sub={`불량 ${filteredDefects.length} · 양품 ${filteredGoods.length}`} />

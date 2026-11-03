@@ -22,6 +22,7 @@ import {
   resolveWasAiAccepted,
 } from '../../lib/aiCorrectionLog';
 import PageHeader from '../../components/PageHeader';
+import ListTruncationNotice from '../../components/ListTruncationNotice';
 import SignedImage from '../../components/SignedImage';
 import DefectEditModal from '../../components/DefectEditModal';
 import BatchClassifyReviewModal from '../../components/BatchClassifyReviewModal';
@@ -57,7 +58,7 @@ const DEFECT_CODE_OPTIONS = Object.entries(DEFECT_CODE_LABELS).map(([value, labe
 }));
 
 export default function DefectsPage() {
-  const { loading, error, defects, refetch, workerDirectory } = useReports();
+  const { loading, error, truncated, defects, refetch, workerDirectory } = useReports();
   const [worker, setWorker] = useState('all');
   const [type, setType] = useState('all');
   const [productQuery, setProductQuery] = useState('');
@@ -286,12 +287,18 @@ export default function DefectsPage() {
     );
   }
 
-  if (loading) return <div className="p-8 text-muted text-sm">데이터 불러오는 중...</div>;
+  if (loading) return <div className="p-8 text-muted text-sm">기록을 불러오는 중...</div>;
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   return (
     <div>
       <PageHeader eyebrow="RECORDS" title="불량 기록" description={`총 ${filtered.length}건`} />
+
+      {truncated ? (
+        <div className="px-4 pt-3 md:px-8">
+          <ListTruncationNotice show />
+        </div>
+      ) : null}
 
       {pendingNotifyCount > 0 ? (
         <div className="px-4 pt-3 md:px-8">

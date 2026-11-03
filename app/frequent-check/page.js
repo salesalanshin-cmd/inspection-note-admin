@@ -34,6 +34,7 @@ import {
   downloadImagesAsZip,
 } from '../../lib/downloadImages';
 import PageHeader from '../../components/PageHeader';
+import ListTruncationNotice from '../../components/ListTruncationNotice';
 import PageTableShell from '../../components/PageTableShell';
 import SortableTh from '../../components/SortableTh';
 import FilterToolbar from '../../components/FilterToolbar';
@@ -219,7 +220,7 @@ function buildInspectionPhotoRows(defects, goods) {
 }
 
 export default function FrequentCheckPage() {
-  const { loading, error, defects, goods, fives, workerDirectory } = useReports();
+  const { loading, error, truncated, defects, goods, fives, workerDirectory } = useReports();
 
   // ——— 현황 ———
   const [date, setDate] = useState(() => startOfDay(new Date()));
@@ -421,7 +422,7 @@ export default function FrequentCheckPage() {
     }
   }
 
-  if (loading) return <div className="p-8 text-muted text-sm">데이터 불러오는 중...</div>;
+  if (loading) return <div className="p-8 text-muted text-sm">기록을 불러오는 중...</div>;
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   const clickableRowClass =
@@ -436,6 +437,7 @@ export default function FrequentCheckPage() {
       />
 
       <div className="space-y-6 px-4 pb-8 pt-0 md:px-8">
+        {truncated ? <ListTruncationNotice show /> : null}
         {/* 상단: 현황 표 (3정5S의 ClockInOutSection 위치) */}
         <PageTableShell
           variant="flow"

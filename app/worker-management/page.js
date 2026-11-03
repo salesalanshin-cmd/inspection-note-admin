@@ -19,6 +19,7 @@ import {
 import { getCompanyId } from '../../lib/company';
 import { supabase } from '../../lib/supabase';
 import PageHeader from '../../components/PageHeader';
+import ListTruncationNotice from '../../components/ListTruncationNotice';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
 import WorkerEditModal from '../../components/WorkerEditModal';
 
@@ -443,7 +444,7 @@ function WorkerMobileCard({
 }
 
 export default function WorkerManagementPage() {
-  const { loading, error, defects, goods, fives, workerDirectory, refetch } = useReports();
+  const { loading, error, truncated, defects, goods, fives, workerDirectory, refetch } = useReports();
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(null);
   const [formError, setFormError] = useState(null);
@@ -725,6 +726,7 @@ export default function WorkerManagementPage() {
       />
 
       <div className="space-y-6 p-4 md:p-8">
+        {truncated ? <ListTruncationNotice show /> : null}
         {unassignedCount > 0 ? (
           <div className="rounded-xl border border-warn/30 bg-warnSoft px-4 py-3 text-sm text-text">
             담당 설비 미지정 {unassignedCount}명 — 이 작업자들의 불량 기록에는 설비 정보가

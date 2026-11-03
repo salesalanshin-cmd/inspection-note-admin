@@ -41,6 +41,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import GalleryFloatingBar from '../../components/GalleryFloatingBar';
 import DateRangePicker from '../../components/DateRangePicker';
 import ClockInOutSection from '../../components/ClockInOutSection';
+import ListTruncationNotice from '../../components/ListTruncationNotice';
 
 const exportBtnClass =
   'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
@@ -86,7 +87,7 @@ function getFivesSortValue(record, key) {
 }
 
 export default function FivesPage() {
-  const { loading, error, fives, refetch, workerDirectory } = useReports();
+  const { loading, error, truncated, fives, refetch, workerDirectory } = useReports();
   const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
   const [selected, setSelected] = useState(null);
   const [batchProgress, setBatchProgress] = useState(null);
@@ -276,12 +277,18 @@ export default function FivesPage() {
     );
   }
 
-  if (loading) return <div className="p-8 text-muted text-sm">데이터 불러오는 중...</div>;
+  if (loading) return <div className="p-8 text-muted text-sm">기록을 불러오는 중...</div>;
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
   return (
     <div>
       <PageHeader eyebrow="WORKPLACE" title="3정5S 기록" description={`총 ${filtered.length}건`} />
+
+      {truncated ? (
+        <div className="px-4 pt-3 md:px-8">
+          <ListTruncationNotice show />
+        </div>
+      ) : null}
 
       {pendingNotifyCount > 0 ? (
         <div className="px-4 pt-3 md:px-8">
