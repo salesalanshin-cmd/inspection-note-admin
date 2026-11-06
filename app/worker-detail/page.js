@@ -19,6 +19,8 @@ import {
   tagInspectionStage,
 } from '../../lib/analytics';
 import { getKstDateParts, getKstHours, getKstMinutes, getKstSeconds } from '../../lib/kst';
+import { resolveRecordShift } from '../../lib/attendance/resolveRecordShift';
+import { useAttendanceDailyMap } from '../../lib/attendance/useAttendanceDailyMap';
 import { PROCESS_FILTER_ALL, SHIFT_STAGES, defectLabel, docLabel, fivesLabel } from '../../lib/constants';
 import {
   eachDateInRange,
@@ -198,6 +200,9 @@ function WorkerDetailContent() {
   const searchParams = useSearchParams();
   const { loading, error, truncated, defects, goods, fives, docs, workerDirectory } = useReports();
   const [dateRange, setDateRange] = useState(() => getRecentDaysRange(7));
+  const attendanceByWorker = useAttendanceDailyMap(dateRange.start, dateRange.end, {
+    enabled: isDateRangeValid(dateRange),
+  });
   const [selectedName, setSelectedName] = useState(() => searchParams.get('name') || '');
 
   const displayMap = useMemo(
@@ -250,9 +255,20 @@ function WorkerDetailContent() {
     if (!selectedName || !isDateRangeValid(dateRange)) return [];
 
     const items = [];
-    const pushItem = (record, kind, typeLabel) => {
+    const pushItem = (record, kind, typeLabel, { useAttendance = false } = {}) => {
       if (!record?.created_at) return;
-      const workDate = getWorkDateForRecord(record.created_at);
+      let workDate = getWorkDateForRecord(record.created_at);
+      if (useAttendance) {
+        const resolved = resolveRecordShift({
+          workerName: record.worker_name,
+          timestamp: record.created_at,
+          attendanceRows: attendanceByWorker.get(record.worker_name),
+          defaultShift: getManualWorkerShift(workerDirectory, record.worker_name),
+        });
+        if (resolved.source === 'attendance' && resolved.workDate) {
+          workDate = resolved.workDate;
+        }
+      }
       if (workDate < dateRange.start || workDate > dateRange.end) return;
       items.push({
         id: `${kind}-${record.id}`,
@@ -265,12 +281,22 @@ function WorkerDetailContent() {
     };
 
     for (const record of workerRecords.goods) {
-      const { stage } = tagInspectionStage(record, workerDirectory, workerRecords.all);
+      const { stage } = tagInspectionStage(
+        record,
+        workerDirectory,
+        workerRecords.all,
+        attendanceByWorker.get(record.worker_name)
+      );
       const stagePart = SHIFT_STAGES.includes(stage) ? stage.replace('품', '') : stage;
-      pushItem(record, 'frequent', `자주검사-${stagePart}`);
+      pushItem(record, 'frequent', `자주검사-${stagePart}`, { useAttendance: true });
     }
     for (const record of workerRecords.defects) {
-      const { stage } = tagInspectionStage(record, workerDirectory, workerRecords.all);
+      const { stage } = tagInspectionStage(
+        record,
+        workerDirectory,
+        workerRecords.all,
+        attendanceByWorker.get(record.worker_name)
+      );
       const suffix = SHIFT_STAGES.includes(stage) ? `-${stage.replace('품', '')}` : '';
       pushItem(record, 'defect', `불량기록${suffix}`);
     }
@@ -278,7 +304,7 @@ function WorkerDetailContent() {
       pushItem(record, 'fives', '3정5S');
     }
     for (const record of workerRecords.docs) {
-      pushItem(record, 'document', '문서스캔');
+      pushItem(record, 'document', '문서스캔', { useAttendance: true });
     }
 
     const shiftCache = new Map();
@@ -301,7 +327,7 @@ function WorkerDetailContent() {
 
     items.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     return items;
-  }, [selectedName, dateRange, workerRecords, workerDirectory]);
+  }, [selectedName, dateRange, workerRecords, workerDirectory, attendanceByWorker]);
 
   const groupedTimeline = useMemo(() => {
     const groups = [];

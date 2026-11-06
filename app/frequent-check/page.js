@@ -24,10 +24,12 @@ import {
   countDaysInRange,
   eachDateInRange,
   filterByCreatedAtDateRange,
+  formatISODate,
   getRecentDaysRange,
   isDateRangeValid,
   startOfLocalDay as startOfDay,
 } from '../../lib/dateRange';
+import { useAttendanceDailyMap } from '../../lib/attendance/useAttendanceDailyMap';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
 import {
   buildImageDownloadFilename,
@@ -240,6 +242,21 @@ export default function FrequentCheckPage() {
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
     useGalleryBatchSelect((item) => item.listKey);
 
+  const attendanceRange = useMemo(() => {
+    let start = galleryDateRange.start;
+    let end = galleryDateRange.end;
+    for (const row of [...(defects || []), ...(goods || [])]) {
+      if (!row?.created_at) continue;
+      const key = formatISODate(row.created_at);
+      if (key < start) start = key;
+      if (key > end) end = key;
+    }
+    return { start, end };
+  }, [galleryDateRange.start, galleryDateRange.end, defects, goods]);
+  const attendanceByWorker = useAttendanceDailyMap(attendanceRange.start, attendanceRange.end, {
+    enabled: !loading,
+  });
+
   const excludedNames = useMemo(
     () => getExcludedWorkerNames(workerDirectory),
     [workerDirectory]
@@ -309,7 +326,8 @@ export default function FrequentCheckPage() {
       const { stage, shift } = tagInspectionStage(
         r,
         workerDirectory,
-        byWorker.get(r.worker_name) || [r]
+        byWorker.get(r.worker_name) || [r],
+        attendanceByWorker.get(r.worker_name)
       );
       return { ...r, stage, shift };
     });
@@ -319,6 +337,7 @@ export default function FrequentCheckPage() {
     galleryWorker,
     photoRows,
     workerDirectory,
+    attendanceByWorker,
     gallerySortKey,
     gallerySortDir,
   ]);
@@ -758,6 +777,7 @@ export default function FrequentCheckPage() {
           defects={defects}
           goods={goods}
           workerDirectory={workerDirectory}
+          attendanceByWorker={attendanceByWorker}
           onClose={() => setModalWorker(null)}
         />
       ) : null}

@@ -10,7 +10,8 @@ import {
   getExcludedWorkerNames,
   groupComplianceByShift,
 } from '../../lib/analytics';
-import { startOfLocalDay as startOfDay } from '../../lib/dateRange';
+import { formatISODate, startOfLocalDay as startOfDay } from '../../lib/dateRange';
+import { useAttendanceDailyMap } from '../../lib/attendance/useAttendanceDailyMap';
 import PageHeader from '../../components/PageHeader';
 import ListTruncationNotice from '../../components/ListTruncationNotice';
 import PageTableShell from '../../components/PageTableShell';
@@ -81,6 +82,20 @@ export default function InspectionHistoryPage() {
   const { loading, error, truncated, defects, goods, fives, workerDirectory } = useReports();
   const [date, setDate] = useState(() => startOfDay(new Date()));
   const [modalWorker, setModalWorker] = useState(null);
+  const attendanceRange = useMemo(() => {
+    let start = formatISODate(date);
+    let end = start;
+    for (const row of [...(defects || []), ...(goods || [])]) {
+      if (!row?.created_at) continue;
+      const key = formatISODate(row.created_at);
+      if (key < start) start = key;
+      if (key > end) end = key;
+    }
+    return { start, end };
+  }, [date, defects, goods]);
+  const attendanceByWorker = useAttendanceDailyMap(attendanceRange.start, attendanceRange.end, {
+    enabled: !loading,
+  });
 
   const excludedNames = useMemo(
     () => getExcludedWorkerNames(workerDirectory),
@@ -261,6 +276,7 @@ export default function InspectionHistoryPage() {
           defects={defects}
           goods={goods}
           workerDirectory={workerDirectory}
+          attendanceByWorker={attendanceByWorker}
           onClose={() => setModalWorker(null)}
         />
       ) : null}

@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { DOC_ERROR_CODES, docLabel } from '../../lib/constants';
 import { OCR_DOC_TYPES, ocrDocTypeLabel } from '../../lib/ocrDocTypes';
-import { buildWorkerDisplayNameMap } from '../../lib/analytics';
-import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
+import { buildWorkerDisplayNameMap, getManualWorkerShift } from '../../lib/analytics';
+import { resolveRecordShift } from '../../lib/attendance/resolveRecordShift';
+import { useAttendanceDailyMap } from '../../lib/attendance/useAttendanceDailyMap';
+import { formatISODate, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
 import {
   buildImageDownloadFilename,
@@ -57,6 +59,9 @@ export default function DocumentsPage() {
   const [pendingNotifyCount, setPendingNotifyCount] = useState(0);
   const { selectedIds, selectedCount, toggle, selectAll, clearAll, isSelected } =
     useGalleryBatchSelect();
+  const attendanceByWorker = useAttendanceDailyMap(dateRange.start, dateRange.end, {
+    enabled: !loading && isDateRangeValid(dateRange),
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -78,10 +83,23 @@ export default function DocumentsPage() {
     [workerDirectory]
   );
 
-  const dateFiltered = useMemo(
-    () => filterByCreatedAtDateRange(docs, dateRange),
-    [docs, dateRange]
-  );
+  const dateFiltered = useMemo(() => {
+    if (!isDateRangeValid(dateRange)) return docs;
+    return (docs || []).filter((row) => {
+      if (!row?.created_at) return false;
+      const resolved = resolveRecordShift({
+        workerName: row.worker_name,
+        timestamp: row.created_at,
+        attendanceRows: attendanceByWorker.get(row.worker_name),
+        defaultShift: getManualWorkerShift(workerDirectory, row.worker_name),
+      });
+      const key =
+        resolved.source === 'attendance' && resolved.workDate
+          ? resolved.workDate
+          : formatISODate(row.created_at);
+      return key >= dateRange.start && key <= dateRange.end;
+    });
+  }, [docs, dateRange, attendanceByWorker, workerDirectory]);
 
   const workers = useMemo(
     () => Array.from(new Set(dateFiltered.map((d) => d.worker_name).filter(Boolean))).sort(),

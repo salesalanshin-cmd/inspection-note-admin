@@ -87,6 +87,7 @@ export default function WorkerDailyDetailModal({
   goods,
   fives,
   workerDirectory,
+  attendanceRows,
   date,
   onClose,
 }) {
@@ -109,10 +110,10 @@ export default function WorkerDailyDetailModal({
     return dayRecords
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       .map((r) => {
-        const { stage } = tagInspectionStage(r, workerDirectory, workerRecords);
+        const { stage } = tagInspectionStage(r, workerDirectory, workerRecords, attendanceRows);
         return { ...r, stage, listKey: `${r.recordType}-${r.id}` };
       });
-  }, [defects, goods, workerName, date, workerDirectory]);
+  }, [defects, goods, workerName, date, workerDirectory, attendanceRows]);
 
   const fivesRecords = useMemo(
     () =>

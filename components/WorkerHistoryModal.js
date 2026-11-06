@@ -20,9 +20,14 @@ function formatDateListLabel(dateStr) {
   return `${monthDay} 근무일`;
 }
 
-function enrichRecord(record, workerDirectory, allWorkerRecords) {
+function enrichRecord(record, workerDirectory, allWorkerRecords, attendanceRows) {
   const recordType = record.recordType === 'good' ? 'good' : 'defect';
-  const { stage, shift } = tagInspectionStage(record, workerDirectory, allWorkerRecords);
+  const { stage, shift } = tagInspectionStage(
+    record,
+    workerDirectory,
+    allWorkerRecords,
+    attendanceRows
+  );
   return {
     ...record,
     recordType,
@@ -32,7 +37,14 @@ function enrichRecord(record, workerDirectory, allWorkerRecords) {
   };
 }
 
-export default function WorkerHistoryModal({ workerName, defects, goods, workerDirectory, onClose }) {
+export default function WorkerHistoryModal({
+  workerName,
+  defects,
+  goods,
+  workerDirectory,
+  attendanceByWorker,
+  onClose,
+}) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [previewRecord, setPreviewRecord] = useState(null);
   const [downloading, setDownloading] = useState(false);
@@ -46,9 +58,11 @@ export default function WorkerHistoryModal({ workerName, defects, goods, workerD
     [defects, goods]
   );
 
+  const attendanceRows = attendanceByWorker?.get?.(workerName);
+
   const dateGroups = useMemo(
-    () => groupWorkerRecordsByDate(combinedRecords, workerName),
-    [combinedRecords, workerName]
+    () => groupWorkerRecordsByDate(combinedRecords, workerName, attendanceRows),
+    [combinedRecords, workerName, attendanceRows]
   );
 
   const workerRecords = useMemo(
@@ -59,11 +73,13 @@ export default function WorkerHistoryModal({ workerName, defects, goods, workerD
   const dayRecords = useMemo(() => {
     if (!selectedDate) return [];
     const group = dateGroups.find((g) => g.date === selectedDate);
-    return (group?.records || []).map((r) => enrichRecord(r, workerDirectory, workerRecords));
-  }, [dateGroups, selectedDate, workerDirectory, workerRecords]);
+    return (group?.records || []).map((r) =>
+      enrichRecord(r, workerDirectory, workerRecords, attendanceRows)
+    );
+  }, [dateGroups, selectedDate, workerDirectory, workerRecords, attendanceRows]);
 
   const previewItem = previewRecord
-    ? enrichRecord(previewRecord, workerDirectory, workerRecords)
+    ? enrichRecord(previewRecord, workerDirectory, workerRecords, attendanceRows)
     : null;
   const isDefectPreview = previewItem?.recordType === 'defect';
 

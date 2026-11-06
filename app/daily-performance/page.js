@@ -15,7 +15,8 @@ import {
   isSameCalendarDay,
 } from '../../lib/analytics';
 import { DEFAULT_PROCESS_FILTER, SHIFT_STAGES } from '../../lib/constants';
-import { isWeekend, shiftWorkDate, startOfLocalDay as startOfDay, toPreviousWeekday } from '../../lib/dateRange';
+import { formatISODate, isWeekend, shiftWorkDate, startOfLocalDay as startOfDay, toPreviousWeekday } from '../../lib/dateRange';
+import { useAttendanceDailyMap } from '../../lib/attendance/useAttendanceDailyMap';
 import { sortRows, toggleSortKey } from '../../lib/tableSort';
 import PageHeader from '../../components/PageHeader';
 import ListTruncationNotice from '../../components/ListTruncationNotice';
@@ -371,6 +372,10 @@ export default function DailyPerformancePage() {
     useReports();
   const [activeTab, setActiveTab] = useState('today');
   const [date, setDate] = useState(() => toPreviousWeekday(startOfDay(new Date())));
+  const attendanceDay = formatISODate(date);
+  const attendanceByWorker = useAttendanceDailyMap(attendanceDay, attendanceDay, {
+    enabled: !loading,
+  });
   const [includeHolidays, setIncludeHolidays] = useState(false);
   const [processFilter, setProcessFilter] = useState(DEFAULT_PROCESS_FILTER);
   const [now, setNow] = useState(() => new Date());
@@ -954,6 +959,7 @@ export default function DailyPerformancePage() {
           goods={goods}
           fives={fives}
           workerDirectory={workerDirectory}
+          attendanceRows={attendanceByWorker.get(detailWorker)}
           date={date}
           onClose={() => setDetailWorker(null)}
         />
