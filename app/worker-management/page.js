@@ -18,6 +18,18 @@ import {
 } from '../../lib/constants';
 import { getCompanyId } from '../../lib/company';
 import { supabase } from '../../lib/supabase';
+import {
+  MSG_ALREADY_REGISTERED,
+  MSG_RESTORE_CONFIRM,
+  buildNewWorkerRow,
+  buildRestorePatch,
+  classifyWorkerImport,
+  isWorkerSetupIncomplete,
+  nationalityOptions,
+  parseWorkerPaste,
+  shiftLabel,
+  workerAddWarnings,
+} from '../../lib/workerBulk';
 import PageHeader from '../../components/PageHeader';
 import ListTruncationNotice from '../../components/ListTruncationNotice';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
@@ -29,6 +41,13 @@ const inputClass =
 function hasEquipmentAssigned(row) {
   return Boolean(row?.default_equipment_id);
 }
+
+const IMPORT_STATUS = {
+  new: { label: '신규', className: 'bg-goodSoft text-good' },
+  restore: { label: '복원 대상', className: 'bg-accentSoft text-accent' },
+  duplicate: { label: '중복', className: 'bg-warnSoft text-warn' },
+  error: { label: '오류', className: 'bg-dangerSoft text-danger' },
+};
 
 const STATUS_BADGE_CLASS = {
   good: 'bg-goodSoft text-good',
@@ -253,6 +272,14 @@ function workerDetailHref(name) {
   return `/worker-detail?name=${encodeURIComponent(name)}`;
 }
 
+function UnsetBadge() {
+  return (
+    <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+      미설정
+    </span>
+  );
+}
+
 function WorkerNameLink({ name, displayName, className = '' }) {
   const label = displayName.trim() || name;
   return (
@@ -297,7 +324,10 @@ function WorkerRow({
         />
       </td>
       <td className="px-4 py-3">
-        <WorkerNameLink name={name} displayName={displayName} />
+        <div className="flex flex-wrap items-center gap-2">
+          <WorkerNameLink name={name} displayName={displayName} />
+          {isWorkerSetupIncomplete(row) ? <UnsetBadge /> : null}
+        </div>
         <div className="mt-0.5 flex items-center gap-2 text-[11px]">
           <span className="text-muted">원본: {name}</span>
           <Link href={workerDetailHref(name)} className="text-accent hover:underline">
@@ -367,7 +397,12 @@ function WorkerMobileCard({
 
   return (
     <MobileListCard
-      header={<WorkerNameLink name={name} displayName={displayName} />}
+      header={
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <WorkerNameLink name={name} displayName={displayName} />
+          {isWorkerSetupIncomplete(row) ? <UnsetBadge /> : null}
+        </span>
+      }
       badge={showStatus ? <WorkerStatusBadge row={row} /> : null}
       leading={
         <input
@@ -445,7 +480,6 @@ function WorkerMobileCard({
 
 export default function WorkerManagementPage() {
   const { loading, error, truncated, defects, goods, fives, workerDirectory, refetch } = useReports();
-  const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(null);
   const [formError, setFormError] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
@@ -455,7 +489,20 @@ export default function WorkerManagementPage() {
   const [filterUnassigned, setFilterUnassigned] = useState(false);
   const [selectedNames, setSelectedNames] = useState(() => new Set());
   const [bulkEquipmentId, setBulkEquipmentId] = useState('');
+  const [bulkShiftChoice, setBulkShiftChoice] = useState('');
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [addForm, setAddForm] = useState({
+    name: '',
+    displayName: '',
+    nationality: '',
+    shift: '',
+    process: '',
+    role: 'inspector',
+    note: '',
+  });
+  const [pasteText, setPasteText] = useState('');
+  const [importSummary, setImportSummary] = useState(null);
+  const [filterUnset, setFilterUnset] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -521,11 +568,42 @@ export default function WorkerManagementPage() {
   );
 
   const tableNames = useMemo(() => {
-    if (!filterUnassigned) return baseTableNames;
-    return baseTableNames.filter(
-      (name) => !hasEquipmentAssigned(directoryMap.get(name))
-    );
-  }, [baseTableNames, filterUnassigned, directoryMap]);
+    return baseTableNames.filter((name) => {
+      const row = directoryMap.get(name);
+      if (filterUnassigned && hasEquipmentAssigned(row)) return false;
+      if (filterUnset && !isWorkerSetupIncomplete(row)) return false;
+      return true;
+    });
+  }, [baseTableNames, filterUnassigned, filterUnset, directoryMap]);
+
+  const unsetCount = useMemo(
+    () => baseTableNames.filter((name) => isWorkerSetupIncomplete(directoryMap.get(name))).length,
+    [baseTableNames, directoryMap]
+  );
+
+  const nationalityChoices = useMemo(
+    () => nationalityOptions(workerDirectory),
+    [workerDirectory]
+  );
+
+  const processChoices = useMemo(() => {
+    const extras = new Set(WORKER_PROCESSES);
+    for (const row of workerDirectory) {
+      const value = String(row?.process || '').trim();
+      if (value) extras.add(value);
+    }
+    return [...extras];
+  }, [workerDirectory]);
+
+  const addWarnings = useMemo(
+    () => workerAddWarnings({ nationality: addForm.nationality, shift: addForm.shift }),
+    [addForm.nationality, addForm.shift]
+  );
+
+  const importPreview = useMemo(
+    () => classifyWorkerImport(parseWorkerPaste(pasteText), workerDirectory),
+    [pasteText, workerDirectory]
+  );
 
   const colCount = (showAllWorkers ? 8 : 7) + 2; // checkbox + 담당 설비
 
@@ -635,45 +713,188 @@ export default function WorkerManagementPage() {
     }
   }
 
+  function patchAddForm(partial) {
+    setAddForm((prev) => ({ ...prev, ...partial }));
+  }
+
   async function handleAddWorker() {
-    const name = newName.trim();
+    const name = addForm.name.trim();
     if (!name) return;
-    if (directoryMap.has(name) || allNames.includes(name) || everyNames.includes(name)) {
-      setFormError('이미 목록에 있는 작업자입니다.');
+    const [classified] = classifyWorkerImport(
+      [
+        {
+          name,
+          nationality: addForm.nationality,
+          shift: addForm.shift || null,
+          process: addForm.process,
+          error: null,
+        },
+      ],
+      workerDirectory
+    );
+    if (classified.status === 'duplicate') {
+      setFormError(MSG_ALREADY_REGISTERED);
       return;
     }
+    if (classified.status === 'restore' && !window.confirm(MSG_RESTORE_CONFIRM)) return;
+
     setSaving('__new__');
     setFormError(null);
     try {
       const companyId = await getCompanyId();
-      const { error: insertError } = await supabase.from('worker_directory').insert({
-        worker_name: name,
-        company_id: companyId,
-        excluded: false,
-        note: '',
-        default_shift: null,
-        handles_frequent_check: true,
-        handles_fives: true,
-        handles_documents: true,
-        handles_defects: true,
-        phone_number: '',
-        display_name: '',
-        nationality: '',
-        role: 'inspector',
-        lang: 'ko',
-        process: null,
-        default_equipment_id: null,
-      });
-      setSaving(null);
-      if (insertError) {
-        setFormError(insertError.message);
-        return;
+      if (classified.status === 'restore') {
+        const existing = classified.existing;
+        const { error: restoreError } = await supabase.from('worker_directory').upsert(
+          workerUpsertPayload(
+            existing.worker_name,
+            existing,
+            buildRestorePatch({
+              nationality: addForm.nationality,
+              shift: addForm.shift || null,
+              process: addForm.process,
+            }),
+            companyId
+          )
+        );
+        setSaving(null);
+        if (restoreError) {
+          setFormError(restoreError.message);
+          return;
+        }
+      } else {
+        const { error: insertError } = await supabase.from('worker_directory').insert(
+          buildNewWorkerRow(
+            { ...addForm, name, role: normalizeWorkerRole(addForm.role) },
+            companyId
+          )
+        );
+        setSaving(null);
+        if (insertError) {
+          setFormError(insertError.message);
+          return;
+        }
       }
-      setNewName('');
+      setAddForm({
+        name: '',
+        displayName: '',
+        nationality: '',
+        shift: '',
+        process: '',
+        role: 'inspector',
+        note: '',
+      });
       refetch();
     } catch (err) {
       setSaving(null);
       setFormError(err?.message || '추가에 실패했습니다.');
+    }
+  }
+
+  async function handleBulkImport() {
+    const fresh = importPreview.filter((row) => row.status === 'new' || row.status === 'restore');
+    const skippedDup = importPreview.filter((row) => row.status === 'duplicate').length;
+    const skippedErr = importPreview.filter((row) => row.status === 'error').length;
+    if (!importPreview.length) return;
+    const created = fresh.filter((row) => row.status === 'new').length;
+    const restored = fresh.filter((row) => row.status === 'restore').length;
+    if (fresh.length) {
+      const ok = window.confirm(
+        `${fresh.map((row) => row.name).join(', ')}\n신규 ${created}명, 복원 ${restored}명을 등록합니다. 중복 ${skippedDup}명, 오류 ${skippedErr}명은 건너뜁니다.`
+      );
+      if (!ok) return;
+    }
+
+    setBulkSaving(true);
+    setFormError(null);
+    let doneNew = 0;
+    let doneRestore = 0;
+    let failed = 0;
+    try {
+      const companyId = await getCompanyId();
+      for (const row of fresh) {
+        if (row.status === 'restore') {
+          const { error: restoreError } = await supabase.from('worker_directory').upsert(
+            workerUpsertPayload(
+              row.existing.worker_name,
+              row.existing,
+              buildRestorePatch(row),
+              companyId
+            )
+          );
+          if (restoreError) {
+            failed += 1;
+            setFormError(restoreError.message);
+            continue;
+          }
+          doneRestore += 1;
+        } else {
+          const { error: insertError } = await supabase.from('worker_directory').insert(
+            buildNewWorkerRow(
+              {
+                name: row.name,
+                nationality: row.nationality,
+                shift: row.shift,
+                process: row.process,
+                role: 'inspector',
+              },
+              companyId
+            )
+          );
+          if (insertError) {
+            failed += 1;
+            setFormError(insertError.message);
+            continue;
+          }
+          doneNew += 1;
+        }
+      }
+      setImportSummary(
+        `신규 ${doneNew}명, 복원 ${doneRestore}명 등록. 중복 ${skippedDup}명, 오류 ${skippedErr}명은 건너뛰었습니다.${
+          failed ? ` 실패 ${failed}명.` : ''
+        }`
+      );
+      if (doneNew || doneRestore) {
+        setPasteText('');
+        refetch();
+      }
+    } catch (err) {
+      setFormError(err?.message || '일괄 등록에 실패했습니다.');
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
+  async function handleBulkShift() {
+    const names = [...selectedNames].filter(
+      (name) => tableNames.includes(name) || baseTableNames.includes(name)
+    );
+    if (!names.length || !bulkShiftChoice) {
+      setFormError('교대를 바꿀 작업자를 선택하세요.');
+      return;
+    }
+    const nextShift = bulkShiftChoice === 'unset' ? null : bulkShiftChoice;
+    const ok = window.confirm(
+      `${names.join(', ')}\n기본 교대를 ${shiftLabel(nextShift)}으로 변경합니다.`
+    );
+    if (!ok) return;
+
+    setBulkSaving(true);
+    setFormError(null);
+    try {
+      const companyId = await getCompanyId();
+      for (const worker_name of names) {
+        const existing = directoryMap.get(worker_name);
+        const { error: upsertError } = await supabase.from('worker_directory').upsert(
+          workerUpsertPayload(worker_name, existing, { default_shift: nextShift }, companyId)
+        );
+        if (upsertError) throw new Error(upsertError.message);
+      }
+      setBulkShiftChoice('');
+      refetch();
+    } catch (err) {
+      setFormError(err?.message || '교대 일괄 변경에 실패했습니다.');
+    } finally {
+      setBulkSaving(false);
     }
   }
 
@@ -714,6 +935,23 @@ export default function WorkerManagementPage() {
     }
   }
 
+  const emptyListLabel =
+    filterUnset && filterUnassigned
+      ? '조건에 맞는 작업자가 없습니다'
+      : filterUnset
+        ? '국적·교대 미설정 작업자가 없습니다'
+        : filterUnassigned
+          ? '설비 미지정 작업자가 없습니다'
+          : '등록된 작업자가 없습니다';
+  const showAddWarnings = Boolean(
+    addForm.name.trim() ||
+      addForm.nationality.trim() ||
+      addForm.shift ||
+      addForm.process.trim() ||
+      addForm.displayName.trim() ||
+      addForm.note.trim()
+  );
+
   if (loading) return <div className="p-8 text-muted text-sm">데이터 불러오는 중...</div>;
   if (error) return <div className="p-8 text-danger text-sm">오류: {error}</div>;
 
@@ -734,28 +972,183 @@ export default function WorkerManagementPage() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px] flex-1">
-            <label className="mb-1.5 block text-xs text-muted">새 작업자 이름 직접 추가</label>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddWorker();
-              }}
-              placeholder="예: 홍길동"
-              className={`${inputClass} w-full max-w-xs`}
-            />
+        <form
+          className="space-y-3 rounded-xl border border-border bg-surface px-4 py-4 shadow-card"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleAddWorker();
+          }}
+        >
+          <div className="text-sm font-medium text-text">작업자 추가</div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="block text-xs text-muted">
+              이름
+              <input
+                type="text"
+                required
+                value={addForm.name}
+                onChange={(e) => patchAddForm({ name: e.target.value })}
+                placeholder="예: 홍길동"
+                className={`${inputClass} mt-1.5 w-full`}
+              />
+            </label>
+            <label className="block text-xs text-muted">
+              표시명
+              <input
+                type="text"
+                value={addForm.displayName}
+                onChange={(e) => patchAddForm({ displayName: e.target.value })}
+                className={`${inputClass} mt-1.5 w-full`}
+              />
+            </label>
+            <label className="block text-xs text-muted">
+              국적
+              <input
+                type="text"
+                list="worker-nationality-options"
+                value={addForm.nationality}
+                onChange={(e) => patchAddForm({ nationality: e.target.value })}
+                placeholder="선택 또는 직접 입력"
+                className={`${inputClass} mt-1.5 w-full`}
+              />
+              <datalist id="worker-nationality-options">
+                {nationalityChoices.map((value) => (
+                  <option key={value} value={value} />
+                ))}
+              </datalist>
+            </label>
+            <label className="block text-xs text-muted">
+              기본 교대
+              <select
+                value={addForm.shift}
+                onChange={(e) => patchAddForm({ shift: e.target.value })}
+                className={`${inputClass} mt-1.5 w-full`}
+              >
+                <option value="">미지정</option>
+                <option value="day">주간</option>
+                <option value="night">야간</option>
+              </select>
+            </label>
+            <label className="block text-xs text-muted">
+              공정
+              <input
+                type="text"
+                list="worker-process-options"
+                value={addForm.process}
+                onChange={(e) => patchAddForm({ process: e.target.value })}
+                placeholder="선택 또는 직접 입력"
+                className={`${inputClass} mt-1.5 w-full`}
+              />
+              <datalist id="worker-process-options">
+                {processChoices.map((value) => (
+                  <option key={value} value={value} />
+                ))}
+              </datalist>
+            </label>
+            <label className="block text-xs text-muted">
+              역할
+              <select
+                value={addForm.role}
+                onChange={(e) => patchAddForm({ role: e.target.value })}
+                className={`${inputClass} mt-1.5 w-full`}
+              >
+                {WORKER_ROLES.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs text-muted sm:col-span-2">
+              메모
+              <input
+                type="text"
+                value={addForm.note}
+                onChange={(e) => patchAddForm({ note: e.target.value })}
+                className={`${inputClass} mt-1.5 w-full`}
+              />
+            </label>
           </div>
+          {showAddWarnings
+            ? addWarnings.map((warning) => (
+                <p key={warning} className="text-xs text-warn">
+                  {warning}
+                </p>
+              ))
+            : null}
           <button
-            type="button"
-            onClick={handleAddWorker}
-            disabled={!newName.trim() || saving === '__new__'}
+            type="submit"
+            disabled={!addForm.name.trim() || saving === '__new__'}
             className="min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
           >
-            추가
+            {saving === '__new__' ? '추가 중...' : '추가'}
           </button>
+        </form>
+
+        <div className="space-y-3 rounded-xl border border-border bg-surface px-4 py-4 shadow-card">
+          <div className="text-sm font-medium text-text">일괄 등록</div>
+          <p className="text-xs text-muted">
+            한 줄에 이름, 국적, 교대, 공정. 탭 또는 쉼표로 구분하고 뒤 항목은 생략할 수 있습니다.
+            교대는 주간/야간/day/night/주/야.
+          </p>
+          <textarea
+            value={pasteText}
+            onChange={(e) => {
+              setPasteText(e.target.value);
+              setImportSummary(null);
+            }}
+            rows={5}
+            placeholder={'홍길동,베트남,야간,주조\n김철수\t한국\t주'}
+            className={`${inputClass} w-full font-mono`}
+          />
+          {importPreview.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[36rem] text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted">
+                    <th className="px-2 py-2">이름</th>
+                    <th className="px-2 py-2">국적</th>
+                    <th className="px-2 py-2">교대</th>
+                    <th className="px-2 py-2">공정</th>
+                    <th className="px-2 py-2">결과</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importPreview.map((row, index) => {
+                    const status = IMPORT_STATUS[row.status] || IMPORT_STATUS.error;
+                    return (
+                      <tr key={`${row.name}-${index}`} className="border-b border-border last:border-0">
+                        <td className="px-2 py-2">{row.name || '—'}</td>
+                        <td className="px-2 py-2">{row.nationality || '—'}</td>
+                        <td className="px-2 py-2">{row.shift ? shiftLabel(row.shift) : '—'}</td>
+                        <td className="px-2 py-2">{row.process || '—'}</td>
+                        <td className="px-2 py-2">
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${status.className}`}>
+                            {status.label}
+                          </span>
+                          {row.message && row.status !== 'new' ? (
+                            <span className="ml-2 text-xs text-muted">{row.message}</span>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleBulkImport}
+            disabled={!importPreview.length || bulkSaving}
+            className="min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
+          >
+            {bulkSaving ? '등록 중...' : '확인 후 등록'}
+          </button>
+          {importSummary ? <p className="text-xs text-text">{importSummary}</p> : null}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
           <button
             type="button"
             onClick={() => setShowAllWorkers((prev) => !prev)}
@@ -774,18 +1167,29 @@ export default function WorkerManagementPage() {
           >
             설비 미지정{unassignedCount > 0 ? ` · ${unassignedCount}` : ''}
           </button>
+          <button
+            type="button"
+            onClick={() => setFilterUnset((prev) => !prev)}
+            className={`min-h-[44px] rounded-full border px-3 py-1.5 text-sm font-medium transition-colors md:min-h-0 ${
+              filterUnset
+                ? 'border-warn/40 bg-warnSoft text-text'
+                : 'border-border bg-surface text-muted hover:bg-surface2 hover:text-text'
+            }`}
+          >
+            미설정만 보기{unsetCount > 0 ? ` · ${unsetCount}` : ''}
+          </button>
         </div>
 
         <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface2/40 px-4 py-3">
-          <div className="text-xs text-muted">
-            선택 {selectedNames.size}명 · 일괄 담당 설비
-          </div>
-          <select
-            value={bulkEquipmentId}
-            disabled={bulkSaving || selectedNames.size === 0}
-            onChange={(e) => setBulkEquipmentId(e.target.value)}
-            className={`${inputClass} min-w-[10rem]`}
-          >
+          <div className="text-xs text-muted">선택 {selectedNames.size}명</div>
+          <label className="block text-xs text-muted">
+            담당 설비
+            <select
+              value={bulkEquipmentId}
+              disabled={bulkSaving || selectedNames.size === 0}
+              onChange={(e) => setBulkEquipmentId(e.target.value)}
+              className={`${inputClass} mt-1.5 min-w-[10rem]`}
+            >
             <option value="">미지정으로</option>
             {equipmentList.map((eq) => (
               <option key={eq.id} value={eq.id}>
@@ -794,13 +1198,36 @@ export default function WorkerManagementPage() {
               </option>
             ))}
           </select>
+          </label>
           <button
             type="button"
             onClick={handleBulkAssign}
             disabled={bulkSaving || selectedNames.size === 0}
             className="min-h-[44px] rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
           >
-            {bulkSaving ? '적용 중...' : '선택에게 적용'}
+            {bulkSaving ? '적용 중...' : '설비 적용'}
+          </button>
+          <label className="block text-xs text-muted">
+            기본 교대 변경
+            <select
+              value={bulkShiftChoice}
+              disabled={bulkSaving || selectedNames.size === 0}
+              onChange={(e) => setBulkShiftChoice(e.target.value)}
+              className={`${inputClass} mt-1.5 min-w-[8rem]`}
+            >
+              <option value="">교대 선택</option>
+              <option value="day">주간</option>
+              <option value="night">야간</option>
+              <option value="unset">미지정</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={handleBulkShift}
+            disabled={bulkSaving || selectedNames.size === 0 || !bulkShiftChoice}
+            className="min-h-[44px] rounded-xl border border-accent bg-surface px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
+          >
+            교대 변경
           </button>
           {selectedNames.size > 0 ? (
             <button
@@ -842,9 +1269,7 @@ export default function WorkerManagementPage() {
           ))}
           {tableNames.length === 0 ? (
             <div className="py-12 text-center text-xs text-muted">
-              {filterUnassigned
-                ? '설비 미지정 작업자가 없습니다'
-                : '등록된 작업자가 없습니다'}
+              {emptyListLabel}
             </div>
           ) : null}
         </div>
@@ -892,9 +1317,7 @@ export default function WorkerManagementPage() {
               {tableNames.length === 0 && (
                 <tr>
                   <td colSpan={colCount} className="px-4 py-12 text-center text-xs text-muted">
-                    {filterUnassigned
-                      ? '설비 미지정 작업자가 없습니다'
-                      : '등록된 작업자가 없습니다'}
+                    {emptyListLabel}
                   </td>
                 </tr>
               )}
