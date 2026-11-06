@@ -11,6 +11,7 @@ import {
   describeAttendanceExportRange,
   filterAttendanceExportRows,
   missingAttendanceWorkDates,
+  omitHiddenAttendanceRows,
 } from '../lib/attendance/excel.js';
 
 function row(partial) {
@@ -50,6 +51,39 @@ describe('formatExportDateTime KST', () => {
       '2026-10-26 17:22:00'
     );
     assert.equal(formatExportDateTime(''), '');
+  });
+});
+
+describe('omitHiddenAttendanceRows', () => {
+  it('removed·excluded 이름은 빼고, 포함 옵션이면 남긴다', () => {
+    const rows = [
+      row({ worker_name: '활성' }),
+      row({ worker_name: '숨김' }),
+      row({ worker_name: '제외' }),
+    ];
+    const hidden = new Set(['숨김', '제외']);
+    assert.deepEqual(
+      omitHiddenAttendanceRows(rows, hidden).map((r) => r.worker_name),
+      ['활성']
+    );
+    assert.equal(
+      omitHiddenAttendanceRows(rows, hidden, { includeHidden: true }).length,
+      3
+    );
+  });
+
+  it('퇴근 정시 보정은 엑셀 비고에 적는다', () => {
+    const excel = attendanceRowsForExcel([
+      row({
+        judgment_rationale: {
+          shift: 'day',
+          rule: 'directory_default_shift',
+          clockOutAdjusted: true,
+          clockOutAt: '2026-10-26T07:53:00.000Z',
+        },
+      }),
+    ]);
+    assert.equal(excel[0].비고, '퇴근 정시 보정(원래 16:53)');
   });
 });
 

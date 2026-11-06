@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { judgeAttendance, wallTimeOnWorkDate } from '../lib/attendance/judge.js';
+import { formatJudgmentRationaleSummary } from '../lib/attendance/shift.js';
 import { summarizeSignals } from '../lib/attendance/signalUtils.js';
 import { resolvePolicyForWorker } from '../lib/attendance/policy.js';
 import {
@@ -104,6 +105,127 @@ describe('judgeAttendance', () => {
     assert.equal(r.judgment, 'present');
     assert.equal(r.signalKinds.bundles[0].type, 'lot_move');
     assert.equal(r.estimatedClockIn, wallTimeOnWorkDate(WORK_DATE, '08:00').toISOString());
+  });
+
+  it('퇴근 16:53은 정책 종료 17:00으로 맞추고 원래 시각은 남긴다', () => {
+    const clockOut = wallTimeOnWorkDate(WORK_DATE, '16:53').toISOString();
+    const r = judgeAttendance({
+      workDate: WORK_DATE,
+      signals: [
+        { type: 'fives', at: wallTimeOnWorkDate(WORK_DATE, '09:00').toISOString() },
+        { type: 'frequent', at: clockOut },
+      ],
+      policy: POLICY_DAY,
+      nationality: '한국',
+      defaultShift: 'day',
+    });
+    assert.equal(r.estimatedClockOut, wallTimeOnWorkDate(WORK_DATE, '17:00').toISOString());
+    assert.equal(r.judgmentRationale.clockOutAt, clockOut);
+    assert.equal(r.judgmentRationale.clockOutAdjusted, true);
+    assert.equal(r.isOt, false);
+    assert.match(
+      formatJudgmentRationaleSummary(r.judgmentRationale),
+      /퇴근 정시 보정\(원래 16:53\)/
+    );
+  });
+
+  it('퇴근 16:20(30분 초과)은 그대로', () => {
+    const clockOut = wallTimeOnWorkDate(WORK_DATE, '16:20').toISOString();
+    const r = judgeAttendance({
+      workDate: WORK_DATE,
+      signals: [
+        { type: 'fives', at: wallTimeOnWorkDate(WORK_DATE, '09:00').toISOString() },
+        { type: 'frequent', at: clockOut },
+      ],
+      policy: POLICY_DAY,
+      nationality: '한국',
+      defaultShift: 'day',
+    });
+    assert.equal(r.estimatedClockOut, clockOut);
+    assert.equal(r.judgmentRationale.clockOutAdjusted, undefined);
+  });
+
+  it('퇴근 17:05(종료 이후)는 그대로', () => {
+    const clockOut = wallTimeOnWorkDate(WORK_DATE, '17:05').toISOString();
+    const r = judgeAttendance({
+      workDate: WORK_DATE,
+      signals: [
+        { type: 'fives', at: wallTimeOnWorkDate(WORK_DATE, '09:00').toISOString() },
+        { type: 'frequent', at: clockOut },
+      ],
+      policy: POLICY_DAY,
+      nationality: '한국',
+      defaultShift: 'day',
+    });
+    assert.equal(r.estimatedClockOut, clockOut);
+    assert.equal(r.isOt, false);
+    assert.equal(r.judgmentRationale.clockOutAdjusted, undefined);
+  });
+
+  it('야간 07:52는 익일 정책 종료 08:00으로 맞춘다', () => {
+    const nightPolicy = {
+      shift: 'night',
+      work_start_time: '20:00',
+      work_end_time: '08:00',
+      ot_threshold_time: '09:00',
+      ot_end_time: '10:00',
+      adjust_minutes: 0,
+      window_start_time: '19:00',
+      window_end_time: '09:00',
+      signal_merge_minutes: 10,
+      clock_out_min_gap_minutes: 60,
+    };
+    const clockOut = wallTimeOnWorkDate(WORK_DATE, '07:52', 1).toISOString();
+    const r = judgeAttendance({
+      workDate: WORK_DATE,
+      signals: [
+        { type: 'fives', at: wallTimeOnWorkDate(WORK_DATE, '21:00').toISOString() },
+        { type: 'frequent', at: clockOut },
+      ],
+      policy: nightPolicy,
+      nightPolicy,
+      nationality: '베트남',
+      defaultShift: 'night',
+      shift: 'night',
+    });
+    assert.equal(r.shift, 'night');
+    assert.equal(r.isOt, false);
+    assert.equal(r.estimatedClockOut, wallTimeOnWorkDate(WORK_DATE, '08:00', 1).toISOString());
+    assert.equal(r.judgmentRationale.clockOutAt, clockOut);
+    assert.equal(r.judgmentRationale.clockOutAdjusted, true);
+    assert.match(
+      formatJudgmentRationaleSummary(r.judgmentRationale),
+      /퇴근 정시 보정\(원래 07:52\)/
+    );
+  });
+
+  it('퇴근 신호가 없으면 추정 퇴근은 null', () => {
+    const r = judgeAttendance({
+      workDate: WORK_DATE,
+      signals: [{ type: 'fives', at: wallTimeOnWorkDate(WORK_DATE, '09:00').toISOString() }],
+      policy: POLICY_DAY,
+      nationality: '한국',
+      defaultShift: 'day',
+    });
+    assert.equal(r.estimatedClockOut, null);
+    assert.equal(r.clockOutConfirmed, false);
+    assert.equal(r.judgmentRationale.clockOutAdjusted, undefined);
+  });
+
+  it('정책 종료 시각이 없으면 16:53도 그대로', () => {
+    const clockOut = wallTimeOnWorkDate(WORK_DATE, '16:53').toISOString();
+    const r = judgeAttendance({
+      workDate: WORK_DATE,
+      signals: [
+        { type: 'fives', at: wallTimeOnWorkDate(WORK_DATE, '09:00').toISOString() },
+        { type: 'frequent', at: clockOut },
+      ],
+      policy: { ...POLICY_DAY, work_end_time: '' },
+      nationality: '한국',
+      defaultShift: 'day',
+    });
+    assert.equal(r.estimatedClockOut, clockOut);
+    assert.equal(r.judgmentRationale.clockOutAdjusted, undefined);
   });
 
   it('실적(production)만 있어도 출근', () => {

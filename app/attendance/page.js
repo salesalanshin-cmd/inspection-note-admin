@@ -10,6 +10,7 @@ import {
   describeAttendanceExportRange,
   filterAttendanceExportRows,
   missingAttendanceWorkDates,
+  omitHiddenAttendanceRows,
   saveAttendanceRangeExcel,
 } from '../../lib/attendance/excel';
 import {
@@ -64,6 +65,7 @@ export default function AttendancePage() {
   const [savingId, setSavingId] = useState(null);
   const [recomputing, setRecomputing] = useState(false);
   const [filter, setFilter] = useState('all'); // all | unconfirmed | present | unreviwed
+  const [includeHidden, setIncludeHidden] = useState(false);
   const [rangeStart, setRangeStart] = useState(() => getRecentDaysRange(1).end);
   const [rangeEnd, setRangeEnd] = useState(() => getRecentDaysRange(1).end);
   const [exportWorker, setExportWorker] = useState('');
@@ -83,16 +85,28 @@ export default function AttendancePage() {
     [directory]
   );
 
+  const hiddenNames = useMemo(() => {
+    const names = new Set();
+    for (const worker of directory) {
+      if (!worker?.worker_name) continue;
+      if (worker.removed === true || worker.excluded === true) {
+        names.add(worker.worker_name);
+      }
+    }
+    return names;
+  }, [directory]);
+
   const exportWorkers = useMemo(() => {
     return [...directory]
       .filter((worker) => worker.worker_name)
+      .filter((worker) => includeHidden || !hiddenNames.has(worker.worker_name))
       .sort((a, b) =>
         (displayMap.get(a.worker_name) || a.worker_name).localeCompare(
           displayMap.get(b.worker_name) || b.worker_name,
           'ko'
         )
       );
-  }, [directory, displayMap]);
+  }, [directory, displayMap, hiddenNames, includeHidden]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,7 +122,7 @@ export default function AttendancePage() {
           .order('worker_name'),
         supabase
           .from('worker_directory')
-          .select('worker_name, display_name, process, nationality')
+          .select('worker_name, display_name, process, nationality, removed, excluded')
           .eq('company_id', companyId),
       ]);
       if (attRes.error) throw new Error(attRes.error.message);
@@ -135,7 +149,8 @@ export default function AttendancePage() {
   }, []);
 
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
+    const visible = omitHiddenAttendanceRows(rows, hiddenNames, { includeHidden });
+    return visible.filter((r) => {
       if (filter === 'unconfirmed') return r.judgment === 'unconfirmed';
       if (filter === 'present') return r.judgment === 'present';
       if (filter === 'unreviewed') return r.reviewed !== true;
@@ -144,7 +159,7 @@ export default function AttendancePage() {
       }
       return true;
     });
-  }, [rows, filter]);
+  }, [rows, filter, hiddenNames, includeHidden]);
 
   async function handleRecompute() {
     setRecomputing(true);
@@ -226,10 +241,13 @@ export default function AttendancePage() {
       const missingNotice = attendanceRecomputeNotice(missing);
       setRangeNotice(missingNotice);
 
-      const exportRows = filterAttendanceExportRows(stored, {
-        workerName: exportWorker,
-        shift: exportShift,
-      });
+      const exportRows = filterAttendanceExportRows(
+        omitHiddenAttendanceRows(stored, hiddenNames, { includeHidden }),
+        {
+          workerName: exportWorker,
+          shift: exportShift,
+        }
+      );
       const workerLabel = exportWorker
         ? displayMap.get(exportWorker) || exportWorker
         : '전체';
@@ -361,6 +379,14 @@ export default function AttendancePage() {
             <option value="unreviewed">미검수</option>
             <option value="needs_review">확인 필요</option>
           </select>
+          <label className="inline-flex min-h-[44px] items-center gap-2 text-sm text-text md:min-h-0">
+            <input
+              type="checkbox"
+              checked={includeHidden}
+              onChange={(e) => setIncludeHidden(e.target.checked)}
+            />
+            숨김 작업자 포함
+          </label>
           <button
             type="button"
             className={primaryBtn}
