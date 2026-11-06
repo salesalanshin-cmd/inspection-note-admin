@@ -624,6 +624,15 @@ function AttendanceRow({ row, displayName, saving, onSave }) {
         <div className="mt-0.5 text-text">
           {formatJudgmentRationaleSummary(row.judgment_rationale)}
         </div>
+        {row.judgment_rationale?.autoComment ? (
+          <div className="mt-0.5 text-[11px] text-muted">{row.judgment_rationale.autoComment}</div>
+        ) : null}
+        {Array.isArray(row.judgment_rationale?.flags) &&
+        row.judgment_rationale.flags.includes('single_signal') ? (
+          <span className="mt-0.5 inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+            확인 필요
+          </span>
+        ) : null}
         {flags.length ? (
           <div className="mt-0.5 text-danger">{flags.join(' · ')}</div>
         ) : null}
