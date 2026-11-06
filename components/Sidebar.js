@@ -20,6 +20,7 @@ const DAILY_NAV = [
 
 /** 보조 — 주 단위·필요 시 확인 */
 const WEEKLY_NAV = [
+  { href: '/attendance/edits', label: '근태 수정 이력', code: '16' },
   { href: '/ai-accuracy', label: 'AI 오진율', code: '15' },
   { href: '/document-scans', label: '스캔 문서 검수', code: '06' },
   { href: '/documents', label: '문서', code: '06b' },
@@ -42,7 +43,9 @@ const SETTINGS_NAV = [
 ];
 
 function isActive(pathname, href) {
-  return pathname?.startsWith(href);
+  if (!pathname) return false;
+  if (href === '/attendance') return pathname === '/attendance';
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function NavLink({ item, active, onNavigate, badge }) {

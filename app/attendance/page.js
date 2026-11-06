@@ -7,7 +7,11 @@ import { judgmentLabel } from '../../lib/attendance/judge';
 import {
   appendAttendanceCorrection,
   applyAttendanceExcelImport,
+  buildAttendanceEditLogs,
+  collectExcelImportKeys,
   diffAttendanceFields,
+  displayAttendanceValue,
+  attendanceFieldLabel,
   summarizeAttendanceCorrections,
 } from '../../lib/attendance/excelImport';
 import { fetchListPages } from '../../lib/listPages';
@@ -83,6 +87,8 @@ export default function AttendancePage() {
   const [rangeJob, setRangeJob] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importNotice, setImportNotice] = useState('');
+  const [logWarning, setLogWarning] = useState('');
+  const [excelPreview, setExcelPreview] = useState(null);
   const [patternRows, setPatternRows] = useState([]);
   const [patternToken, setPatternToken] = useState(0);
   const rangeAbortRef = useRef(null);
@@ -227,7 +233,7 @@ export default function AttendancePage() {
     }
   }
 
-  async function saveRow(row, patch) {
+  async function saveRow(row, patch, changes = []) {
     setSavingId(row.id);
     try {
       const companyId = await getCompanyId();
@@ -249,6 +255,24 @@ export default function AttendancePage() {
         .eq('id', row.id)
         .eq('company_id', companyId);
       if (upErr) throw new Error(upErr.message);
+      if (changes.length) {
+        const logs = buildAttendanceEditLogs({
+          companyId,
+          attendanceId: row.id,
+          workerName: row.worker_name,
+          workDate: row.work_date,
+          changes,
+          source: 'screen',
+          originalRule: row.judgment_rationale?.rule || null,
+          editedBy: payload.reviewed_by || 'admin',
+          editedAt: payload.updated_at,
+          batchId: crypto.randomUUID(),
+        });
+        const { error: logErr } = await supabase.from('attendance_edit_log').insert(logs);
+        if (logErr) {
+          setLogWarning(`수정은 저장됐지만 이력 기록에 실패했습니다. ${logErr.message}`);
+        }
+      }
       setPatternToken((token) => token + 1);
       await load();
     } catch (err) {
@@ -266,59 +290,79 @@ export default function AttendancePage() {
     );
   }
 
+  const importColumns =
+    'id, worker_name, work_date, shift, judgment, estimated_clock_in, estimated_clock_out, is_ot, reviewed, judgment_rationale';
+
+  async function loadImportDailyRows(companyId, dates, ids) {
+    const merged = new Map();
+    if (dates.length) {
+      const sorted = dates.slice().sort();
+      const { rows: dailyRows, error: fetchError } = await fetchListPages(
+        () =>
+          supabase
+            .from('attendance_daily')
+            .select(importColumns)
+            .eq('company_id', companyId)
+            .gte('work_date', sorted[0])
+            .lte('work_date', sorted.at(-1)),
+        { timeColumn: 'work_date', label: 'attendance_excel_import', ascending: true }
+      );
+      if (fetchError) throw new Error(fetchError.message);
+      for (const row of dailyRows) merged.set(String(row.id), row);
+    }
+    for (let index = 0; index < ids.length; index += 200) {
+      const chunk = ids.slice(index, index + 200);
+      const { data, error: idError } = await supabase
+        .from('attendance_daily')
+        .select(importColumns)
+        .eq('company_id', companyId)
+        .in('id', chunk);
+      if (idError) throw new Error(idError.message);
+      for (const row of data || []) merged.set(String(row.id), row);
+    }
+    return [...merged.values()];
+  }
+
   async function handleExcelFile(file) {
     if (!file) return;
     setImporting(true);
     setImportNotice('');
+    setLogWarning('');
+    setExcelPreview(null);
     setError(null);
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
       const sheet = workbook.Sheets['기록'] || workbook.Sheets['근태'];
       if (!sheet) throw new Error('기록 시트가 없습니다.');
       const excelRows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
-      const dates = [
-        ...new Set(
-          excelRows
-            .map((row) => String(row.근무일 || '').trim().replace(/[./]/g, '-').slice(0, 10))
-            .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
-        ),
-      ];
-      if (!dates.length) throw new Error('근무일 열이 없습니다.');
+      const keys = collectExcelImportKeys(excelRows);
+      if (!keys.dates.length && !keys.ids.length) throw new Error('근무일 열과 행ID가 없습니다.');
       const companyId = await getCompanyId();
-      const start = dates.slice().sort()[0];
-      const end = dates.slice().sort().at(-1);
-      const { rows: dailyRows, error: fetchError } = await fetchListPages(
-        () =>
-          supabase
-            .from('attendance_daily')
-            .select(
-              'id, worker_name, work_date, shift, judgment, estimated_clock_in, estimated_clock_out, is_ot, reviewed, judgment_rationale'
-            )
-            .eq('company_id', companyId)
-            .gte('work_date', start)
-            .lte('work_date', end),
-        { timeColumn: 'work_date', label: 'attendance_excel_import', ascending: true }
-      );
-      if (fetchError) throw new Error(fetchError.message);
+      const dailyRows = await loadImportDailyRows(companyId, keys.dates, keys.ids);
       const planned = applyAttendanceExcelImport({
         excelRows,
         dailyRows,
         directory,
       });
-      const errorLines = planned.errors.slice(0, 8).map((item) => `${item.row}행: ${item.message}`);
-      if (!planned.updates.length && !planned.confirms.length) {
-        setImportNotice(
-          errorLines.length
-            ? `반영할 수정이 없습니다. ${errorLines.join(' / ')}`
-            : '바꾼 값이 없습니다.'
-        );
-        return;
-      }
-      const ok = window.confirm(
-        `값 변경 ${planned.updates.length}건, 확정 ${planned.confirms.length}건을 반영합니다. 오류 ${planned.errors.length}건은 건너뜁니다.`
-      );
-      if (!ok) return;
+      setExcelPreview({ companyId, planned });
+    } catch (err) {
+      setError(err?.message || '엑셀 반영 실패');
+    } finally {
+      setImporting(false);
+      if (excelInputRef.current) excelInputRef.current.value = '';
+    }
+  }
+
+  async function applyExcelPreview() {
+    if (!excelPreview) return;
+    const { companyId, planned } = excelPreview;
+    setImporting(true);
+    setLogWarning('');
+    setError(null);
+    try {
       const reviewedAt = new Date().toISOString();
+      const batchId = crypto.randomUUID();
+      const logs = [];
       for (const update of planned.updates) {
         const { error: upErr } = await supabase
           .from('attendance_daily')
@@ -331,6 +375,20 @@ export default function AttendancePage() {
           .eq('id', update.id)
           .eq('company_id', companyId);
         if (upErr) throw new Error(upErr.message);
+        logs.push(
+          ...buildAttendanceEditLogs({
+            companyId,
+            attendanceId: update.id,
+            workerName: update.workerName,
+            workDate: update.workDate,
+            changes: update.changes,
+            source: 'excel',
+            originalRule: update.originalRule,
+            editedBy: 'excel',
+            editedAt: reviewedAt,
+            batchId,
+          })
+        );
       }
       for (const confirm of planned.confirms) {
         const { error: upErr } = await supabase
@@ -345,18 +403,25 @@ export default function AttendancePage() {
           .eq('company_id', companyId);
         if (upErr) throw new Error(upErr.message);
       }
+      if (logs.length) {
+        const { error: logErr } = await supabase.from('attendance_edit_log').insert(logs);
+        if (logErr) {
+          setLogWarning(`근태는 반영됐지만 이력 기록에 실패했습니다. ${logErr.message}`);
+        }
+      }
+      const errorLines = planned.errors.slice(0, 8).map((item) => `${item.row}행: ${item.message}`);
       setImportNotice(
         `반영 ${planned.updates.length + planned.confirms.length}건, 건너뜀 ${planned.skipped}건, 오류 ${planned.errors.length}건.${
           errorLines.length ? ` ${errorLines.join(' / ')}` : ''
         }`
       );
+      setExcelPreview(null);
       setPatternToken((token) => token + 1);
       await load();
     } catch (err) {
       setError(err?.message || '엑셀 반영 실패');
     } finally {
       setImporting(false);
-      if (excelInputRef.current) excelInputRef.current.value = '';
     }
   }
 
@@ -651,6 +716,15 @@ export default function AttendancePage() {
             <p className="mt-1 text-xs text-text">{rangeNotice}</p>
           ) : null}
           {importNotice ? <p className="mt-1 text-xs text-text">{importNotice}</p> : null}
+          {logWarning ? <p className="mt-1 text-xs text-warn">{logWarning}</p> : null}
+          {excelPreview ? (
+            <ExcelImportPreview
+              planned={excelPreview.planned}
+              applying={importing}
+              onApply={applyExcelPreview}
+              onClose={() => setExcelPreview(null)}
+            />
+          ) : null}
           <div className="mt-3 text-xs text-muted">
             <div className="font-medium text-text">오판 패턴</div>
             {correctionSummary.total ? (
@@ -712,6 +786,62 @@ export default function AttendancePage() {
             </table>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ExcelImportPreview({ planned, applying, onApply, onClose }) {
+  const canApply = planned.updates.length > 0 || planned.confirms.length > 0;
+  return (
+    <div className="mt-3 rounded-xl border border-border bg-surface p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-medium text-text">엑셀 반영 미리보기</div>
+        <div className="text-xs text-muted">
+          변경 {planned.updates.length}건 · 확정 {planned.confirms.length}건 · 건너뜀 {planned.skipped}건 · 오류 {planned.errors.length}건
+        </div>
+      </div>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-xs">
+          <thead className="text-muted">
+            <tr>
+              <th className="px-2 py-1 font-medium">행</th>
+              <th className="px-2 py-1 font-medium">작업자</th>
+              <th className="px-2 py-1 font-medium">근무일</th>
+              <th className="px-2 py-1 font-medium">이전 → 이후</th>
+              <th className="px-2 py-1 font-medium">상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            {planned.preview.map((item) => (
+              <tr key={`${item.row}-${item.status}`} className="border-t border-border align-top">
+                <td className="px-2 py-1.5">{item.row}</td>
+                <td className="px-2 py-1.5">{item.workerName || '—'}</td>
+                <td className="px-2 py-1.5 whitespace-nowrap">{item.workDate || '—'}</td>
+                <td className="px-2 py-1.5">
+                  {item.changes.length
+                    ? item.changes.map((change) => (
+                        <div key={change.field}>
+                          {attendanceFieldLabel(change.field)} {displayAttendanceValue(change.field, change.from)} → {displayAttendanceValue(change.field, change.to)}
+                        </div>
+                      ))
+                    : '—'}
+                </td>
+                <td className={`px-2 py-1.5 ${item.status === 'error' ? 'text-danger' : 'text-muted'}`}>
+                  {item.status === 'update' ? '변경' : item.message}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" className={btnClass} onClick={onApply} disabled={!canApply || applying}>
+          {applying ? '적용 중…' : '적용'}
+        </button>
+        <button type="button" className={btnClass} onClick={onClose} disabled={applying}>
+          닫기
+        </button>
       </div>
     </div>
   );
@@ -845,7 +975,7 @@ function AttendanceRow({ row, displayName, saving, onSave }) {
                     ? 'manual_override'
                     : row.judgment_rationale?.rule || 'manual_override',
               },
-            });
+            }, changes);
           }}
         >
           {saving ? '…' : '저장'}

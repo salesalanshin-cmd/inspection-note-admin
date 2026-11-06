@@ -3,7 +3,9 @@ import { describe, it } from 'node:test';
 import { applyAutoCommentToRationale } from '../lib/attendance/autoComment.js';
 import {
   applyAttendanceExcelImport,
+  buildAttendanceEditLogs,
   summarizeAttendanceCorrections,
+  summarizeAttendanceEdits,
 } from '../lib/attendance/excelImport.js';
 import { kstWallToUtc } from '../lib/kst.js';
 
@@ -126,7 +128,7 @@ describe('applyAttendanceExcelImport', () => {
       excelRows: [{ 근무일: WORK_DATE, 작업자: '길동', 조: '야간' }],
     });
     assert.equal(result.updates.length, 0);
-    assert.equal(result.errors[0].message, '작업자 이름이 여러 명과 겹칩니다');
+    assert.equal(result.errors[0].message, '동일 표시명 중복');
   });
 });
 
@@ -154,5 +156,165 @@ describe('summarizeAttendanceCorrections', () => {
     assert.equal(kept.corrections.length, 1);
     assert.equal(kept.rule, 'excel_import');
     assert.equal(kept.autoComment, '새 코멘트');
+  });
+});
+
+describe('엑셀 행 매칭과 시각', () => {
+  it('행ID, 작업자ID, 표시명 순으로 찾고 같은 표시명은 건너뛴다', () => {
+    const rows = [
+      daily({ id: 'row-a' }),
+      daily({ id: 'row-b', worker_name: '김철수', judgment_rationale: { rule: 'directory_default_shift' } }),
+    ];
+    const directoryWithDup = [
+      ...directory,
+      { worker_name: '홍길순', display_name: '길동' },
+    ];
+    const byId = applyAttendanceExcelImport({
+      directory: directoryWithDup,
+      dailyRows: rows,
+      excelRows: [{ 행ID: 'row-b', 근무일: WORK_DATE, 작업자: '길동', 조: '야간' }],
+    });
+    assert.equal(byId.updates[0].id, 'row-b');
+
+    const byWorkerId = applyAttendanceExcelImport({
+      directory: directoryWithDup,
+      dailyRows: rows,
+      excelRows: [{ 작업자ID: '홍길동', 근무일: WORK_DATE, 작업자: '길동', 조: '야간' }],
+    });
+    assert.equal(byWorkerId.updates[0].id, 'row-a');
+
+    const skipped = applyAttendanceExcelImport({
+      directory: directoryWithDup,
+      dailyRows: rows,
+      excelRows: [{ 근무일: WORK_DATE, 작업자: '길동', 조: '야간' }],
+    });
+    assert.equal(skipped.updates.length, 0);
+    assert.equal(skipped.errors[0].message, '동일 표시명 중복');
+    assert.equal(skipped.preview[0].status, 'error');
+  });
+
+  it('HH:mm은 근무일 KST로 읽고 출근보다 이른 퇴근은 다음 날이다', () => {
+    const result = applyAttendanceExcelImport({
+      directory,
+      dailyRows: [daily()],
+      excelRows: [
+        {
+          근무일: WORK_DATE,
+          작업자ID: '홍길동',
+          추정출근: '20:00',
+          추정퇴근: '06:00',
+        },
+      ],
+    });
+    assert.equal(result.errors.length, 0);
+    assert.equal(
+      result.updates[0].patch.estimated_clock_in,
+      kstWallToUtc(2026, 10, 6, 20, 0, 0).toISOString()
+    );
+    assert.equal(
+      result.updates[0].patch.estimated_clock_out,
+      kstWallToUtc(2026, 10, 7, 6, 0, 0).toISOString()
+    );
+  });
+
+  it('출근·퇴근 빈 칸은 값을 지우지 않는다', () => {
+    const result = applyAttendanceExcelImport({
+      directory,
+      dailyRows: [daily()],
+      excelRows: [{ 근무일: WORK_DATE, 작업자: '홍길동', 조: '야간', 추정출근: '', 추정퇴근: '' }],
+    });
+    assert.deepEqual(
+      result.updates[0].changes.map((change) => change.field),
+      ['shift']
+    );
+    assert.equal(result.updates[0].patch.estimated_clock_in, undefined);
+    assert.equal(result.updates[0].patch.estimated_clock_out, undefined);
+  });
+});
+
+describe('수정 이력과 요약', () => {
+  it('바꾼 필드마다 같은 batch_id와 수정 전 규칙을 남긴다', () => {
+    const imported = applyAttendanceExcelImport({
+      directory,
+      dailyRows: [daily()],
+      at: '2026-11-06T10:00:00.000Z',
+      excelRows: [{ 근무일: WORK_DATE, 작업자ID: '홍길동', 조: '야간', OT: 'Y' }],
+    });
+    const logs = buildAttendanceEditLogs({
+      companyId: 'company-1',
+      attendanceId: imported.updates[0].id,
+      workerName: imported.updates[0].workerName,
+      workDate: imported.updates[0].workDate,
+      changes: imported.updates[0].changes,
+      source: 'excel',
+      originalRule: imported.updates[0].originalRule,
+      editedBy: 'excel',
+      editedAt: '2026-11-06T10:00:00.000Z',
+      batchId: 'batch-1',
+    });
+    assert.equal(logs.length, 2);
+    assert.deepEqual(
+      logs.map((log) => log.field),
+      ['shift', 'is_ot']
+    );
+    assert.equal(logs.every((log) => log.batch_id === 'batch-1'), true);
+    assert.equal(logs.every((log) => log.original_rule === 'signal_pattern'), true);
+    assert.equal(logs[0].source, 'excel');
+    assert.equal(logs[0].old_value, 'day');
+    assert.equal(logs[0].new_value, 'night');
+  });
+
+  it('규칙 비율은 판정 행이 없으면 나누지 않는다', () => {
+    const summary = summarizeAttendanceEdits(
+      [
+        {
+          attendance_id: 'a',
+          worker_name: '홍길동',
+          field: 'shift',
+          old_value: 'day',
+          new_value: 'night',
+          original_rule: 'signal_pattern',
+          edited_at: '2026-11-06T01:00:00.000Z',
+        },
+        {
+          attendance_id: 'a',
+          worker_name: '홍길동',
+          field: 'is_ot',
+          old_value: 'false',
+          new_value: 'true',
+          original_rule: 'signal_pattern',
+          edited_at: '2026-11-06T02:00:00.000Z',
+        },
+        {
+          attendance_id: 'b',
+          worker_name: '김철수',
+          field: 'shift',
+          old_value: 'night',
+          new_value: 'day',
+          original_rule: 'gone',
+          edited_at: '2026-11-06T03:00:00.000Z',
+        },
+      ],
+      [
+        { judgment_rationale: { rule: 'signal_pattern' } },
+        { judgment_rationale: { rule: 'signal_pattern' } },
+      ]
+    );
+    assert.equal(summary.total, 3);
+    assert.equal(summary.rowCount, 2);
+    assert.equal(summary.workerCount, 2);
+    assert.equal(summary.dayToNight, 1);
+    assert.equal(summary.nightToDay, 1);
+    assert.equal(summary.lines.length, 4);
+    const signal = summary.byRule.find((item) => item.rule === 'signal_pattern');
+    assert.equal(signal.editedRows, 1);
+    assert.equal(signal.judgedRows, 2);
+    assert.equal(signal.ratio, 0.5);
+    const missing = summary.byRule.find((item) => item.rule === 'gone');
+    assert.equal(missing.judgedRows, 0);
+    assert.equal(missing.ratio, null);
+    const empty = summarizeAttendanceEdits([], []);
+    assert.equal(empty.total, 0);
+    assert.equal(empty.byRule.length, 0);
   });
 });

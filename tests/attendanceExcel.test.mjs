@@ -249,8 +249,16 @@ describe('range workbook', () => {
   });
 
   it('메일용 버퍼는 근태 시트 하나만 유지한다', () => {
-    const buffer = buildAttendanceExcelBuffer([row({})], displayMap);
+    const buffer = buildAttendanceExcelBuffer([row({ id: 'row-1' })], displayMap);
     const workbook = readWorkbook(buffer);
     assert.deepEqual(workbook.SheetNames, ['근태']);
+    const header = XLSX.utils.sheet_to_json(workbook.Sheets['근태'], { header: 1 })[0];
+    assert.equal(header[0], '근무일');
+    assert.equal(header.at(-2), '행ID');
+    assert.equal(header.at(-1), '작업자ID');
+    assert.equal(header.includes('비고'), true);
+    const records = XLSX.utils.sheet_to_json(workbook.Sheets['근태']);
+    assert.equal(records[0]['행ID'], 'row-1');
+    assert.equal(records[0]['작업자ID'], '진현주');
   });
 });
