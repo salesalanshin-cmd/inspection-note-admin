@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   MSG_ALREADY_REGISTERED,
+  ORGANIZATION_UNSET,
   buildNewWorkerRow,
   buildRestorePatch,
   classifyWorkerImport,
+  matchesOrganizationFilter,
+  organizationOptions,
   parseWorkerPaste,
 } from '../lib/workerBulk.js';
 
@@ -12,9 +15,9 @@ describe('parseWorkerPaste', () => {
   it('탭·쉼표 구분과 생략된 뒤 항목을 읽는다', () => {
     const rows = parseWorkerPaste('홍길동\t베트남\t야간\t주조\n김철수,태국,주간\n박민수');
     assert.deepEqual(rows, [
-      { name: '홍길동', nationality: '베트남', shift: 'night', process: '주조', error: null },
-      { name: '김철수', nationality: '태국', shift: 'day', process: null, error: null },
-      { name: '박민수', nationality: null, shift: null, process: null, error: null },
+      { name: '홍길동', nationality: '베트남', shift: 'night', process: '주조', organization: null, error: null },
+      { name: '김철수', nationality: '태국', shift: 'day', process: null, organization: null, error: null },
+      { name: '박민수', nationality: null, shift: null, process: null, organization: null, error: null },
     ]);
   });
 
@@ -45,6 +48,19 @@ describe('parseWorkerPaste', () => {
     const [row] = parseWorkerPaste('홍길동,한국,저녁,주조');
     assert.equal(row.error, '교대 표기를 알 수 없습니다');
     assert.equal(row.shift, null);
+  });
+
+  it('5열은 조직을 읽고 4열은 조직을 비운 채 그대로 동작한다', () => {
+    const rows = parseWorkerPaste('홍길동,베트남,야간,주조,1공장\n김철수,태국,주간,사상');
+    assert.equal(rows[0].organization, '1공장');
+    assert.equal(rows[0].process, '주조');
+    assert.equal(rows[1].organization, null);
+    assert.equal(rows[1].shift, 'day');
+    assert.equal(rows[1].error, null);
+    assert.deepEqual(
+      buildRestorePatch({ nationality: null, shift: null, process: null, organization: '사외' }),
+      { removed: false, organization: '사외' }
+    );
   });
 });
 
@@ -112,8 +128,28 @@ describe('buildNewWorkerRow', () => {
     assert.equal(row.nationality, null);
     assert.equal(row.default_shift, null);
     assert.equal(row.process, null);
+    assert.equal(row.organization, null);
     assert.equal(row.note, '');
     assert.equal(row.role, 'worker');
     assert.equal(row.excluded, false);
+  });
+});
+
+describe('조직 필터', () => {
+  const directory = [
+    { worker_name: '홍길동', organization: '1공장' },
+    { worker_name: '김철수', organization: '사외' },
+    { worker_name: '박민수', organization: '  ' },
+    { worker_name: '최미정', organization: null },
+  ];
+
+  it('전체, 조직 이름, 미설정을 가른다', () => {
+    assert.deepEqual(organizationOptions(directory), ['1공장', '사외']);
+    assert.equal(matchesOrganizationFilter('1공장', ''), true);
+    assert.equal(matchesOrganizationFilter('사외', '1공장'), false);
+    assert.equal(matchesOrganizationFilter('1공장', '1공장'), true);
+    assert.equal(matchesOrganizationFilter(null, ORGANIZATION_UNSET), true);
+    assert.equal(matchesOrganizationFilter('  ', ORGANIZATION_UNSET), true);
+    assert.equal(matchesOrganizationFilter('1공장', ORGANIZATION_UNSET), false);
   });
 });

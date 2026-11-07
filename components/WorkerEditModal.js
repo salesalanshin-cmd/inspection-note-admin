@@ -103,12 +103,14 @@ export default function WorkerEditModal({
   workerName,
   row,
   saving,
+  organizationOptions = [],
   onSave,
   onRequestDelete,
   onClose,
 }) {
   const [displayName, setDisplayName] = useState(row?.display_name ?? '');
   const [nationality, setNationality] = useState(row?.nationality ?? '');
+  const [organization, setOrganization] = useState(row?.organization ?? '');
   const [lang, setLang] = useState(() => normalizeWorkerLang(row?.lang));
   const [phone, setPhone] = useState(row?.phone_number ?? '');
   const [note, setNote] = useState(row?.note ?? '');
@@ -121,6 +123,7 @@ export default function WorkerEditModal({
   useEffect(() => {
     setDisplayName(row?.display_name ?? '');
     setNationality(row?.nationality ?? '');
+    setOrganization(row?.organization ?? '');
     setLang(normalizeWorkerLang(row?.lang));
     setPhone(row?.phone_number ?? '');
     setNote(row?.note ?? '');
@@ -152,6 +155,7 @@ export default function WorkerEditModal({
     const ok = await onSave(workerName, {
       display_name: displayName.trim(),
       nationality: nationality.trim(),
+      organization: organization.trim() || null,
       lang,
       phone_number: phone.trim(),
       note,
@@ -228,6 +232,24 @@ export default function WorkerEditModal({
               onChange={setNationality}
             />
           </div>
+
+          <label className="block space-y-1.5">
+            <span className="text-xs font-medium text-muted">조직</span>
+            <input
+              type="text"
+              list="worker-edit-organization-options"
+              value={organization}
+              disabled={saving}
+              placeholder="선택 또는 직접 입력, 비우면 미설정"
+              className={inputClass}
+              onChange={(e) => setOrganization(e.target.value)}
+            />
+            <datalist id="worker-edit-organization-options">
+              {organizationOptions.map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+          </label>
 
           <label className="block space-y-1.5">
             <span className="text-xs font-medium text-muted">사용 언어</span>

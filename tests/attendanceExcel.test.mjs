@@ -12,6 +12,7 @@ import {
   filterAttendanceExportRows,
   missingAttendanceWorkDates,
   omitHiddenAttendanceRows,
+  summarizeAttendanceByOrganization,
 } from '../lib/attendance/excel.js';
 
 function row(partial) {
@@ -254,11 +255,32 @@ describe('range workbook', () => {
     assert.deepEqual(workbook.SheetNames, ['근태']);
     const header = XLSX.utils.sheet_to_json(workbook.Sheets['근태'], { header: 1 })[0];
     assert.equal(header[0], '근무일');
-    assert.equal(header.at(-2), '행ID');
-    assert.equal(header.at(-1), '작업자ID');
+    assert.equal(header.at(-3), '행ID');
+    assert.equal(header.at(-2), '작업자ID');
+    assert.equal(header.at(-1), '조직');
     assert.equal(header.includes('비고'), true);
     const records = XLSX.utils.sheet_to_json(workbook.Sheets['근태']);
     assert.equal(records[0]['행ID'], 'row-1');
     assert.equal(records[0]['작업자ID'], '진현주');
+  });
+
+  it('조직별 집계는 현재 소속으로 출근·미확인·OT를 센다', () => {
+    const organizations = new Map([
+      ['진현주', '1공장'],
+      ['김야간', ''],
+    ]);
+    const summary = summarizeAttendanceByOrganization(
+      [
+        row({ worker_name: '진현주', judgment: 'present', is_ot: true }),
+        row({ worker_name: '진현주', judgment: 'unconfirmed', is_ot: false }),
+        row({ worker_name: '김야간', judgment: 'present', is_ot: false }),
+        row({ worker_name: '없는사람', judgment: 'unconfirmed', is_ot: true }),
+      ],
+      organizations
+    );
+    assert.deepEqual(summary, [
+      { organization: '1공장', present: 1, unconfirmed: 1, ot: 1 },
+      { organization: '미설정', present: 1, unconfirmed: 1, ot: 1 },
+    ]);
   });
 });

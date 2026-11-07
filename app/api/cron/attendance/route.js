@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCompanyId } from '../../../../lib/company';
 import { authorizeCron } from '../../../../lib/cronAuth';
 import { buildWorkerDisplayNameMap } from '../../../../lib/analytics';
+import { organizationByWorkerName } from '../../../../lib/workerBulk';
 import {
   computeAttendanceForWorkDate,
   fetchAttendanceRange,
@@ -51,9 +52,10 @@ export async function GET(request) {
 
     const { data: directory } = await supabase
       .from('worker_directory')
-      .select('worker_name, display_name')
+      .select('worker_name, display_name, organization')
       .eq('company_id', companyId);
     const displayMap = buildWorkerDisplayNameMap(directory || []);
+    const organizationByWorker = organizationByWorkerName(directory || []);
 
     const mails = [];
 
@@ -73,6 +75,7 @@ export async function GET(request) {
         periodEnd: workDate,
         rows: dailyRows,
         displayMap,
+        organizationByWorker,
         subject: `[검사노트] 근태 일일 (${workDate})`,
       })
     );
@@ -103,6 +106,7 @@ export async function GET(request) {
           periodEnd: week.end,
           rows: weekRows,
           displayMap,
+          organizationByWorker,
           subject: `[검사노트] 근태 주간 (${week.start}~${week.end})`,
         })
       );
@@ -127,6 +131,7 @@ export async function GET(request) {
           periodEnd: month.end,
           rows: monthRows,
           displayMap,
+          organizationByWorker,
           subject: `[검사노트] 근태 월간 (${month.start}~${month.end})`,
         })
       );

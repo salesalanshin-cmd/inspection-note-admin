@@ -25,10 +25,13 @@ import {
   buildRestorePatch,
   classifyWorkerImport,
   isWorkerSetupIncomplete,
+  matchesOrganizationFilter,
   nationalityOptions,
+  organizationOptions,
   parseWorkerPaste,
   shiftLabel,
   workerAddWarnings,
+  ORGANIZATION_UNSET,
 } from '../../lib/workerBulk';
 import PageHeader from '../../components/PageHeader';
 import ListTruncationNotice from '../../components/ListTruncationNotice';
@@ -352,6 +355,7 @@ function WorkerRow({
       <td className="px-4 py-3">
         <ProcessSelect name={name} row={row} isSaving={isSaving} onUpsert={onUpsert} />
       </td>
+      <td className="px-4 py-3 text-sm text-text">{row?.organization || '미설정'}</td>
       <td className="px-4 py-3">
         <EquipmentSelect
           name={name}
@@ -441,6 +445,11 @@ function WorkerMobileCard({
       <MobileCardField label="공정">
         <ProcessSelect name={name} row={row} isSaving={isSaving} onUpsert={onUpsert} />
       </MobileCardField>
+      <MobileCardField label="조직">
+        <span className={row?.organization ? 'text-sm text-text' : 'text-sm text-muted'}>
+          {row?.organization || '미설정'}
+        </span>
+      </MobileCardField>
       <MobileCardField label="담당 설비" className="col-span-2">
         <EquipmentSelect
           name={name}
@@ -490,6 +499,8 @@ export default function WorkerManagementPage() {
   const [selectedNames, setSelectedNames] = useState(() => new Set());
   const [bulkEquipmentId, setBulkEquipmentId] = useState('');
   const [bulkShiftChoice, setBulkShiftChoice] = useState('');
+  const [bulkOrganization, setBulkOrganization] = useState('');
+  const [bulkOrganizationText, setBulkOrganizationText] = useState('');
   const [bulkSaving, setBulkSaving] = useState(false);
   const [addForm, setAddForm] = useState({
     name: '',
@@ -497,12 +508,15 @@ export default function WorkerManagementPage() {
     nationality: '',
     shift: '',
     process: '',
+    organization: '',
     role: 'inspector',
     note: '',
   });
   const [pasteText, setPasteText] = useState('');
   const [importSummary, setImportSummary] = useState(null);
   const [filterUnset, setFilterUnset] = useState(false);
+  const [filterOrganization, setFilterOrganization] = useState('');
+  const [filterOrganizationUnset, setFilterOrganizationUnset] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -572,9 +586,20 @@ export default function WorkerManagementPage() {
       const row = directoryMap.get(name);
       if (filterUnassigned && hasEquipmentAssigned(row)) return false;
       if (filterUnset && !isWorkerSetupIncomplete(row)) return false;
+      if (filterOrganizationUnset && !matchesOrganizationFilter(row?.organization, ORGANIZATION_UNSET)) {
+        return false;
+      }
+      if (!matchesOrganizationFilter(row?.organization, filterOrganization)) return false;
       return true;
     });
-  }, [baseTableNames, filterUnassigned, filterUnset, directoryMap]);
+  }, [
+    baseTableNames,
+    filterUnassigned,
+    filterUnset,
+    filterOrganization,
+    filterOrganizationUnset,
+    directoryMap,
+  ]);
 
   const unsetCount = useMemo(
     () => baseTableNames.filter((name) => isWorkerSetupIncomplete(directoryMap.get(name))).length,
@@ -595,6 +620,11 @@ export default function WorkerManagementPage() {
     return [...extras];
   }, [workerDirectory]);
 
+  const organizationChoices = useMemo(
+    () => organizationOptions(workerDirectory),
+    [workerDirectory]
+  );
+
   const addWarnings = useMemo(
     () => workerAddWarnings({ nationality: addForm.nationality, shift: addForm.shift }),
     [addForm.nationality, addForm.shift]
@@ -605,7 +635,7 @@ export default function WorkerManagementPage() {
     [pasteText, workerDirectory]
   );
 
-  const colCount = (showAllWorkers ? 8 : 7) + 2; // checkbox + 담당 설비
+  const colCount = (showAllWorkers ? 8 : 7) + 3; // checkbox + 담당 설비 + 조직
 
   const allVisibleSelected =
     tableNames.length > 0 && tableNames.every((n) => selectedNames.has(n));
@@ -652,6 +682,7 @@ export default function WorkerManagementPage() {
       role: normalizeWorkerRole(existing?.role),
       lang: normalizeWorkerLang(existing?.lang),
       process: existing?.process || null,
+      organization: existing?.organization ?? null,
       removed: existing?.removed ?? false,
       default_equipment_id: existing?.default_equipment_id ?? null,
       ...patch,
@@ -727,6 +758,7 @@ export default function WorkerManagementPage() {
           nationality: addForm.nationality,
           shift: addForm.shift || null,
           process: addForm.process,
+          organization: addForm.organization,
           error: null,
         },
       ],
@@ -752,6 +784,7 @@ export default function WorkerManagementPage() {
               nationality: addForm.nationality,
               shift: addForm.shift || null,
               process: addForm.process,
+              organization: addForm.organization,
             }),
             companyId
           )
@@ -780,6 +813,7 @@ export default function WorkerManagementPage() {
         nationality: '',
         shift: '',
         process: '',
+        organization: '',
         role: 'inspector',
         note: '',
       });
@@ -835,6 +869,7 @@ export default function WorkerManagementPage() {
                 nationality: row.nationality,
                 shift: row.shift,
                 process: row.process,
+                organization: row.organization,
                 role: 'inspector',
               },
               companyId
@@ -898,6 +933,46 @@ export default function WorkerManagementPage() {
     }
   }
 
+  async function handleBulkOrganization() {
+    const names = [...selectedNames].filter(
+      (name) => tableNames.includes(name) || baseTableNames.includes(name)
+    );
+    if (!names.length || (!bulkOrganization && !bulkOrganizationText.trim())) {
+      setFormError('조직을 바꿀 작업자를 선택하세요.');
+      return;
+    }
+    const typed = bulkOrganizationText.trim();
+    const nextOrganization = typed
+      ? typed
+      : bulkOrganization === ORGANIZATION_UNSET
+        ? null
+        : bulkOrganization.trim();
+    const ok = window.confirm(
+      `${names.join(', ')}\n조직을 ${nextOrganization || '미설정'}으로 변경합니다.`
+    );
+    if (!ok) return;
+
+    setBulkSaving(true);
+    setFormError(null);
+    try {
+      const companyId = await getCompanyId();
+      for (const worker_name of names) {
+        const existing = directoryMap.get(worker_name);
+        const { error: upsertError } = await supabase.from('worker_directory').upsert(
+          workerUpsertPayload(worker_name, existing, { organization: nextOrganization }, companyId)
+        );
+        if (upsertError) throw new Error(upsertError.message);
+      }
+      setBulkOrganization('');
+      setBulkOrganizationText('');
+      refetch();
+    } catch (err) {
+      setFormError(err?.message || '조직 일괄 변경에 실패했습니다.');
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
   async function handleRemoveWorker(name) {
     if (!name) return;
     const existing = directoryMap.get(name);
@@ -948,6 +1023,7 @@ export default function WorkerManagementPage() {
       addForm.nationality.trim() ||
       addForm.shift ||
       addForm.process.trim() ||
+      addForm.organization.trim() ||
       addForm.displayName.trim() ||
       addForm.note.trim()
   );
@@ -1046,6 +1122,22 @@ export default function WorkerManagementPage() {
               </datalist>
             </label>
             <label className="block text-xs text-muted">
+              조직
+              <input
+                type="text"
+                list="worker-organization-options"
+                value={addForm.organization}
+                onChange={(e) => patchAddForm({ organization: e.target.value })}
+                placeholder="선택 또는 직접 입력, 비우면 미설정"
+                className={`${inputClass} mt-1.5 w-full`}
+              />
+              <datalist id="worker-organization-options">
+                {organizationChoices.map((value) => (
+                  <option key={value} value={value} />
+                ))}
+              </datalist>
+            </label>
+            <label className="block text-xs text-muted">
               역할
               <select
                 value={addForm.role}
@@ -1088,8 +1180,8 @@ export default function WorkerManagementPage() {
         <div className="space-y-3 rounded-xl border border-border bg-surface px-4 py-4 shadow-card">
           <div className="text-sm font-medium text-text">일괄 등록</div>
           <p className="text-xs text-muted">
-            한 줄에 이름, 국적, 교대, 공정. 탭 또는 쉼표로 구분하고 뒤 항목은 생략할 수 있습니다.
-            교대는 주간/야간/day/night/주/야.
+            한 줄에 이름, 국적, 교대, 공정, 조직. 탭 또는 쉼표로 구분하고 뒤 항목은 생략할 수 있습니다.
+            교대는 주간/야간/day/night/주/야. 조직이 없는 기존 4열도 그대로 등록됩니다.
           </p>
           <textarea
             value={pasteText}
@@ -1098,7 +1190,7 @@ export default function WorkerManagementPage() {
               setImportSummary(null);
             }}
             rows={5}
-            placeholder={'홍길동,베트남,야간,주조\n김철수\t한국\t주'}
+            placeholder={'홍길동,베트남,야간,주조,1공장\n김철수\t한국\t주'}
             className={`${inputClass} w-full font-mono`}
           />
           {importPreview.length > 0 ? (
@@ -1110,6 +1202,7 @@ export default function WorkerManagementPage() {
                     <th className="px-2 py-2">국적</th>
                     <th className="px-2 py-2">교대</th>
                     <th className="px-2 py-2">공정</th>
+                    <th className="px-2 py-2">조직</th>
                     <th className="px-2 py-2">결과</th>
                   </tr>
                 </thead>
@@ -1122,6 +1215,7 @@ export default function WorkerManagementPage() {
                         <td className="px-2 py-2">{row.nationality || '—'}</td>
                         <td className="px-2 py-2">{row.shift ? shiftLabel(row.shift) : '—'}</td>
                         <td className="px-2 py-2">{row.process || '—'}</td>
+                        <td className="px-2 py-2">{row.organization || '—'}</td>
                         <td className="px-2 py-2">
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${status.className}`}>
                             {status.label}
@@ -1178,6 +1272,33 @@ export default function WorkerManagementPage() {
           >
             미설정만 보기{unsetCount > 0 ? ` · ${unsetCount}` : ''}
           </button>
+          <label className="block text-xs text-muted">
+            조직
+            <select
+              value={filterOrganization}
+              onChange={(e) => setFilterOrganization(e.target.value)}
+              className={`${inputClass} mt-1.5 min-w-[8rem]`}
+            >
+              <option value="">전체</option>
+              {organizationChoices.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+              <option value={ORGANIZATION_UNSET}>미설정</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setFilterOrganizationUnset((prev) => !prev)}
+            className={`min-h-[44px] rounded-full border px-3 py-1.5 text-sm font-medium transition-colors md:min-h-0 ${
+              filterOrganizationUnset
+                ? 'border-warn/40 bg-warnSoft text-text'
+                : 'border-border bg-surface text-muted hover:bg-surface2 hover:text-text'
+            }`}
+          >
+            조직 미설정만 보기
+          </button>
         </div>
 
         <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface2/40 px-4 py-3">
@@ -1228,6 +1349,52 @@ export default function WorkerManagementPage() {
             className="min-h-[44px] rounded-xl border border-accent bg-surface px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
           >
             교대 변경
+          </button>
+          <label className="block text-xs text-muted">
+            조직 변경
+            <input
+              type="text"
+              list="worker-organization-bulk"
+              value={bulkOrganizationText}
+              disabled={bulkSaving || selectedNames.size === 0}
+              placeholder="직접 입력"
+              onChange={(e) => setBulkOrganizationText(e.target.value)}
+              className={`${inputClass} mt-1.5 min-w-[8rem]`}
+            />
+            <datalist id="worker-organization-bulk">
+              {organizationChoices.map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+          </label>
+          <label className="block text-xs text-muted">
+            또는 선택
+            <select
+              value={bulkOrganization}
+              disabled={bulkSaving || selectedNames.size === 0}
+              onChange={(e) => setBulkOrganization(e.target.value)}
+              className={`${inputClass} mt-1.5 min-w-[8rem]`}
+            >
+              <option value="">조직 선택</option>
+              {organizationChoices.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+              <option value={ORGANIZATION_UNSET}>미설정</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={handleBulkOrganization}
+            disabled={
+              bulkSaving ||
+              selectedNames.size === 0 ||
+              (!bulkOrganization && !bulkOrganizationText.trim())
+            }
+            className="min-h-[44px] rounded-xl border border-accent bg-surface px-4 py-2 text-sm font-medium text-accent transition-opacity hover:opacity-90 disabled:opacity-50 md:min-h-0"
+          >
+            조직 변경
           </button>
           {selectedNames.size > 0 ? (
             <button
@@ -1294,6 +1461,7 @@ export default function WorkerManagementPage() {
                 <th className="px-4 py-3">근무조</th>
                 <th className="px-4 py-3">담당업무</th>
                 <th className="px-4 py-3">공정</th>
+                <th className="px-4 py-3">조직</th>
                 <th className="px-4 py-3">담당 설비</th>
                 <th className="px-4 py-3">제외</th>
                 <th className="px-4 py-3">편집</th>
@@ -1338,6 +1506,7 @@ export default function WorkerManagementPage() {
         <WorkerEditModal
           workerName={editTarget}
           row={directoryMap.get(editTarget)}
+          organizationOptions={organizationChoices}
           saving={saving === editTarget}
           onSave={upsertWorker}
           onRequestDelete={handleRemoveWorker}

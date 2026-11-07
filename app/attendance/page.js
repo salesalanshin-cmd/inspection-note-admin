@@ -42,6 +42,12 @@ import {
 } from '../../lib/exportExcel';
 import { formatISODate, getRecentDaysRange } from '../../lib/dateRange';
 import {
+  ORGANIZATION_UNSET,
+  matchesOrganizationFilter,
+  organizationByWorkerName,
+  organizationOptions,
+} from '../../lib/workerBulk';
+import {
   attendanceRangeDates,
   buildAttendanceRecomputeBody,
   formatRangeJobStatus,
@@ -77,6 +83,7 @@ export default function AttendancePage() {
   const [savingId, setSavingId] = useState(null);
   const [recomputing, setRecomputing] = useState(false);
   const [filter, setFilter] = useState('all'); // all | unconfirmed | present | unreviwed
+  const [organizationFilter, setOrganizationFilter] = useState('');
   const [includeHidden, setIncludeHidden] = useState(false);
   const [rangeStart, setRangeStart] = useState(() => getRecentDaysRange(1).end);
   const [rangeEnd, setRangeEnd] = useState(() => getRecentDaysRange(1).end);
@@ -108,6 +115,10 @@ export default function AttendancePage() {
     () => buildWorkerDisplayNameMap(directory),
     [directory]
   );
+  // 조직은 attendance_daily에 저장하지 않는다. 현재 worker_directory 소속을 붙이므로
+  // 소속이 바뀌면 과거 근무일에도 바뀐 뒤의 조직이 보인다.
+  const organizationByWorker = useMemo(() => organizationByWorkerName(directory), [directory]);
+  const organizationChoices = useMemo(() => organizationOptions(directory), [directory]);
 
   const hiddenNames = useMemo(() => {
     const names = new Set();
@@ -146,7 +157,7 @@ export default function AttendancePage() {
           .order('worker_name'),
         supabase
           .from('worker_directory')
-          .select('worker_name, display_name, process, nationality, removed, excluded')
+          .select('worker_name, display_name, process, nationality, organization, removed, excluded')
           .eq('company_id', companyId),
       ]);
       if (attRes.error) throw new Error(attRes.error.message);
@@ -205,15 +216,13 @@ export default function AttendancePage() {
   const filtered = useMemo(() => {
     const visible = omitHiddenAttendanceRows(rows, hiddenNames, { includeHidden });
     return visible.filter((r) => {
-      if (filter === 'unconfirmed') return r.judgment === 'unconfirmed';
-      if (filter === 'present') return r.judgment === 'present';
-      if (filter === 'unreviewed') return r.reviewed !== true;
-      if (filter === 'needs_review') {
-        return hasNeedsReviewFlag(r.flags);
-      }
-      return true;
+      if (filter === 'unconfirmed' && r.judgment !== 'unconfirmed') return false;
+      if (filter === 'present' && r.judgment !== 'present') return false;
+      if (filter === 'unreviewed' && r.reviewed === true) return false;
+      if (filter === 'needs_review' && !hasNeedsReviewFlag(r.flags)) return false;
+      return matchesOrganizationFilter(organizationByWorker.get(r.worker_name), organizationFilter);
     });
-  }, [rows, filter, hiddenNames, includeHidden]);
+  }, [rows, filter, hiddenNames, includeHidden, organizationByWorker, organizationFilter]);
 
   async function handleRecompute() {
     setRecomputing(true);
@@ -283,7 +292,7 @@ export default function AttendancePage() {
   }
 
   function handleExport() {
-    const excelRows = attendanceRowsForExcel(filtered, displayMap);
+    const excelRows = attendanceRowsForExcel(filtered, displayMap, organizationByWorker);
     exportToExcel(
       excelRows,
       `근태_${formatDateRangeForFilename(date, date)}.xlsx`
@@ -473,6 +482,7 @@ export default function AttendancePage() {
           workerLabel,
           shiftLabel: shiftText,
           missingDates: missing,
+          organizationByWorker,
         },
         `근태_${formatDateRangeForFilename(rangeStart, rangeEnd)}.xlsx`
       );
@@ -586,6 +596,20 @@ export default function AttendancePage() {
             <option value="unconfirmed">미확인</option>
             <option value="unreviewed">미검수</option>
             <option value="needs_review">확인 필요</option>
+          </select>
+          <select
+            value={organizationFilter}
+            onChange={(e) => setOrganizationFilter(e.target.value)}
+            className={selectClass}
+            aria-label="조직"
+          >
+            <option value="">조직 전체</option>
+            {organizationChoices.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+            <option value={ORGANIZATION_UNSET}>조직 미설정</option>
           </select>
           <label className="inline-flex min-h-[44px] items-center gap-2 text-sm text-text md:min-h-0">
             <input
@@ -755,6 +779,7 @@ export default function AttendancePage() {
               <thead className="border-b border-border bg-surface2 text-xs text-muted">
                 <tr>
                   <th className="px-3 py-2">작업자</th>
+                  <th className="px-3 py-2">조직</th>
                   <th className="px-3 py-2">조</th>
                   <th className="px-3 py-2">판정</th>
                   <th className="px-3 py-2">추정 출근</th>
@@ -771,13 +796,14 @@ export default function AttendancePage() {
                     key={r.id}
                     row={r}
                     displayName={displayMap.get(r.worker_name) || r.worker_name}
+                    organization={organizationByWorker.get(r.worker_name) || ''}
                     saving={savingId === r.id}
                     onSave={saveRow}
                   />
                 ))}
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-3 py-8 text-center text-xs text-muted">
+                    <td colSpan={10} className="px-3 py-8 text-center text-xs text-muted">
                       데이터 없음 — 재계산을 실행하세요
                     </td>
                   </tr>
@@ -847,7 +873,7 @@ function ExcelImportPreview({ planned, applying, onApply, onClose }) {
   );
 }
 
-function AttendanceRow({ row, displayName, saving, onSave }) {
+function AttendanceRow({ row, displayName, organization, saving, onSave }) {
   const [judgment, setJudgment] = useState(row.judgment);
   const [shift, setShift] = useState(row.shift || 'day');
   const [clockIn, setClockIn] = useState(toLocalInput(row.estimated_clock_in));
@@ -869,6 +895,7 @@ function AttendanceRow({ row, displayName, saving, onSave }) {
   return (
     <tr className="border-b border-border last:border-0">
       <td className="px-3 py-2 font-medium text-text">{displayName}</td>
+      <td className="px-3 py-2 text-xs text-muted">{organization || '미설정'}</td>
       <td className="px-3 py-2">
         <select
           value={shift}
