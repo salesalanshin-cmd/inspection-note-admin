@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import PageHeader from '../../components/PageHeader';
+import { attendanceCardPath } from '../../lib/attendance/card';
 import { buildWorkerDisplayNameMap } from '../../lib/analytics';
 import { judgmentLabel } from '../../lib/attendance/judge';
 import {
@@ -797,6 +799,7 @@ export default function AttendancePage() {
                     row={r}
                     displayName={displayMap.get(r.worker_name) || r.worker_name}
                     organization={organizationByWorker.get(r.worker_name) || ''}
+                    month={date.slice(0, 7)}
                     saving={savingId === r.id}
                     onSave={saveRow}
                   />
@@ -873,7 +876,7 @@ function ExcelImportPreview({ planned, applying, onApply, onClose }) {
   );
 }
 
-function AttendanceRow({ row, displayName, organization, saving, onSave }) {
+function AttendanceRow({ row, displayName, organization, month, saving, onSave }) {
   const [judgment, setJudgment] = useState(row.judgment);
   const [shift, setShift] = useState(row.shift || 'day');
   const [clockIn, setClockIn] = useState(toLocalInput(row.estimated_clock_in));
@@ -894,7 +897,14 @@ function AttendanceRow({ row, displayName, organization, saving, onSave }) {
 
   return (
     <tr className="border-b border-border last:border-0">
-      <td className="px-3 py-2 font-medium text-text">{displayName}</td>
+      <td className="px-3 py-2 font-medium text-text">
+        <Link
+          href={attendanceCardPath(row.worker_name, month)}
+          className="hover:text-accent hover:underline"
+        >
+          {displayName}
+        </Link>
+      </td>
       <td className="px-3 py-2 text-xs text-muted">{organization || '미설정'}</td>
       <td className="px-3 py-2">
         <select

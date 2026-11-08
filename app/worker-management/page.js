@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ClipboardCheck, FileText, LayoutGrid, Pencil } from 'lucide-react';
 import { useReports } from '../../lib/useReports';
+import { attendanceCardPath } from '../../lib/attendance/card';
+import { formatKstISODate } from '../../lib/kst';
 import {
   collectAllWorkerNames,
   collectEveryWorkerName,
@@ -285,11 +287,12 @@ function UnsetBadge() {
 
 function WorkerNameLink({ name, displayName, className = '' }) {
   const label = displayName.trim() || name;
+  const month = formatKstISODate(new Date()).slice(0, 7);
   return (
     <Link
-      href={workerDetailHref(name)}
+      href={attendanceCardPath(name, month)}
       className={`font-medium text-text hover:text-accent hover:underline ${className}`.trim()}
-      title="작업자 상세 조회"
+      title="근태 기록 카드"
     >
       {label}
     </Link>

@@ -19,12 +19,12 @@ export default function AppShell({ children }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg">
+    <div className="flex h-screen overflow-hidden bg-bg print:block print:h-auto print:overflow-visible">
       <Sidebar mobileOpen={sidebarOpen} onMobileClose={closeSidebar} />
-      <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg">
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg print:block print:h-auto print:overflow-visible">
         <MobileHeader onMenuOpen={openSidebar} />
         <TopBar />
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto print:overflow-visible">{children}</div>
       </main>
     </div>
   );

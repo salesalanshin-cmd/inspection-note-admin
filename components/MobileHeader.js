@@ -5,7 +5,7 @@ import { Home, Menu, MessageCircle, Sparkles } from 'lucide-react';
 
 export default function MobileHeader({ onMenuOpen }) {
   return (
-    <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 md:hidden">
+    <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 print:hidden md:hidden">
       <button
         type="button"
         onClick={onMenuOpen}

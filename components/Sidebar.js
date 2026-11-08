@@ -44,7 +44,9 @@ const SETTINGS_NAV = [
 
 function isActive(pathname, href) {
   if (!pathname) return false;
-  if (href === '/attendance') return pathname === '/attendance';
+  if (href === '/attendance') {
+    return pathname === '/attendance' || pathname.startsWith('/attendance/card');
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -275,7 +277,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
 
   return (
     <>
-      <aside className="hidden h-screen w-60 shrink-0 flex-col overflow-y-auto bg-surface shadow-sidebar md:flex">
+      <aside className="hidden h-screen w-60 shrink-0 flex-col overflow-y-auto bg-surface shadow-sidebar print:hidden md:flex">
         <SidebarPanel
           pathname={pathname}
           onNavigate={undefined}
@@ -286,7 +288,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
       </aside>
 
       <div
-        className={`fixed inset-0 z-[60] md:hidden ${mobileOpen ? '' : 'pointer-events-none'}`}
+        className={`fixed inset-0 z-[60] print:hidden md:hidden ${mobileOpen ? '' : 'pointer-events-none'}`}
         aria-hidden={!mobileOpen}
         onClick={handleOverlayClose}
       >

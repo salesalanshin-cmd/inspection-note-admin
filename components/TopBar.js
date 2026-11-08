@@ -5,7 +5,7 @@ import { Home, MessageCircle, Sparkles } from 'lucide-react';
 
 export default function TopBar() {
   return (
-    <div className="sticky top-0 z-40 hidden h-14 shrink-0 items-center justify-end gap-2 border-b border-border bg-surface px-6 md:flex">
+    <div className="sticky top-0 z-40 hidden h-14 shrink-0 items-center justify-end gap-2 border-b border-border bg-surface px-6 print:hidden md:flex">
       <Link
         href="/insight-lab"
         aria-label="인사이트 랩(AI대화)로 이동"

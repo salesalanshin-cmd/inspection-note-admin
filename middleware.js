@@ -23,6 +23,7 @@ function isPublicPath(pathname) {
   if (path === '/api/ask' || path.startsWith('/api/ask/')) return true;
   if (path === '/api/push' || path.startsWith('/api/push/')) return true;
   if (path === '/api/defects' || path.startsWith('/api/defects/')) return true;
+  if (path === '/api/attendance/card') return true;
 
   // 앱 관리자 답변
   if (/^\/api\/questions\/[^/]+\/answer$/.test(path)) return true;

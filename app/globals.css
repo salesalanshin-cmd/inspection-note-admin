@@ -19,3 +19,15 @@ body {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+@media print {
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .attendance-card-sheet {
+    zoom: 0.68;
+  }
+}
