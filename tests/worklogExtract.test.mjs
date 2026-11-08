@@ -7,7 +7,7 @@ import {
   matchDefectCode,
   matchRatio,
   needsReviewForRow,
-  planSupersedes,
+  planWorklogDedup,
   resolveProcessCode,
   resolveWorkDate,
   signatureMultiset,
@@ -165,52 +165,79 @@ describe('paper supersede', () => {
     );
   });
 
-  it('21일 이내의 이전 사진만, 겹치는 날짜 행만 대체한다', () => {
-    const pRows = [
-      { work_date: '2026-07-20', qty: 10 },
-      { work_date: '2026-08-01', qty: 9 },
-    ];
+  it('나중에 찍힌 사진 중 가장 최근 것과 겹치는 날짜만 대체한다', () => {
     const keep = { id: 'q-keep', work_date: '2026-07-21', qty: 5 };
     const drop = { id: 'q-drop', work_date: '2026-07-20', qty: 10 };
     const blank = { id: 'q-blank', work_date: '2026-07-20', qty: null };
-    const targets = planSupersedes({
-      pRows,
-      pCapturedAt: later,
-      sheets: [
-        { capturedAt: earlier, superseded: false, rows: [drop, keep, blank] },
-        {
-          capturedAt: new Date(Date.parse(later) - SUPERSEDE_WINDOW_MS - 1000).toISOString(),
-          superseded: false,
-          rows: [{ id: 'old', work_date: '2026-07-20', qty: 10 }],
-        },
-        {
-          capturedAt: earlier,
-          superseded: true,
-          rows: [{ id: 'gone', work_date: '2026-07-20', qty: 10 }],
-        },
-      ],
-    });
-    assert.deepEqual(targets.map((row) => row.id), ['q-drop', 'q-blank']);
+    const middle = new Date(Date.parse(earlier) + 24 * 60 * 60 * 1000).toISOString();
+    const plan = planWorklogDedup([
+      {
+        id: 'newer',
+        formType: 'final_inspection',
+        capturedAt: later,
+        rows: [
+          { id: 'n1', work_date: '2026-07-20', qty: 10 },
+          { id: 'n2', work_date: '2026-08-01', qty: 9 },
+        ],
+      },
+      {
+        id: 'older',
+        formType: 'final_inspection',
+        capturedAt: earlier,
+        rows: [drop, keep, blank],
+      },
+      {
+        id: 'middle',
+        formType: 'final_inspection',
+        capturedAt: middle,
+        rows: [{ id: 'm1', work_date: '2026-07-20', qty: 10 }],
+      },
+      {
+        id: 'too-old',
+        formType: 'final_inspection',
+        capturedAt: new Date(Date.parse(later) - SUPERSEDE_WINDOW_MS - 1000).toISOString(),
+        rows: [{ id: 'old', work_date: '2026-07-20', qty: 999 }],
+      },
+      {
+        id: 'other-form',
+        formType: 'working_report',
+        capturedAt: earlier,
+        rows: [{ id: 'w1', work_date: '2026-07-20', qty: 10 }],
+      },
+    ]);
+    assert.equal(plan.supersededPhotos, 2);
+    assert.deepEqual(
+      plan.marks.map((mark) => [mark.id, mark.supersededBy]),
+      [
+        ['q-drop', 'newer'],
+        ['q-blank', 'newer'],
+        ['m1', 'newer'],
+      ]
+    );
     assert.equal(withinSupersedeWindow(earlier, later), true);
     assert.equal(withinSupersedeWindow(later, earlier), false);
   });
 
   it('겹침이 절반보다 적으면 대체하지 않는다', () => {
-    const targets = planSupersedes({
-      pRows: [{ work_date: '2026-07-20', qty: 10 }],
-      pCapturedAt: later,
-      sheets: [
-        {
-          capturedAt: earlier,
-          superseded: false,
-          rows: [
-            { id: 'a', work_date: '2026-07-20', qty: 10 },
-            { id: 'b', work_date: '2026-07-21', qty: 5 },
-            { id: 'c', work_date: '2026-07-22', qty: 7 },
-          ],
-        },
-      ],
-    });
-    assert.deepEqual(targets, []);
+    const plan = planWorklogDedup([
+      {
+        id: 'older',
+        formType: 'final_inspection',
+        capturedAt: earlier,
+        rows: [
+          { id: 'a', work_date: '2026-07-20', qty: 10 },
+          { id: 'b', work_date: '2026-07-21', qty: 5 },
+          { id: 'c', work_date: '2026-07-22', qty: 7 },
+        ],
+      },
+      {
+        id: 'newer',
+        formType: 'final_inspection',
+        capturedAt: later,
+        rows: [{ id: 'n', work_date: '2026-07-20', qty: 10 }],
+      },
+    ]);
+    assert.equal(plan.supersededPhotos, 0);
+    assert.deepEqual(plan.marks, []);
   });
 });
