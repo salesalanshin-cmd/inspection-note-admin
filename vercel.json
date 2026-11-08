@@ -13,6 +13,10 @@
       "schedule": "*/3 * * * *"
     },
     {
+      "path": "/api/ocr/extract",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/attendance",
       "schedule": "0 0 * * *"
     },
