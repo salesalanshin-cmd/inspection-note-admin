@@ -522,6 +522,13 @@ export default function WorkerManagementPage() {
   const [filterOrganizationUnset, setFilterOrganizationUnset] = useState(false);
 
   useEffect(() => {
+    const name = new URLSearchParams(window.location.search).get('addName');
+    if (!name) return;
+    setAddForm((prev) => ({ ...prev, name }));
+    document.getElementById('worker-add-name')?.focus();
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
@@ -1063,6 +1070,7 @@ export default function WorkerManagementPage() {
             <label className="block text-xs text-muted">
               이름
               <input
+                id="worker-add-name"
                 type="text"
                 required
                 value={addForm.name}

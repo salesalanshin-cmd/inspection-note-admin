@@ -55,6 +55,8 @@ import {
   formatRangeJobStatus,
   runAttendanceRangeRecompute,
 } from '../../lib/attendance/rangeJob';
+import { loadUnmatchedNameSummary } from '../../lib/attendance/loadUnmatchedNames';
+import UnmatchedNamesNotice from '../../components/attendance/UnmatchedNamesNotice';
 import { supabase } from '../../lib/supabase';
 
 const selectClass =
@@ -78,6 +80,7 @@ function signalSummary(kinds) {
 
 export default function AttendancePage() {
   const [date, setDate] = useState(() => getRecentDaysRange(1).end);
+  const [unmatchedNames, setUnmatchedNames] = useState(null);
   const [rows, setRows] = useState([]);
   const [directory, setDirectory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -176,6 +179,23 @@ export default function AttendancePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const companyId = await getCompanyId();
+        const summary = await loadUnmatchedNameSummary(supabase, companyId);
+        if (!cancelled) setUnmatchedNames(summary);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[attendance/unmatched]', err?.message || err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!rangeCheck.ok) {
@@ -575,6 +595,7 @@ export default function AttendancePage() {
       />
 
       <div className="space-y-4 px-4 pb-8 pt-4 md:px-8">
+        <UnmatchedNamesNotice summary={unmatchedNames} />
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" className={btnClass} onClick={() => shiftDate(-1)}>
             이전
