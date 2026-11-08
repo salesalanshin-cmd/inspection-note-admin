@@ -3,10 +3,16 @@ import { describe, it } from 'node:test';
 import {
   buildDedupKey,
   buildWorklogInserts,
+  docTypeForForm,
   matchDefectCode,
+  matchRatio,
   needsReviewForRow,
+  planSupersedes,
   resolveProcessCode,
   resolveWorkDate,
+  signatureMultiset,
+  SUPERSEDE_WINDOW_MS,
+  withinSupersedeWindow,
 } from '../lib/worklogExtract.js';
 
 describe('matchDefectCode', () => {
@@ -130,5 +136,81 @@ describe('saved row', () => {
       }),
       false
     );
+  });
+});
+
+describe('paper supersede', () => {
+  const later = '2026-07-24T10:00:00.000Z';
+  const earlier = new Date(Date.parse(later) - SUPERSEDE_WINDOW_MS).toISOString();
+
+  it('양식에 맞춰 문서 유형을 채운다', () => {
+    assert.equal(docTypeForForm('final_inspection'), 'worklog');
+    assert.equal(docTypeForForm('casting_detail'), 'worklog');
+    assert.equal(docTypeForForm('self_check'), 'inspection');
+    assert.equal(docTypeForForm('other'), 'other');
+    assert.equal(docTypeForForm('unknown'), null);
+  });
+
+  it('수량 멀티셋은 같은 날짜·수량을 개수대로 센다', () => {
+    const counts = signatureMultiset([
+      { work_date: '2026-07-20', qty: 10 },
+      { work_date: '2026-07-20', qty: '10' },
+      { work_date: '2026-07-20', qty: null },
+      { work_date: '2026-07-21', qty: 5 },
+    ]);
+    assert.equal(matchRatio(counts, counts), 1);
+    assert.equal(
+      matchRatio(counts, signatureMultiset([{ work_date: '2026-07-20', qty: 10 }])),
+      1 / 3
+    );
+  });
+
+  it('21일 이내의 이전 사진만, 겹치는 날짜 행만 대체한다', () => {
+    const pRows = [
+      { work_date: '2026-07-20', qty: 10 },
+      { work_date: '2026-08-01', qty: 9 },
+    ];
+    const keep = { id: 'q-keep', work_date: '2026-07-21', qty: 5 };
+    const drop = { id: 'q-drop', work_date: '2026-07-20', qty: 10 };
+    const blank = { id: 'q-blank', work_date: '2026-07-20', qty: null };
+    const targets = planSupersedes({
+      pRows,
+      pCapturedAt: later,
+      sheets: [
+        { capturedAt: earlier, superseded: false, rows: [drop, keep, blank] },
+        {
+          capturedAt: new Date(Date.parse(later) - SUPERSEDE_WINDOW_MS - 1000).toISOString(),
+          superseded: false,
+          rows: [{ id: 'old', work_date: '2026-07-20', qty: 10 }],
+        },
+        {
+          capturedAt: earlier,
+          superseded: true,
+          rows: [{ id: 'gone', work_date: '2026-07-20', qty: 10 }],
+        },
+      ],
+    });
+    assert.deepEqual(targets.map((row) => row.id), ['q-drop', 'q-blank']);
+    assert.equal(withinSupersedeWindow(earlier, later), true);
+    assert.equal(withinSupersedeWindow(later, earlier), false);
+  });
+
+  it('겹침이 절반보다 적으면 대체하지 않는다', () => {
+    const targets = planSupersedes({
+      pRows: [{ work_date: '2026-07-20', qty: 10 }],
+      pCapturedAt: later,
+      sheets: [
+        {
+          capturedAt: earlier,
+          superseded: false,
+          rows: [
+            { id: 'a', work_date: '2026-07-20', qty: 10 },
+            { id: 'b', work_date: '2026-07-21', qty: 5 },
+            { id: 'c', work_date: '2026-07-22', qty: 7 },
+          ],
+        },
+      ],
+    });
+    assert.deepEqual(targets, []);
   });
 });

@@ -5,6 +5,7 @@ import {
   isOcrEnabled,
   remainingDailyQuota,
   shouldStopForTimeBudget,
+  shouldSkipOcrClassify,
   statusAfterFailure,
   getOcrDailyLimit,
   getOcrBatchSize,
@@ -121,6 +122,13 @@ describe('OCR_ENABLED / daily limit / time budget', () => {
     assert.equal(getOcrDailyLimit({ OCR_DAILY_LIMIT: '10' }), 10);
     assert.equal(getOcrBatchSize({}), 6);
     assert.equal(getOcrBatchSize({ OCR_BATCH_SIZE: '8' }), 8);
+  });
+
+  it('추출 단계 사진은 분류를 건너뛴다', () => {
+    assert.equal(shouldSkipOcrClassify({ stage: 'extract' }), true);
+    assert.equal(shouldSkipOcrClassify({ stage: 'extracting' }), true);
+    assert.equal(shouldSkipOcrClassify({ stage: 'classify' }), false);
+    assert.equal(shouldSkipOcrClassify(null), false);
   });
 
   it('시간 예산', () => {
