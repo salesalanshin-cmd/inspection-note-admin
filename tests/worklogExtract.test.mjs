@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { EXTRACT_PROMPT_VERSION, EXTRACT_SYSTEM_PROMPT, normalizeFormEvidence } from '../lib/ocrExtract.js';
+import { isAnthropicBillingStop } from '../lib/worklogExtractJob.js';
 import {
   buildDedupKey,
   buildWorklogInserts,
@@ -274,5 +275,20 @@ describe('paper supersede', () => {
     ]);
     assert.equal(plan.supersededPhotos, 0);
     assert.deepEqual(plan.marks, []);
+  });
+});
+
+describe('isAnthropicBillingStop', () => {
+  it('크레딧 부족과 요금 제한만 멈춤으로 본다', () => {
+    assert.equal(isAnthropicBillingStop({ status: 429, message: 'slow down' }), true);
+    assert.equal(isAnthropicBillingStop({ status: 402, message: 'payment required' }), true);
+    assert.equal(isAnthropicBillingStop({ error: { type: 'rate_limit_error' } }), true);
+    assert.equal(isAnthropicBillingStop({ error: { error: { type: 'billing_error' } } }), true);
+    assert.equal(
+      isAnthropicBillingStop({ status: 400, message: 'Your credit balance is too low to access the Anthropic API.' }),
+      true,
+    );
+    assert.equal(isAnthropicBillingStop({ status: 400, message: 'invalid image' }), false);
+    assert.equal(isAnthropicBillingStop({ status: 529, message: 'overloaded' }), false);
   });
 });
