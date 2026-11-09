@@ -54,16 +54,6 @@ function basisLabel(basis) {
   return '달마다 다름';
 }
 
-function basisNote(basis) {
-  if (basis === 'attendance') {
-    return '검사공정 가동일(검사 담당자 출근일) 기준입니다. worker_directory.process=검사 인 작업자가 1명 이상 출근한 날을 가동일로 씁니다.';
-  }
-  if (basis === 'weekday') {
-    return '검사 담당 출근 기록이 없어, 가동 근무일을 월~토로 대체했습니다. 일요일은 빠집니다.';
-  }
-  return '검사 담당 출근 기록이 있는 달은 검사공정 가동일(검사 담당자 출근일) 기준이고, 없는 달은 월~토로 대체합니다. 일요일은 빠집니다.';
-}
-
 export default function ProjectKpiPage() {
   const [fromA, setFromA] = useState('2026-06-01');
   const [toA, setToA] = useState('2026-07-31');
