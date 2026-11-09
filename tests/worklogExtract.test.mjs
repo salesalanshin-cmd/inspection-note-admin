@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { EXTRACT_PROMPT_VERSION, EXTRACT_SYSTEM_PROMPT, normalizeFormEvidence } from '../lib/ocrExtract.js';
 import {
   buildDedupKey,
   buildWorklogInserts,
@@ -109,6 +110,24 @@ describe('saved row', () => {
     assert.deepEqual(row.defect_breakdown, [{ raw_code: 'A10', code: 'A010', qty: 2 }]);
     assert.equal(row.defect_qty, 2);
     assert.equal(row.needs_review, false);
+    assert.equal(row.raw.form_evidence, null);
+  });
+
+  it('판별 근거를 행 raw에 함께 넣는다', () => {
+    const evidence = "제목 '최종 검사 작업일보', 수량칸 '양품수량'";
+    const [row] = buildWorklogInserts({
+      parsed: {
+        form_type: 'final_inspection',
+        form_evidence: evidence,
+        rows: [{ date: '07-20', item_code: '94500', qty: 10, confidence: 'high' }],
+      },
+      capturedYmd: '2026-07-24',
+      companyId: 'company-1',
+      uploaderName: '진현주',
+      ocrResultId: 'ocr-1',
+    });
+    assert.equal(row.raw.form_evidence, evidence);
+    assert.equal(row.raw.item_code, '94500');
   });
 
   it('수량이 없고 메모도 없거나 날짜가 뒤면 확인이 필요하다', () => {
@@ -136,6 +155,22 @@ describe('saved row', () => {
       }),
       false
     );
+  });
+});
+
+describe('extract prompt', () => {
+  it('프롬프트 버전은 3이고 수량 칸 제목으로 양식을 가른다', () => {
+    assert.equal(EXTRACT_PROMPT_VERSION, 3);
+    assert.match(EXTRACT_SYSTEM_PROMPT, /양품수량.*final_inspection/);
+    assert.match(EXTRACT_SYSTEM_PROMPT, /작업수량.*final_inspection이 아니다/);
+    assert.match(EXTRACT_SYSTEM_PROMPT, /둘 다 보이지 않으면 form_type은 other/);
+    assert.match(EXTRACT_SYSTEM_PROMPT, /form_evidence/);
+    assert.equal(
+      normalizeFormEvidence("  제목 '최종 검사 작업일보',  수량칸 '양품수량'  "),
+      "제목 '최종 검사 작업일보', 수량칸 '양품수량'"
+    );
+    assert.equal(normalizeFormEvidence('   '), null);
+    assert.equal(normalizeFormEvidence(null), null);
   });
 });
 
