@@ -46,23 +46,40 @@ describe('work date and process', () => {
     assert.equal(resolveWorkDate('07-30', '2026-07-24').afterCapture, true);
   });
 
-  it('최종검사는 IN, 공용 양식은 검사만 IN이다', () => {
+  it('최종검사는 IN, 공용 양식은 site·작업자로 공정을 판별한다', () => {
     assert.deepEqual(resolveProcessCode('final_inspection', null), {
       processCode: 'IN',
       siteNeedsReview: false,
+      processInferred: null,
     });
     assert.deepEqual(resolveProcessCode('working_report', '검사'), {
       processCode: 'IN',
       siteNeedsReview: false,
+      processInferred: null,
+    });
+    assert.deepEqual(resolveProcessCode('working_report', '주조'), {
+      processCode: '주조',
+      siteNeedsReview: false,
+      processInferred: null,
     });
     assert.deepEqual(resolveProcessCode('working_report', null), {
       processCode: null,
       siteNeedsReview: true,
+      processInferred: null,
     });
-    assert.deepEqual(resolveProcessCode('working_report', '주조'), {
-      processCode: null,
-      siteNeedsReview: false,
-    });
+    assert.deepEqual(
+      resolveProcessCode('working_report', '불트갭', {
+        matchedWorkers: [{ raw: '이미영', name: '이미영', process: '검사' }],
+      }),
+      { processCode: 'IN', siteNeedsReview: false, processInferred: 'worker' }
+    );
+    assert.deepEqual(
+      resolveProcessCode('working_report', null, {
+        matchedWorkers: [],
+        uploaderMatch: { raw: '염애화', name: '염애화', process: '검사' },
+      }),
+      { processCode: 'IN', siteNeedsReview: false, processInferred: 'uploader' }
+    );
   });
 });
 
