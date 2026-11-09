@@ -49,19 +49,19 @@ function formatMinutes(ocr) {
 }
 
 function basisLabel(basis) {
-  if (basis === 'attendance') return '출근 기록';
+  if (basis === 'attendance') return '검사 담당 출근';
   if (basis === 'weekday') return '월~토';
   return '달마다 다름';
 }
 
 function basisNote(basis) {
   if (basis === 'attendance') {
-    return '기준 기간에 출근 기록(추정 출근 시각 또는 출근 판정)이 있어, 그 기록이 있는 날을 공장 가동 근무일로 썼습니다.';
+    return '검사공정 가동일(검사 담당자 출근일) 기준입니다. worker_directory.process=검사 인 작업자가 1명 이상 출근한 날을 가동일로 씁니다.';
   }
   if (basis === 'weekday') {
-    return '기준 기간에 출근 기록이 없어, 공장 가동 근무일을 월~토로 대체했습니다. 일요일은 빠집니다.';
+    return '검사 담당 출근 기록이 없어, 가동 근무일을 월~토로 대체했습니다. 일요일은 빠집니다.';
   }
-  return '출근 기록이 있는 달은 그 날을 가동 근무일로 썼고, 기록이 없는 달은 월~토로 대체했습니다. 일요일은 빠집니다.';
+  return '검사 담당 출근 기록이 있는 달은 검사공정 가동일(검사 담당자 출근일) 기준이고, 없는 달은 월~토로 대체합니다. 일요일은 빠집니다.';
 }
 
 export default function ProjectKpiPage() {
@@ -162,7 +162,11 @@ export default function ProjectKpiPage() {
           </table>
         </div>
         <p className="mt-2 text-xs text-muted">
-          각주. {basisNote(digital?.basis)} 관리율은 가동 근무일 가운데 검사 데이터가 있는 날의 비율입니다. 공휴일 제외(단, 검사 기록이 있는 공휴일은 가동일로 포함).
+          각주. 검사공정 가동일(검사 담당자 출근일) 기준.
+          {digital?.basis === 'weekday' || digital?.basis === 'mixed'
+            ? ' 검사 담당 출근 기록이 없는 달은 월~토로 대체합니다. 일요일·공휴일 제외(단, 검사 기록이 있는 공휴일은 가동일로 포함).'
+            : ' 공휴일 제외(단, 검사 기록이 있는 공휴일은 가동일로 포함).'}{' '}
+          관리율은 가동 근무일 가운데 검사 데이터가 있는 날의 비율입니다.
         </p>
       </section>
 

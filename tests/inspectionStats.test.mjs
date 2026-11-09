@@ -7,6 +7,7 @@ import {
   buildDailyStats,
   buildDefectPareto,
   buildDigitalManagement,
+  isInspectionDirectoryWorker,
   buildInspectionReport,
   buildMergedDailyStats,
   buildMergedPareto,
@@ -540,6 +541,13 @@ describe('project kpi', () => {
     assert.equal(digital.operatingDays, 1);
     assert.equal(digital.digitalDays, 1);
     assert.equal(digital.rate, 1);
+  });
+
+  it('검사 담당자는 worker_directory.process=검사 로 판별한다', () => {
+    assert.equal(isInspectionDirectoryWorker({ process: '검사' }), true);
+    assert.equal(isInspectionDirectoryWorker({ process: ' 검사 ' }), true);
+    assert.equal(isInspectionDirectoryWorker({ process: '주조', role: 'inspector' }), false);
+    assert.equal(isInspectionDirectoryWorker({ process: null, role: 'inspector' }), false);
   });
 
   it('자동 추출 이전 촬영은 소요시간에서 빼고, 없으면 측정 대기다', () => {
