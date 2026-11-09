@@ -60,6 +60,7 @@ function NavLink({ item, active, onNavigate, badge }) {
     <Link
       href={item.href}
       onClick={onNavigate}
+      data-nav-active={active ? 'true' : undefined}
       className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
         active
           ? 'bg-accentSoft font-medium text-accent'
@@ -165,7 +166,7 @@ function MainNav({ pathname, onNavigate, questionBadge }) {
 
 function SidebarFooter({ onLogout, loggingOut }) {
   return (
-    <div className="space-y-3 border-t border-border px-5 py-4">
+    <div className="shrink-0 space-y-3 border-t border-border px-5 py-4">
       <button
         type="button"
         onClick={onLogout}
@@ -183,33 +184,33 @@ function SidebarFooter({ onLogout, loggingOut }) {
   );
 }
 
+/** 로고(shrink-0) + 메뉴만 스크롤(flex-1 overflow-y-auto) + 하단(shrink-0). absolute/fixed 없음. */
 function SidebarPanel({ pathname, onNavigate, onLogout, loggingOut, questionBadge }) {
+  const navRef = useRef(null);
+
+  useEffect(() => {
+    const active = navRef.current?.querySelector('[data-nav-active="true"]');
+    if (active && typeof active.scrollIntoView === 'function') {
+      active.scrollIntoView({ block: 'nearest' });
+    }
+  }, [pathname]);
+
   return (
-    <>
-      <Link href="/dashboard" onClick={onNavigate} className="block cursor-pointer px-5 py-6">
+    <div className="flex h-full min-h-0 flex-col">
+      <Link
+        href="/dashboard"
+        onClick={onNavigate}
+        className="block shrink-0 cursor-pointer px-5 py-6"
+      >
         <div className="text-xs font-medium text-accent">(주)디케이메탈</div>
         <div className="mt-1 text-lg font-semibold text-text">검사노트 관리</div>
       </Link>
-      <nav className="min-h-0 flex-1 px-3 py-2">
+      <nav
+        ref={navRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2"
+      >
         <MainNav pathname={pathname} onNavigate={onNavigate} questionBadge={questionBadge} />
       </nav>
-      <SidebarFooter onLogout={onLogout} loggingOut={loggingOut} />
-    </>
-  );
-}
-
-function MobileSidebarPanel({ pathname, onNavigate, onLogout, loggingOut, questionBadge }) {
-  return (
-    <div className="flex min-h-full flex-col">
-      <Link href="/dashboard" onClick={onNavigate} className="block cursor-pointer px-5 py-6">
-        <div className="text-xs font-medium text-accent">(주)디케이메탈</div>
-        <div className="mt-1 text-lg font-semibold text-text">검사노트 관리</div>
-      </Link>
-
-      <nav className="min-h-0 flex-1 px-3 py-2">
-        <MainNav pathname={pathname} onNavigate={onNavigate} questionBadge={questionBadge} />
-      </nav>
-
       <SidebarFooter onLogout={onLogout} loggingOut={loggingOut} />
     </div>
   );
@@ -282,7 +283,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
 
   return (
     <>
-      <aside className="hidden h-screen w-60 shrink-0 flex-col overflow-y-auto bg-surface shadow-sidebar print:hidden md:flex">
+      <aside className="hidden h-[100dvh] w-60 shrink-0 flex-col overflow-hidden bg-surface shadow-sidebar print:hidden md:flex">
         <SidebarPanel
           pathname={pathname}
           onNavigate={undefined}
@@ -305,11 +306,11 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }) {
         />
         <aside
           onClick={(e) => e.stopPropagation()}
-          className={`absolute left-0 top-0 flex h-full w-[80%] max-w-[320px] flex-col overflow-y-auto bg-surface shadow-sidebar transition-transform duration-300 ease-out ${
+          className={`absolute left-0 top-0 flex h-[100dvh] max-h-full w-[80%] max-w-[320px] flex-col overflow-hidden bg-surface shadow-sidebar transition-transform duration-300 ease-out ${
             mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          <MobileSidebarPanel
+          <SidebarPanel
             pathname={pathname}
             onNavigate={handleNavigate}
             onLogout={handleLogout}

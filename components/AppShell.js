@@ -19,7 +19,7 @@ export default function AppShell({ children }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg print:block print:h-auto print:overflow-visible">
+    <div className="flex h-[100dvh] overflow-hidden bg-bg print:block print:h-auto print:overflow-visible">
       <Sidebar mobileOpen={sidebarOpen} onMobileClose={closeSidebar} />
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg print:block print:h-auto print:overflow-visible">
         <MobileHeader onMenuOpen={openSidebar} />
