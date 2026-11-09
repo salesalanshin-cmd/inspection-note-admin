@@ -490,7 +490,8 @@ describe('inspection dashboard period', () => {
 });
 
 describe('project kpi', () => {
-  it('출근 기록이 없는 달은 월~토를 가동일로 쓴다', () => {
+  it('출근 기록이 없는 달은 월~토를 가동일로 쓴다(공휴일 제외)', () => {
+    // 2026-06-03 지방선거 공휴일 → 월~토 6일 중 5일
     const digital = buildDigitalManagement({
       from: '2026-06-01',
       to: '2026-06-07',
@@ -498,9 +499,22 @@ describe('project kpi', () => {
       attendanceDays: [],
     });
     assert.equal(digital.basis, 'weekday');
-    assert.equal(digital.operatingDays, 6);
+    assert.equal(digital.operatingDays, 5);
     assert.equal(digital.digitalDays, 2);
-    assert.equal(digital.rate, 2 / 6);
+    assert.equal(digital.rate, 2 / 5);
+  });
+
+  it('추석 연휴는 가동일 분모에서 빠진다', () => {
+    const digital = buildDigitalManagement({
+      from: '2026-09-21',
+      to: '2026-09-26',
+      digitalDays: ['2026-09-21', '2026-09-22'],
+      attendanceDays: [],
+    });
+    // 월21·화22·수23, 목24~토26 추석 제외 → 가동일 3
+    assert.equal(digital.operatingDays, 3);
+    assert.equal(digital.digitalDays, 2);
+    assert.equal(digital.rate, 2 / 3);
   });
 
   it('출근 기록이 있는 달은 그 날만 가동일이다', () => {

@@ -161,7 +161,9 @@ export default function ProjectKpiPage() {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-muted">각주. {basisNote(digital?.basis)} 관리율은 가동 근무일 가운데 검사 데이터가 있는 날의 비율입니다.</p>
+        <p className="mt-2 text-xs text-muted">
+          각주. {basisNote(digital?.basis)} 관리율은 가동 근무일 가운데 검사 데이터가 있는 날의 비율입니다. 공휴일 제외.
+        </p>
       </section>
 
       <section className="rounded-xl border border-border bg-surface p-5">
