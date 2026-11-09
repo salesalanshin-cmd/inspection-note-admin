@@ -25,6 +25,7 @@ const WEEKLY_NAV = [
   { href: '/ai-accuracy', label: 'AI 오진율', code: '15' },
   { href: '/document-scans', label: '스캔 문서 검수', code: '06' },
   { href: '/reports/daily', label: '작업일보', code: '18' },
+  { href: '/reports/kpi', label: '과제 성과지표', code: '20' },
   { href: '/worklog-review', label: '작업일보 검토', code: '17' },
   { href: '/documents', label: '문서', code: '06b' },
   { href: '/knowledge', label: '지식 관리', code: '06d' },

@@ -6,6 +6,7 @@ import {
   activeFinishes,
   buildDailyStats,
   buildDefectPareto,
+  buildDigitalManagement,
   buildInspectionReport,
   buildMergedDailyStats,
   buildMergedPareto,
@@ -16,9 +17,11 @@ import {
   isTestWorkerName,
   bucketInspectionDays,
   countWorkerNames,
+  ocrConfirmMinutes,
   ocrDefectParts,
   ocrQuantities,
   paretoFromInspectionLines,
+  periodSnapshot,
   photoWorkdayOf,
   previousWindow,
   resolveInspectionWindow,
@@ -483,5 +486,61 @@ describe('inspection dashboard period', () => {
       from: '2026-10-11',
       to: '2026-11-09',
     });
+  });
+});
+
+describe('project kpi', () => {
+  it('출근 기록이 없는 달은 월~토를 가동일로 쓴다', () => {
+    const digital = buildDigitalManagement({
+      from: '2026-06-01',
+      to: '2026-06-07',
+      digitalDays: ['2026-06-01', '2026-06-02'],
+      attendanceDays: [],
+    });
+    assert.equal(digital.basis, 'weekday');
+    assert.equal(digital.operatingDays, 6);
+    assert.equal(digital.digitalDays, 2);
+    assert.equal(digital.rate, 2 / 6);
+  });
+
+  it('출근 기록이 있는 달은 그 날만 가동일이다', () => {
+    const digital = buildDigitalManagement({
+      from: '2026-06-01',
+      to: '2026-06-07',
+      digitalDays: ['2026-06-03', '2026-06-04'],
+      attendanceDays: ['2026-06-03'],
+    });
+    assert.equal(digital.basis, 'attendance');
+    assert.equal(digital.operatingDays, 1);
+    assert.equal(digital.digitalDays, 1);
+    assert.equal(digital.rate, 1);
+  });
+
+  it('자동 추출 이전 촬영은 소요시간에서 빼고, 없으면 측정 대기다', () => {
+    const empty = ocrConfirmMinutes([
+      { capturedAt: '2026-11-09T01:00:00.000Z', rowCreatedAt: '2026-11-09T02:00:00.000Z' },
+    ]);
+    assert.equal(empty.status, 'waiting');
+    const measured = ocrConfirmMinutes([
+      { capturedAt: '2026-11-10T01:00:00.000Z', rowCreatedAt: '2026-11-10T01:10:00.000Z' },
+      { capturedAt: '2026-11-10T02:00:00.000Z', rowCreatedAt: '2026-11-10T02:30:00.000Z' },
+    ]);
+    assert.equal(measured.status, 'measured');
+    assert.equal(measured.samples, 2);
+    assert.equal(measured.medianMinutes, 20);
+  });
+
+  it('전후 비교는 기간 안의 일평균과 불량률을 다시 계산한다', () => {
+    const days = [
+      { workday: '2026-06-02', inspectedQty: 100, defectQty: 10, qtyGood: 90, lines: [{ workerName: '김', memoOnly: false, inspectedQty: 100 }] },
+      { workday: '2026-09-02', inspectedQty: 50, defectQty: 1, qtyGood: 49, lines: [{ workerName: '김, 박', memoOnly: false }] },
+    ];
+    const early = periodSnapshot(days, '2026-06-01', '2026-07-31');
+    const recent = periodSnapshot(days, '2026-09-01', '2026-11-09');
+    assert.equal(early.dailyAverage, 100);
+    assert.equal(early.defectRate, 0.1);
+    assert.equal(early.perPersonDaily, 100);
+    assert.equal(recent.perPersonDaily, 25);
+    assert.equal(recent.defectRate, 1 / 50);
   });
 });
