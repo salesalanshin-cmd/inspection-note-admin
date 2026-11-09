@@ -14,9 +14,16 @@ import {
   buildWorkReport,
   defectRate,
   isTestWorkerName,
+  bucketInspectionDays,
+  countWorkerNames,
   ocrDefectParts,
   ocrQuantities,
+  paretoFromInspectionLines,
   photoWorkdayOf,
+  previousWindow,
+  resolveInspectionWindow,
+  splitWorkerNames,
+  summarizeInspectionPeriod,
   withWeekSource,
   workdayBounds,
 } from '../lib/inspectionStats.js';
@@ -388,5 +395,93 @@ describe('ocr inspection source', () => {
     assert.equal(appDay.lines[0].reviewed, true);
     assert.equal(appDay.lines[0].itemCode, 'D098010');
     assert.equal(appDay.inspectedQty, 10);
+  });
+
+  it('쉼표로 적힌 이름은 검사자 수로 나눈다', () => {
+    assert.deepEqual(splitWorkerNames('배경희, 이미영'), ['배경희', '이미영']);
+    assert.deepEqual(splitWorkerNames('배경희，이미영,'), ['배경희', '이미영']);
+    assert.equal(countWorkerNames(['배경희, 이미영', '배경희']), 2);
+    const report = buildInspectionReport({
+      workday: '2026-11-02',
+      ocrRows: [
+        {
+          id: 'a',
+          process_code: 'IN',
+          is_duplicate: false,
+          work_date: '2026-11-02',
+          qty: 760,
+          qty_kind: 'work',
+          defect_qty: 0,
+          sheet_worker: '배경희, 이미영',
+        },
+        {
+          id: 'b',
+          process_code: 'IN',
+          is_duplicate: false,
+          work_date: '2026-11-02',
+          qty: 100,
+          qty_kind: 'work',
+          defect_qty: 0,
+          sheet_worker: '배경희, 이미영',
+        },
+      ],
+    });
+    assert.equal(report.workerCount, 2);
+    assert.equal(report.lines[0].workerName, '배경희, 이미영');
+  });
+});
+
+describe('inspection dashboard period', () => {
+  const days = [
+    {
+      workday: '2026-11-02',
+      inspectedQty: 100,
+      defectQty: 10,
+      qtyGood: 90,
+      defectRate: 0.1,
+      lines: [
+        { id: '1', workerName: '배경희, 이미영', itemCode: 'A', qtyGood: 90, qtyDefect: 10, source: 'ocr', reviewed: false, memoOnly: false, startLabel: '08:00', defectBreakdown: [{ code: 'A002', name: '소착', qty: 10 }] },
+      ],
+    },
+    {
+      workday: '2026-11-03',
+      inspectedQty: 50,
+      defectQty: 0,
+      qtyGood: 50,
+      defectRate: 0,
+      lines: [
+        { id: '2', workerName: '배경희', itemCode: 'B', qtyGood: 50, qtyDefect: 0, source: 'app', reviewed: true, memoOnly: false, startLabel: '09:00', defectBreakdown: [] },
+      ],
+    },
+  ];
+
+  it('일평균은 근무일 수로, 1인 1일은 그날의 검사자 수로 나눈다', () => {
+    const summary = summarizeInspectionPeriod(days);
+    assert.equal(summary.inspectedQty, 150);
+    assert.equal(summary.dayCount, 2);
+    assert.equal(summary.dailyAverage, 75);
+    assert.equal(summary.personDays, 3);
+    assert.equal(summary.perPersonDaily, 50);
+    const months = bucketInspectionDays(days, 'month');
+    assert.equal(months.length, 1);
+    assert.equal(months[0].defectRate, 10 / 150);
+    const pareto = paretoFromInspectionLines(summary.lines, 10);
+    assert.equal(pareto[0].name, '소착');
+    assert.equal(pareto[0].cumRatio, 1);
+  });
+
+  it('직전 기간은 같은 달력 일수다', () => {
+    assert.deepEqual(previousWindow('2026-11-08', '2026-11-08'), { from: '2026-11-07', to: '2026-11-07' });
+    assert.deepEqual(previousWindow('2026-11-01', '2026-11-03'), { from: '2026-10-29', to: '2026-10-31' });
+    assert.deepEqual(resolveInspectionWindow({ preset: 'project', today: '2026-11-09' }), {
+      preset: 'project',
+      from: '2026-06-01',
+      to: '2026-11-09',
+    });
+    assert.deepEqual(resolveInspectionWindow({ preset: '30', today: '2026-11-09' }), {
+      preset: '30',
+      from: '2026-10-11',
+      to: '2026-11-09',
+    });
   });
 });

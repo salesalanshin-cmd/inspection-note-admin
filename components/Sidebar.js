@@ -9,6 +9,7 @@ import { fetchWaitManagerCount } from '../lib/questions';
 /** 상시 — 매일 확인 */
 const DAILY_NAV = [
   { href: '/dashboard', label: '대시보드', code: '01' },
+  { href: '/dashboard/inspection', label: '생산·불량 현황', code: '19' },
   { href: '/daily-performance', label: '일일 실적 관리', code: '02' },
   { href: '/frequent-check', label: '자주검사', code: '03' },
   { href: '/fives', label: '3정5S', code: '04' },
@@ -49,6 +50,7 @@ function isActive(pathname, href) {
   if (href === '/attendance') {
     return pathname === '/attendance' || pathname.startsWith('/attendance/card');
   }
+  if (href === '/dashboard') return pathname === '/dashboard';
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
