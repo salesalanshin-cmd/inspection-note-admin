@@ -6,12 +6,18 @@ import {
   activeFinishes,
   buildDailyStats,
   buildDefectPareto,
+  buildInspectionReport,
+  buildMergedDailyStats,
+  buildMergedPareto,
   buildPhotoDaily,
   buildWeeklyStats,
   buildWorkReport,
   defectRate,
   isTestWorkerName,
+  ocrDefectParts,
+  ocrQuantities,
   photoWorkdayOf,
+  withWeekSource,
   workdayBounds,
 } from '../lib/inspectionStats.js';
 
@@ -235,5 +241,152 @@ describe('photos and work report', () => {
     assert.equal(report.lines[0].startedAt, at(8, 9));
     assert.equal(report.lines[0].defectBreakdown[0].name, '긁힘');
     assert.equal(report.byProcess[0].name, '검사');
+  });
+});
+
+describe('ocr inspection source', () => {
+  it('최종검사는 양품과 불량을 더하고, 공용 작업일보는 작업수량을 검사수량으로 본다', () => {
+    assert.deepEqual(ocrQuantities({ qty: 8, defect_qty: 2, qty_kind: 'good' }), {
+      good: 8,
+      defect: 2,
+      inspected: 10,
+    });
+    assert.deepEqual(ocrQuantities({ qty: 10, defect_qty: 4, qty_kind: 'work' }), {
+      inspected: 10,
+      defect: 4,
+      good: 6,
+    });
+    assert.equal(ocrQuantities({ qty: null, defect_qty: 1, qty_kind: 'good' }), null);
+  });
+
+  it('불량유형은 code가 없으면 raw_code를 쓴다', () => {
+    assert.deepEqual(ocrDefectParts([
+      { code: 'A01', raw_code: 'A0I', qty: 2 },
+      { code: null, raw_code: '긁힘', qty: 1 },
+      { code: '', raw_code: '', qty: 3 },
+    ]), [
+      { code: 'A01', qty: 2 },
+      { code: '긁힘', qty: 1 },
+    ]);
+  });
+
+  it('앱 IN 실적이 있는 날은 앱만 쓰고, 없는 날은 OCR을 쓴다', () => {
+    const events = [
+      {
+        id: 'f1',
+        event_type: 'finish',
+        occurred_at: at(8, 18),
+        process_code: 'IN',
+        lot_id: 'L1',
+        worker_name: '김철수',
+        qty_good: 8,
+        qty_defect: 2,
+        defect_breakdown: [{ code: 'A', qty: 2 }],
+      },
+      {
+        id: 'f-gr',
+        event_type: 'finish',
+        occurred_at: at(7, 18),
+        process_code: 'GR',
+        lot_id: 'L1',
+        worker_name: '김철수',
+        qty_good: 1,
+        qty_defect: 0,
+        defect_breakdown: [],
+      },
+    ];
+    const ocrRows = [
+      {
+        id: 'o1',
+        process_code: 'IN',
+        is_duplicate: false,
+        work_date: '2026-11-08',
+        qty: 100,
+        qty_kind: 'good',
+        defect_qty: 1,
+        defect_breakdown: [{ code: 'B', qty: 1 }],
+        needs_review: false,
+      },
+      {
+        id: 'o2',
+        process_code: 'IN',
+        is_duplicate: false,
+        work_date: '2026-11-07',
+        qty: 10,
+        qty_kind: 'work',
+        defect_qty: 4,
+        defect_breakdown: [{ code: null, raw_code: 'B', qty: 4 }],
+        needs_review: true,
+        sheet_worker: '박주간',
+      },
+      {
+        id: 'memo',
+        process_code: 'IN',
+        is_duplicate: false,
+        work_date: '2026-11-07',
+        qty: null,
+        qty_kind: 'work',
+        defect_qty: 0,
+        task_note: '선별',
+        needs_review: true,
+      },
+    ];
+    const daily = buildMergedDailyStats(events, ocrRows, {
+      from: '2026-11-07',
+      to: '2026-11-08',
+      lotsById: lots,
+    });
+    const day7 = daily.find((row) => row.workday === '2026-11-07');
+    const day8 = daily.find((row) => row.workday === '2026-11-08');
+    assert.equal(day8.source, 'app');
+    assert.equal(day8.inspectedQty, 10);
+    assert.equal(day8.defectQty, 2);
+    assert.equal(day7.source, 'ocr');
+    assert.equal(day7.inspectedQty, 11);
+    assert.equal(day7.defectQty, 4);
+
+    const pareto = buildMergedPareto(events, ocrRows, {
+      from: '2026-11-07',
+      to: '2026-11-08',
+      lotsById: lots,
+      defectNames: new Map([['A', '긁힘']]),
+    });
+    assert.deepEqual(pareto.map((row) => [row.code, row.qty]), [['B', 4], ['A', 2]]);
+
+    const weeks = withWeekSource(daily, buildWeeklyStats(daily));
+    assert.equal(weeks.length, 1);
+    assert.equal(weeks[0].source, undefined);
+
+    const report = buildInspectionReport({
+      workday: '2026-11-07',
+      events,
+      ocrRows,
+      lotsById: lots,
+      defectNames: new Map([['B', '치수']]),
+    });
+    assert.equal(report.source, 'ocr');
+    assert.equal(report.lines.length, 2);
+    assert.equal(report.lines.find((line) => line.id === 'memo').memoOnly, true);
+    assert.equal(report.lines.find((line) => line.id === 'o2').reviewed, false);
+    assert.equal(report.lines.find((line) => line.id === 'o2').defectBreakdown[0].name, '치수');
+    assert.equal(report.inspectedQty, 10);
+    assert.equal(report.qtyGood, 6);
+    assert.equal(report.defectQty, 4);
+    assert.equal(report.workerCount, 1);
+    assert.equal(report.topDefects[0].code, 'B');
+
+    const appDay = buildInspectionReport({
+      workday: '2026-11-08',
+      events,
+      ocrRows,
+      lotsById: lots,
+      startsById: new Map([['s1', { occurred_at: at(8, 9) }]]),
+    });
+    assert.equal(appDay.source, 'app');
+    assert.equal(appDay.lines.length, 1);
+    assert.equal(appDay.lines[0].source, 'app');
+    assert.equal(appDay.lines[0].reviewed, true);
+    assert.equal(appDay.lines[0].itemCode, 'D098010');
+    assert.equal(appDay.inspectedQty, 10);
   });
 });

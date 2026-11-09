@@ -103,7 +103,12 @@ export default function WorklogReviewPage() {
     if (!response.ok) throw new Error(body.error || '목록을 불러오지 못했습니다.');
     setList(body);
     setSelectedId((current) => {
+      const pinned = typeof window === 'undefined'
+        ? null
+        : new URLSearchParams(window.location.search).get('photo');
+      if (pinned && (!current || current === pinned)) return pinned;
       if (current && body.photos.some((photo) => photo.id === current)) return current;
+      if (pinned) return pinned;
       return body.photos[0]?.id || null;
     });
   }, [scope, form, from, to]);
