@@ -162,7 +162,7 @@ export default function ProjectKpiPage() {
           </table>
         </div>
         <p className="mt-2 text-xs text-muted">
-          각주. {basisNote(digital?.basis)} 관리율은 가동 근무일 가운데 검사 데이터가 있는 날의 비율입니다. 공휴일 제외.
+          각주. {basisNote(digital?.basis)} 관리율은 가동 근무일 가운데 검사 데이터가 있는 날의 비율입니다. 공휴일 제외(단, 검사 기록이 있는 공휴일은 가동일로 포함).
         </p>
       </section>
 
