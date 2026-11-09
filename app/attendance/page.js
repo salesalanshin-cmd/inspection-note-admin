@@ -9,14 +9,17 @@ import { judgmentLabel } from '../../lib/attendance/judge';
 import {
   appendAttendanceCorrection,
   applyAttendanceExcelImport,
-  buildAttendanceEditLogs,
   collectExcelImportKeys,
   diffAttendanceFields,
   displayAttendanceValue,
   attendanceFieldLabel,
   summarizeAttendanceCorrections,
 } from '../../lib/attendance/excelImport';
-import { fetchListPages } from '../../lib/listPages';
+import {
+  applyAttendanceDailyBatch,
+  fetchAttendanceDaily,
+  patchAttendanceDaily,
+} from '../../lib/attendance/clientApi';
 import * as XLSX from 'xlsx';
 import {
   attendanceRecomputeNotice,
@@ -154,20 +157,17 @@ export default function AttendancePage() {
     try {
       const companyId = await getCompanyId();
       const [attRes, dirRes] = await Promise.all([
-        supabase
-          .from('attendance_daily')
-          .select('*')
-          .eq('company_id', companyId)
-          .eq('work_date', date)
-          .order('worker_name'),
+        fetchAttendanceDaily({ workDate: date }),
         supabase
           .from('worker_directory')
           .select('worker_name, display_name, process, nationality, organization, removed, excluded')
           .eq('company_id', companyId),
       ]);
-      if (attRes.error) throw new Error(attRes.error.message);
       if (dirRes.error) throw new Error(dirRes.error.message);
-      setRows(attRes.data || []);
+      const sorted = [...(attRes.rows || [])].sort((a, b) =>
+        String(a.worker_name || '').localeCompare(String(b.worker_name || ''), 'ko')
+      );
+      setRows(sorted);
       setDirectory(dirRes.data || []);
     } catch (err) {
       setError(err?.message || '불러오기 실패');
@@ -205,18 +205,12 @@ export default function AttendancePage() {
     let cancelled = false;
     (async () => {
       try {
-        const companyId = await getCompanyId();
-        const { rows: fetched, error: fetchError } = await fetchListPages(
-          () =>
-            supabase
-              .from('attendance_daily')
-              .select('id, worker_name, work_date, judgment_rationale')
-              .eq('company_id', companyId)
-              .gte('work_date', rangeStart)
-              .lte('work_date', rangeEnd),
-          { timeColumn: 'work_date', label: 'attendance_corrections', ascending: true }
-        );
-        if (cancelled || fetchError) return;
+        const { rows: fetched } = await fetchAttendanceDaily({
+          from: rangeStart,
+          to: rangeEnd,
+          columns: 'id,worker_name,work_date,judgment_rationale',
+        });
+        if (cancelled) return;
         setPatternRows(fetched);
       } catch {
         if (!cancelled) setPatternRows([]);
@@ -267,7 +261,6 @@ export default function AttendancePage() {
   async function saveRow(row, patch, changes = []) {
     setSavingId(row.id);
     try {
-      const companyId = await getCompanyId();
       const payload = {
         ...patch,
         updated_at: new Date().toISOString(),
@@ -280,29 +273,16 @@ export default function AttendancePage() {
         payload.reviewed_at = null;
         payload.reviewed_by = null;
       }
-      const { error: upErr } = await supabase
-        .from('attendance_daily')
-        .update(payload)
-        .eq('id', row.id)
-        .eq('company_id', companyId);
-      if (upErr) throw new Error(upErr.message);
-      if (changes.length) {
-        const logs = buildAttendanceEditLogs({
-          companyId,
-          attendanceId: row.id,
-          workerName: row.worker_name,
-          workDate: row.work_date,
-          changes,
-          source: 'screen',
-          originalRule: row.judgment_rationale?.rule || null,
-          editedBy: payload.reviewed_by || 'admin',
-          editedAt: payload.updated_at,
-          batchId: crypto.randomUUID(),
-        });
-        const { error: logErr } = await supabase.from('attendance_edit_log').insert(logs);
-        if (logErr) {
-          setLogWarning(`수정은 저장됐지만 이력 기록에 실패했습니다. ${logErr.message}`);
-        }
+      const result = await patchAttendanceDaily({
+        id: row.id,
+        patch: payload,
+        changes,
+        source: 'screen',
+        originalRule: row.judgment_rationale?.rule || null,
+        editedBy: payload.reviewed_by || 'admin',
+      });
+      if (result.logWarning) {
+        setLogWarning(`수정은 저장됐지만 이력 기록에 실패했습니다. ${result.logWarning}`);
       }
       setPatternToken((token) => token + 1);
       await load();
@@ -324,34 +304,24 @@ export default function AttendancePage() {
   const importColumns =
     'id, worker_name, work_date, shift, judgment, estimated_clock_in, estimated_clock_out, is_ot, reviewed, judgment_rationale';
 
-  async function loadImportDailyRows(companyId, dates, ids) {
-    const merged = new Map();
-    if (dates.length) {
-      const sorted = dates.slice().sort();
-      const { rows: dailyRows, error: fetchError } = await fetchListPages(
-        () =>
-          supabase
-            .from('attendance_daily')
-            .select(importColumns)
-            .eq('company_id', companyId)
-            .gte('work_date', sorted[0])
-            .lte('work_date', sorted.at(-1)),
-        { timeColumn: 'work_date', label: 'attendance_excel_import', ascending: true }
-      );
-      if (fetchError) throw new Error(fetchError.message);
-      for (const row of dailyRows) merged.set(String(row.id), row);
+  async function loadImportDailyRows(_companyId, dates, ids) {
+    const sorted = dates.slice().sort();
+    const params = {
+      columns: importColumns.replace(/\s+/g, ''),
+    };
+    if (sorted.length) {
+      params.from = sorted[0];
+      params.to = sorted.at(-1);
     }
-    for (let index = 0; index < ids.length; index += 200) {
-      const chunk = ids.slice(index, index + 200);
-      const { data, error: idError } = await supabase
-        .from('attendance_daily')
-        .select(importColumns)
-        .eq('company_id', companyId)
-        .in('id', chunk);
-      if (idError) throw new Error(idError.message);
-      for (const row of data || []) merged.set(String(row.id), row);
+    if (ids.length) params.ids = ids.join(',');
+    if (!params.from && !params.ids) return [];
+    if (!params.from && params.ids) {
+      // ids only — API 가 from 없이 ids 만으로 조회
+      const { rows } = await fetchAttendanceDaily(params);
+      return rows;
     }
-    return [...merged.values()];
+    const { rows } = await fetchAttendanceDaily(params);
+    return rows;
   }
 
   async function handleExcelFile(file) {
@@ -386,59 +356,19 @@ export default function AttendancePage() {
 
   async function applyExcelPreview() {
     if (!excelPreview) return;
-    const { companyId, planned } = excelPreview;
+    const { planned } = excelPreview;
     setImporting(true);
     setLogWarning('');
     setError(null);
     try {
-      const reviewedAt = new Date().toISOString();
-      const batchId = crypto.randomUUID();
-      const logs = [];
-      for (const update of planned.updates) {
-        const { error: upErr } = await supabase
-          .from('attendance_daily')
-          .update({
-            ...update.patch,
-            reviewed_at: reviewedAt,
-            reviewed_by: 'excel',
-            updated_at: reviewedAt,
-          })
-          .eq('id', update.id)
-          .eq('company_id', companyId);
-        if (upErr) throw new Error(upErr.message);
-        logs.push(
-          ...buildAttendanceEditLogs({
-            companyId,
-            attendanceId: update.id,
-            workerName: update.workerName,
-            workDate: update.workDate,
-            changes: update.changes,
-            source: 'excel',
-            originalRule: update.originalRule,
-            editedBy: 'excel',
-            editedAt: reviewedAt,
-            batchId,
-          })
-        );
-      }
-      for (const confirm of planned.confirms) {
-        const { error: upErr } = await supabase
-          .from('attendance_daily')
-          .update({
-            reviewed: true,
-            reviewed_at: reviewedAt,
-            reviewed_by: 'excel',
-            updated_at: reviewedAt,
-          })
-          .eq('id', confirm.id)
-          .eq('company_id', companyId);
-        if (upErr) throw new Error(upErr.message);
-      }
-      if (logs.length) {
-        const { error: logErr } = await supabase.from('attendance_edit_log').insert(logs);
-        if (logErr) {
-          setLogWarning(`근태는 반영됐지만 이력 기록에 실패했습니다. ${logErr.message}`);
-        }
+      const result = await applyAttendanceDailyBatch({
+        updates: planned.updates,
+        confirms: planned.confirms,
+        source: 'excel',
+        editedBy: 'excel',
+      });
+      if (result.logWarning) {
+        setLogWarning(`근태는 반영됐지만 이력 기록에 실패했습니다. ${result.logWarning}`);
       }
       const errorLines = planned.errors.slice(0, 8).map((item) => `${item.row}행: ${item.message}`);
       setImportNotice(
@@ -461,18 +391,15 @@ export default function AttendancePage() {
     if (!check.ok) return false;
     setRangeExporting(true);
     try {
-      const companyId = await getCompanyId();
-      const { data, error: fetchError } = await supabase
-        .from('attendance_daily')
-        .select('*')
-        .eq('company_id', companyId)
-        .gte('work_date', rangeStart)
-        .lte('work_date', rangeEnd)
-        .order('work_date', { ascending: true })
-        .order('worker_name', { ascending: true });
-      if (fetchError) throw new Error(fetchError.message);
-
-      const stored = data || [];
+      const { rows: fetched } = await fetchAttendanceDaily({
+        from: rangeStart,
+        to: rangeEnd,
+      });
+      const stored = [...(fetched || [])].sort(
+        (a, b) =>
+          String(a.work_date).localeCompare(String(b.work_date))
+          || String(a.worker_name || '').localeCompare(String(b.worker_name || ''), 'ko')
+      );
       const missing = missingAttendanceWorkDates(stored, {
         start: rangeStart,
         end: rangeEnd,

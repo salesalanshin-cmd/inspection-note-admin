@@ -5,7 +5,7 @@ import {
   isValidSession,
   SESSION_COOKIE_NAME,
 } from '../../../../lib/session';
-import { supabase } from '../../../../lib/supabase';
+import { createServiceRoleClient } from '../../../../lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -32,6 +32,7 @@ export async function POST(request) {
 
   try {
     const companyId = await getCompanyId();
+    const supabase = createServiceRoleClient();
     const result = await computeAttendanceForWorkDate(
       supabase,
       companyId,

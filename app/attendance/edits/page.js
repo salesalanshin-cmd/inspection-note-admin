@@ -3,10 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../../components/PageHeader';
 import { attendanceFieldLabel, displayAttendanceValue, summarizeAttendanceEdits } from '../../../lib/attendance/excelImport';
-import { getCompanyId } from '../../../lib/company';
+import { fetchAttendanceDaily, fetchAttendanceEditLogs } from '../../../lib/attendance/clientApi';
 import { getRecentDaysRange, isDateRangeValid } from '../../../lib/dateRange';
-import { fetchListPages, LIST_TRUNCATION_MESSAGE } from '../../../lib/listPages';
-import { supabase } from '../../../lib/supabase';
+import { LIST_TRUNCATION_MESSAGE } from '../../../lib/listPages';
 
 const inputClass =
   'min-h-[44px] rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text focus:border-accent focus:outline-none md:min-h-0';
@@ -46,36 +45,17 @@ export default function AttendanceEditsPage() {
     setError(null);
     (async () => {
       try {
-        const companyId = await getCompanyId();
         const [logResult, dailyResult] = await Promise.all([
-          fetchListPages(
-            () =>
-              supabase
-                .from('attendance_edit_log')
-                .select(
-                  'id, company_id, attendance_id, worker_name, work_date, field, old_value, new_value, source, original_rule, edited_by, edited_at, batch_id'
-                )
-                .eq('company_id', companyId)
-                .gte('work_date', start)
-                .lte('work_date', end),
-            { timeColumn: 'edited_at', label: 'attendance_edit_log', ascending: false }
-          ),
-          fetchListPages(
-            () =>
-              supabase
-                .from('attendance_daily')
-                .select('id, work_date, worker_name, judgment_rationale')
-                .eq('company_id', companyId)
-                .gte('work_date', start)
-                .lte('work_date', end),
-            { timeColumn: 'work_date', label: 'attendance_edit_denominator', ascending: true }
-          ),
+          fetchAttendanceEditLogs({ from: start, to: end }),
+          fetchAttendanceDaily({
+            from: start,
+            to: end,
+            columns: 'id,work_date,worker_name,judgment_rationale',
+          }),
         ]);
         if (cancelled) return;
-        if (logResult.error) throw new Error(logResult.error.message);
-        if (dailyResult.error) throw new Error(dailyResult.error.message);
-        setLogs(logResult.rows);
-        setDailyRows(dailyResult.rows);
+        setLogs(logResult.rows || []);
+        setDailyRows(dailyResult.rows || []);
         setTruncated(Boolean(logResult.truncated || dailyResult.truncated));
       } catch (err) {
         if (!cancelled) {

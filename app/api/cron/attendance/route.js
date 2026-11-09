@@ -16,7 +16,7 @@ import {
   sendAndLogAttendanceReport,
 } from '../../../../lib/attendance/mail';
 import { getKstDateParts, getKstDay } from '../../../../lib/kst';
-import { supabase } from '../../../../lib/supabase';
+import { createServiceRoleClient } from '../../../../lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -35,6 +35,7 @@ export async function GET(request) {
 
   try {
     const companyId = await getCompanyId();
+    const supabase = createServiceRoleClient();
     const now = new Date();
     const workDate = previousWorkDate(now);
     const workDatePrev2 = workDateDaysAgo(now, 2);

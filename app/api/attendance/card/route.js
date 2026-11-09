@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { resolveAskAuth } from '../../../../lib/askAuth.js';
 import { loadAttendanceCard } from '../../../../lib/attendance/loadCard.js';
 import { getCompanyId } from '../../../../lib/company.js';
-import { supabase } from '../../../../lib/supabase.js';
+import { createServiceRoleClient } from '../../../../lib/supabaseAdmin.js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -59,6 +59,7 @@ export async function GET(request) {
   }
 
   try {
+    const supabase = createServiceRoleClient();
     const card = await loadAttendanceCard(supabase, boundCompanyId, { name, month });
     if (!card) {
       return jsonWithCors({ error: '이 회사의 작업자가 아닙니다.' }, { status: 404 });
