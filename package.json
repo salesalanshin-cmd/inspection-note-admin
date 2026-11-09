@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --import ./tests/esm-ext-register.mjs --test tests/ocrClassify.test.mjs tests/misdiagnosisAlerts.test.mjs tests/aiAccuracy.test.mjs tests/defectFilters.test.mjs tests/attendanceJudge.test.mjs tests/attendanceShift.test.mjs tests/attendanceSundayMondayBoundary.test.mjs tests/attendanceExcel.test.mjs tests/attendanceRangeJob.test.mjs tests/signalMerge.test.mjs tests/attendanceSignals.test.mjs tests/listPages.test.mjs tests/mailEnv.test.mjs tests/resolveRecordShift.test.mjs tests/workerBulk.test.mjs tests/attendanceAutoComment.test.mjs tests/attendanceExcelImport.test.mjs tests/attendanceCard.test.mjs tests/unmatchedNames.test.mjs tests/inspectionStats.test.mjs tests/worklogExtract.test.mjs"
+    "test": "node --import ./tests/esm-ext-register.mjs --test tests/ocrClassify.test.mjs tests/misdiagnosisAlerts.test.mjs tests/aiAccuracy.test.mjs tests/defectFilters.test.mjs tests/attendanceJudge.test.mjs tests/attendanceShift.test.mjs tests/attendanceSundayMondayBoundary.test.mjs tests/attendanceExcel.test.mjs tests/attendanceRangeJob.test.mjs tests/signalMerge.test.mjs tests/attendanceSignals.test.mjs tests/listPages.test.mjs tests/mailEnv.test.mjs tests/resolveRecordShift.test.mjs tests/workerBulk.test.mjs tests/attendanceAutoComment.test.mjs tests/attendanceExcelImport.test.mjs tests/attendanceCard.test.mjs tests/unmatchedNames.test.mjs tests/inspectionStats.test.mjs tests/worklogExtract.test.mjs tests/worklogReview.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
