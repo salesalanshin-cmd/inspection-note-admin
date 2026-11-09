@@ -4,3 +4,5 @@ node_modules
 .env*.local
 .DS_Store
 demo-seed/
+.env.local.backup
+supabase/.temp/
