@@ -87,7 +87,9 @@ export default function AttendancePage() {
   const [rows, setRows] = useState([]);
   const [directory, setDirectory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [error, setError] = useState(null);
+  const loadRequestRef = useRef(0);
   const [savingId, setSavingId] = useState(null);
   const [recomputing, setRecomputing] = useState(false);
   const [filter, setFilter] = useState('all'); // all | unconfirmed | present | unreviwed
@@ -152,8 +154,9 @@ export default function AttendancePage() {
   }, [directory, displayMap, hiddenNames, includeHidden]);
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const companyId = await getCompanyId();
       const [attRes, dirRes] = await Promise.all([
@@ -163,16 +166,24 @@ export default function AttendancePage() {
           .select('worker_name, display_name, process, nationality, organization, removed, excluded')
           .eq('company_id', companyId),
       ]);
+      if (requestId !== loadRequestRef.current) return;
       if (dirRes.error) throw new Error(dirRes.error.message);
-      const sorted = [...(attRes.rows || [])].sort((a, b) =>
+      if (!Array.isArray(attRes?.rows)) {
+        throw new Error('근태 데이터를 불러오지 못했습니다');
+      }
+      const sorted = [...attRes.rows].sort((a, b) =>
         String(a.worker_name || '').localeCompare(String(b.worker_name || ''), 'ko')
       );
       setRows(sorted);
       setDirectory(dirRes.data || []);
     } catch (err) {
-      setError(err?.message || '불러오기 실패');
+      if (requestId !== loadRequestRef.current) return;
+      // eslint-disable-next-line no-console
+      console.warn('[attendance/load]', err?.message || err);
+      setRows([]);
+      setLoadError('근태 데이터를 불러오지 못했습니다');
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, [date]);
 
@@ -721,7 +732,14 @@ export default function AttendancePage() {
           </div>
         ) : null}
 
-        {loading ? (
+        {loadError ? (
+          <div className="rounded-xl border border-border bg-surface px-4 py-8 text-center">
+            <p className="text-sm text-danger">{loadError}</p>
+            <button type="button" className={`${btnClass} mt-3`} onClick={load}>
+              다시 시도
+            </button>
+          </div>
+        ) : loading ? (
           <div className="text-sm text-muted">불러오는 중…</div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border bg-surface shadow-card">
@@ -845,10 +863,10 @@ function AttendanceRow({ row, displayName, organization, month, saving, onSave }
 
   return (
     <tr className="border-b border-border last:border-0">
-      <td className="px-3 py-2 font-medium text-text">
+      <td className="p-0 align-middle font-medium text-text whitespace-nowrap">
         <Link
           href={attendanceCardPath(row.worker_name, month)}
-          className="hover:text-accent hover:underline"
+          className="relative z-10 block px-3 py-2 hover:text-accent hover:underline"
         >
           {displayName}
         </Link>
