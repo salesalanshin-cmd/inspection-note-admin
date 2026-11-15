@@ -96,6 +96,7 @@ export default function FivesPage() {
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [trashConfirm, setTrashConfirm] = useState(false);
   const [trashLoading, setTrashLoading] = useState(false);
+  const [trashError, setTrashError] = useState(null);
   const [sortKey, setSortKey] = useState('created_at');
   const [sortDir, setSortDir] = useState('desc');
   const [pendingNotifyCount, setPendingNotifyCount] = useState(0);
@@ -246,16 +247,27 @@ export default function FivesPage() {
     }
   }
 
+  function openTrashConfirm() {
+    setTrashError(null);
+    setTrashConfirm(true);
+  }
+
+  function closeTrashConfirm() {
+    if (trashLoading) return;
+    setTrashConfirm(false);
+    setTrashError(null);
+  }
+
   async function handleMoveToTrash() {
     setTrashLoading(true);
+    setTrashError(null);
     try {
       await moveToTrash(TRASH_TABLES.fives, [...selectedIds]);
       clearAll();
       setTrashConfirm(false);
       refetch();
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[fives trash]', err);
+      setTrashError(err?.message || '휴지통으로 옮기지 못했습니다.');
     } finally {
       setTrashLoading(false);
     }
@@ -484,8 +496,9 @@ export default function FivesPage() {
         confirmLabel="휴지통으로 이동"
         confirmTone="danger"
         loading={trashLoading}
+        error={trashError}
         onConfirm={handleMoveToTrash}
-        onCancel={() => setTrashConfirm(false)}
+        onCancel={closeTrashConfirm}
       />
 
       {selectedCount > 0 && !batchProgress ? (
@@ -501,7 +514,7 @@ export default function FivesPage() {
           >
             {downloadLoading ? '다운로드 중...' : `선택 ${selectedCount}개 다운로드`}
           </button>
-          <button type="button" onClick={() => setTrashConfirm(true)} className={dangerBtnClass}>
+          <button type="button" onClick={openTrashConfirm} className={dangerBtnClass}>
             휴지통으로 이동
           </button>
         </GalleryFloatingBar>

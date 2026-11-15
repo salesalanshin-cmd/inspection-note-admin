@@ -54,6 +54,7 @@ export default function DocumentsPage() {
   const [selected, setSelected] = useState(null);
   const [trashConfirm, setTrashConfirm] = useState(false);
   const [trashLoading, setTrashLoading] = useState(false);
+  const [trashError, setTrashError] = useState(null);
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [batchError, setBatchError] = useState(null);
   const [pendingNotifyCount, setPendingNotifyCount] = useState(0);
@@ -166,16 +167,27 @@ export default function DocumentsPage() {
     }
   }
 
+  function openTrashConfirm() {
+    setTrashError(null);
+    setTrashConfirm(true);
+  }
+
+  function closeTrashConfirm() {
+    if (trashLoading) return;
+    setTrashConfirm(false);
+    setTrashError(null);
+  }
+
   async function handleMoveToTrash() {
     setTrashLoading(true);
+    setTrashError(null);
     try {
       await moveToTrash(TRASH_TABLES.doc, [...selectedIds]);
       clearAll();
       setTrashConfirm(false);
       refetch();
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[documents trash]', err);
+      setTrashError(err?.message || '휴지통으로 옮기지 못했습니다.');
     } finally {
       setTrashLoading(false);
     }
@@ -404,8 +416,9 @@ export default function DocumentsPage() {
         confirmLabel="휴지통으로 이동"
         confirmTone="danger"
         loading={trashLoading}
+        error={trashError}
         onConfirm={handleMoveToTrash}
-        onCancel={() => setTrashConfirm(false)}
+        onCancel={closeTrashConfirm}
       />
 
       <GalleryFloatingBar count={selectedCount}>
@@ -417,7 +430,7 @@ export default function DocumentsPage() {
         >
           {downloadLoading ? '다운로드 중...' : `선택 ${selectedCount}개 다운로드`}
         </button>
-        <button type="button" onClick={() => setTrashConfirm(true)} className={dangerBtnClass}>
+        <button type="button" onClick={openTrashConfirm} className={dangerBtnClass}>
           선택 {selectedCount}개 휴지통으로 이동
         </button>
       </GalleryFloatingBar>

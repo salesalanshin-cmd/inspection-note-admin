@@ -12,6 +12,7 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
   loading = false,
+  error = null,
 }) {
   if (!open) return null;
 
@@ -38,7 +39,14 @@ export default function ConfirmDialog({
         />
       }
     >
-      <p className="px-4 py-5 text-sm leading-relaxed text-muted md:px-6">{message}</p>
+      <div className="space-y-3 px-4 py-5 md:px-6">
+        <p className="text-sm leading-relaxed text-muted">{message}</p>
+        {error ? (
+          <p className="text-sm leading-relaxed text-danger" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
     </ModalShell>
   );
 }

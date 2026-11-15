@@ -38,6 +38,7 @@ export default function TrashPage() {
   const [filter, setFilter] = useState('all');
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [restoreConfirm, setRestoreConfirm] = useState(false);
+  const [restoreError, setRestoreError] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -80,8 +81,20 @@ export default function TrashPage() {
     return groups;
   }
 
+  function openRestoreConfirm() {
+    setRestoreError(null);
+    setRestoreConfirm(true);
+  }
+
+  function closeRestoreConfirm() {
+    if (actionLoading) return;
+    setRestoreConfirm(false);
+    setRestoreError(null);
+  }
+
   async function handleRestore() {
     setActionLoading(true);
+    setRestoreError(null);
     try {
       const groups = groupSelectedByTable();
       await Promise.all([
@@ -93,8 +106,7 @@ export default function TrashPage() {
       setRestoreConfirm(false);
       refetch();
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[trash restore]', err);
+      setRestoreError(err?.message || '복구하지 못했습니다.');
     } finally {
       setActionLoading(false);
     }
@@ -204,7 +216,7 @@ export default function TrashPage() {
           </button>
           <button
             type="button"
-            onClick={() => setRestoreConfirm(true)}
+            onClick={openRestoreConfirm}
             disabled={selectedCount === 0}
             className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
@@ -278,8 +290,9 @@ export default function TrashPage() {
         message={`선택한 ${selectedCount}개 항목을 복구합니다. 목록 화면에 다시 표시됩니다.`}
         confirmLabel="복구"
         loading={actionLoading}
+        error={restoreError}
         onConfirm={handleRestore}
-        onCancel={() => setRestoreConfirm(false)}
+        onCancel={closeRestoreConfirm}
       />
 
       <ConfirmDialog
