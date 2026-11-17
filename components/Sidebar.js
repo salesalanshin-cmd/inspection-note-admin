@@ -15,6 +15,7 @@ const DAILY_NAV = [
   { href: '/fives', label: '3정5S', code: '04' },
   { href: '/defects', label: '불량기록', code: '05' },
   { href: '/attendance', label: '근태', code: '14' },
+  { href: '/equipment-checks', label: '설비·생산조건 점검', code: '21' },
   { href: '/questions', label: '질문 답변', code: '13', badgeKey: 'questions' },
   { href: '/notices', label: '공지사항', code: '09' },
 ];
@@ -41,6 +42,7 @@ const DEV_NAV =
 /** 설정 — 초기 세팅 후 거의 안 봄 (접힌 그룹) */
 const SETTINGS_NAV = [
   { href: '/worker-management', label: '작업자 관리', code: '07' },
+  { href: '/inspection-items', label: '점검 항목 마스터', code: '22' },
   { href: '/settings/messages', label: '메시지 관리', code: '10' },
   { href: '/trash', label: '휴지통', code: '11' },
   { href: '/master', label: 'MES 기준정보', code: '12' },
@@ -136,7 +138,7 @@ function MainNav({ pathname, onNavigate, questionBadge }) {
 
   return (
     <>
-      <NavSection label={null}>
+      <NavSection label="일상">
         {DAILY_NAV.map((item) => (
           <NavLink
             key={item.href}
