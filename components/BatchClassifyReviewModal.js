@@ -126,8 +126,8 @@ export default function BatchClassifyReviewModal({
           const displayName = record?.worker_name
             ? getDisplayName(record.worker_name, workerDirectory)
             : null;
-          const isLow = r.confidence === 'low';
-          const rowClass = isLow
+          const needsReview = r.needsReview === true || r.confidence === 'low';
+          const rowClass = needsReview
             ? 'border-warn/40 bg-warnSoft/30'
             : 'border-border bg-surface';
 
@@ -165,14 +165,19 @@ export default function BatchClassifyReviewModal({
                   ) : (
                     <span className="text-muted">AI: 코드 없음</span>
                   )}
-                  {isLow ? (
+                  {needsReview ? (
                     <span className="rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
                       확인 필요
                     </span>
                   ) : null}
                 </div>
                 {r.reason ? <p className="break-words text-[11px] leading-relaxed text-muted">{r.reason}</p> : null}
-                <SimilarCorrectionNotes codeSet={codeSet} items={r.similarCorrections} />
+                <SimilarCorrectionNotes
+                  codeSet={codeSet}
+                  items={r.similarCorrections}
+                  suggestedCode={r.code}
+                  productName={record?.product_name}
+                />
                 <select
                   value={selections[r.id] || ''}
                   onChange={(e) => setSelections((prev) => ({ ...prev, [r.id]: e.target.value }))}

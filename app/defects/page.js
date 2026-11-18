@@ -8,6 +8,7 @@ import { buildWorkerDisplayNameMap, filterDefectsForDisplay } from '../../lib/an
 import { filterByCreatedAtDateRange, getRecentDaysRange, isDateRangeValid } from '../../lib/dateRange';
 import { filterDefectGallery } from '../../lib/defectFilters';
 import { requestClassifyPhotosBatch } from '../../lib/classifyClient';
+import { lookupWorkerProcess, resolveProcessHint } from '../../lib/processHint';
 import { useGalleryBatchSelect } from '../../lib/useGalleryBatchSelect';
 import { moveToTrash, TRASH_TABLES } from '../../lib/trash';
 import {
@@ -160,6 +161,10 @@ export default function DefectsPage() {
         id: d.id,
         imageUrl: d.image_url,
         productName: d.product_name ? String(d.product_name).trim() : undefined,
+        processHint: resolveProcessHint({
+          defectStage: d.defect_stage,
+          workerProcess: lookupWorkerProcess(workerDirectory, d.worker_name),
+        }),
       }));
 
     if (!items.length) {

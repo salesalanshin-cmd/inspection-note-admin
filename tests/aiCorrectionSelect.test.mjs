@@ -198,7 +198,10 @@ describe('formatCorrectionExampleLine', () => {
 
 describe('classify prompt', () => {
   it('정정 우선 지시를 넣고 응답 형식은 유지한다', () => {
-    const source = readFileSync(new URL('../lib/classifyPrompt.js', import.meta.url), 'utf8');
+    const source = readFileSync(
+      new URL('../lib/classifyPromptFormat.js', import.meta.url),
+      'utf8'
+    );
     assert.match(source, /사용자가 정정한 사례는 AI의 기존 판단보다 우선한다/);
     assert.match(
       source,

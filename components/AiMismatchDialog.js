@@ -99,10 +99,21 @@ export default function AiMismatchDialog({
             이유: {pendingAi.reason}
           </>
         ) : null}
+        {pendingAi.needsReview ? (
+          <>
+            <br />
+            <span className="font-medium text-warn">확인 필요</span>
+          </>
+        ) : null}
       </p>
       {pendingAi.similarCorrections?.length ? (
         <div className="mt-2">
-          <SimilarCorrectionNotes codeSet={codeSet} items={pendingAi.similarCorrections} />
+          <SimilarCorrectionNotes
+            codeSet={codeSet}
+            items={pendingAi.similarCorrections}
+            suggestedCode={pendingAi.code}
+            productName={pendingAi.productName}
+          />
         </div>
       ) : null}
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">

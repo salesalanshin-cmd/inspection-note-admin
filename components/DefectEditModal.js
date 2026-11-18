@@ -17,6 +17,7 @@ import {
   insertAiCorrectionLog,
   resolveWasAiAccepted,
 } from '../lib/aiCorrectionLog';
+import { lookupWorkerProcess, resolveProcessHint } from '../lib/processHint';
 import AiClassifyStatus from './AiClassifyStatus';
 import AiMismatchDialog from './AiMismatchDialog';
 import AiSuggestionBanner from './AiSuggestionBanner';
@@ -108,8 +109,13 @@ export default function DefectEditModal({
     setPendingAi(null);
     setCorrectionReason(null);
     try {
+      const processHint = resolveProcessHint({
+        defectStage: report.defect_stage,
+        workerProcess: lookupWorkerProcess(workerDirectory, report.worker_name),
+      });
       const result = await requestClassifyPhoto(report.image_url, 'defect', {
         productName: productNameRef.current,
+        processHint,
       });
       const normalized = normalizeDefectCode(result.code);
       const completedAt = new Date();
@@ -117,6 +123,9 @@ export default function DefectEditModal({
         code: normalized,
         confidence: result.confidence,
         reason: result.reason,
+        needsReview: result.needsReview === true,
+        processHint: result.processHint || processHint,
+        productName: String(productNameRef.current || '').trim() || undefined,
         similarCorrections: Array.isArray(result.similarCorrections)
           ? result.similarCorrections
           : [],
@@ -390,6 +399,8 @@ export default function DefectEditModal({
                 confidence={aiSuggestion.confidence}
                 reason={aiSuggestion.reason}
                 codeSet="defect"
+                needsReview={aiSuggestion.needsReview}
+                productName={productName}
                 similarCorrections={aiSuggestion.similarCorrections}
               />
             ) : null}
