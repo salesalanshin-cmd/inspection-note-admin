@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  buildFrequentInspectionCompliance,
+  buildFrequentInspectionComplianceForDates,
+} from '../lib/analytics.js';
+import {
   ISSUE_NO_CLOCK_OUT,
   ISSUE_SATURDAY_UNKNOWN,
   buildAttendanceCard,
@@ -10,6 +14,8 @@ import {
   issueShortShift,
   resolveEmptyDayStatus,
 } from '../lib/attendance/card.js';
+import { PROCESS_FILTER_ALL } from '../lib/constants.js';
+import { kstWallToUtc } from '../lib/kst.js';
 
 const NIGHT_TIMES = {
   day: { start: '08:00', end: '17:00' },
@@ -305,6 +311,59 @@ describe('day worker and sparse worker', () => {
     assert.equal(result.defects.length, 0);
     assert.equal(result.days.filter((day) => day.status === 'pending_recalc').length, 4);
     assert.equal(result.days.filter((day) => day.status === 'future').length, 2);
+  });
+});
+
+describe('inspection compliance grouping', () => {
+  it('일자별 호출과 한 번 그룹핑 결과가 같다', () => {
+    const worker = {
+      worker_name: '김다운',
+      display_name: '김다운',
+      default_shift: 'night',
+      process: '주조',
+    };
+    const directory = [worker];
+    const goods = [
+      { worker_name: '김다운', created_at: '2026-10-14T11:00:00.000Z' },
+      { worker_name: '김다운', created_at: '2026-10-14T16:30:00.000Z' },
+      { worker_name: '김다운', created_at: '2026-10-14T21:00:00.000Z' },
+      { worker_name: '김다운', created_at: '2026-10-26T11:10:00.000Z' },
+    ];
+    const defects = [
+      {
+        worker_name: '김다운',
+        created_at: '2026-10-14T11:30:00.000Z',
+        defect_type: '기포',
+      },
+    ];
+    const fives = [{ worker_name: '김다운', created_at: '2026-10-09T12:00:00.000Z' }];
+    const dates = [
+      kstWallToUtc(2026, 9, 14, 12, 0, 0, 0),
+      kstWallToUtc(2026, 9, 21, 12, 0, 0, 0),
+      kstWallToUtc(2026, 9, 26, 12, 0, 0, 0),
+    ];
+
+    const perDay = dates.map((date) =>
+      buildFrequentInspectionCompliance(
+        defects,
+        goods,
+        fives,
+        date,
+        new Set(),
+        directory,
+        PROCESS_FILTER_ALL
+      )
+    );
+    const grouped = buildFrequentInspectionComplianceForDates(
+      defects,
+      goods,
+      fives,
+      dates,
+      new Set(),
+      directory,
+      PROCESS_FILTER_ALL
+    );
+    assert.deepEqual(grouped, perDay);
   });
 });
 
