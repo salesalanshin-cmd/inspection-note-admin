@@ -358,26 +358,26 @@ export default function DocumentsPage() {
                   {(() => {
                     const markCount = parseMarkingData(d.marking_data).filter((m) => m.code).length;
                     return markCount > 0 ? (
-                      <span className="rounded-full bg-dangerSoft px-2 py-0.5 text-[10px] font-medium text-danger">
+                      <span className="rounded-full bg-dangerSoft px-2 py-0.5 text-xs font-medium text-danger">
                         지적 {markCount}건
                       </span>
                     ) : null;
                   })()}
                   {d.doc_error_code ? (
-                    <span className="rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
+                    <span className="rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
                       {DOC_ERROR_CODES[d.doc_error_code] || d.doc_error_code}
                     </span>
                   ) : null}
                 </div>
               </div>
-              <div className="p-2.5 text-[11px] md:text-xs">
+              <div className="p-2.5 text-xs md:text-xs">
                 <div className="truncate font-medium text-text">
                   {d.doc_title || ocrDocTypeLabel(d.doc_type)}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1 text-muted">
                   <span>{ocrDocTypeLabel(d.doc_type)}</span>
                   {d.needs_review === true ? (
-                    <span className="rounded-full bg-warnSoft px-1.5 py-0.5 text-[10px] font-medium text-warn">
+                    <span className="rounded-full bg-warnSoft px-1.5 py-0.5 text-xs font-medium text-warn">
                       검수 필요
                     </span>
                   ) : null}

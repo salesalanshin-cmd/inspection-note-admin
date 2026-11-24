@@ -2,10 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background-color: #F7F8FA;
-  color: #8B94A7;
-  font-size: 14px;
+@layer base {
+  body {
+    @apply bg-bg text-base text-text;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.accent');
+    outline-offset: 2px;
+  }
+}
+
+@media screen and (min-width: 1440px) {
+  html {
+    font-size: clamp(100%, calc(87.5% + 0.15vw), 125%);
+  }
+}
+
+@media screen and (max-width: 767px) {
+  /* Keep the keyboard from zooming the page when a form field receives focus. */
+  .font-body :where(select, textarea, input:not([type="checkbox"]):not([type="radio"])) {
+    font-size: max(1em, 16px);
+    max-width: 100%;
+  }
 }
 
 ::-webkit-scrollbar {

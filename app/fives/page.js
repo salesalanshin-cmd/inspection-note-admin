@@ -411,30 +411,30 @@ export default function FivesPage() {
                         )}
                         <div className="absolute bottom-2 left-2 right-2 z-20 flex flex-wrap gap-1">
                           {f.zone_code && ZONE_CODES[f.zone_code] ? (
-                            <span className="rounded-full bg-accentSoft px-2 py-0.5 text-[10px] font-medium text-accent">
+                            <span className="rounded-full bg-accentSoft px-2 py-0.5 text-xs font-medium text-accent">
                               {getZoneLabel(f.zone_code)}
                             </span>
                           ) : f.area_type ? (
-                            <span className="rounded-full bg-accentSoft px-2 py-0.5 text-[10px] font-medium text-accent">
+                            <span className="rounded-full bg-accentSoft px-2 py-0.5 text-xs font-medium text-accent">
                               {f.area_type}
                             </span>
                           ) : null}
                           {(() => {
                             const markCount = parseMarkingData(f.marking_data).filter((m) => m.code).length;
                             return markCount > 0 ? (
-                              <span className="rounded-full bg-dangerSoft px-2 py-0.5 text-[10px] font-medium text-danger">
+                              <span className="rounded-full bg-dangerSoft px-2 py-0.5 text-xs font-medium text-danger">
                                 지적 {markCount}건
                               </span>
                             ) : null;
                           })()}
                           {errorCode ? (
-                            <span className="rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
+                            <span className="rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
                               {errorCode}
                             </span>
                           ) : null}
                         </div>
                       </div>
-                      <div className="p-2.5 text-[11px] md:text-xs">
+                      <div className="p-2.5 text-xs md:text-xs">
                         <div className="font-medium text-text">
                           {f.worker_name
                             ? displayMap.get(f.worker_name) || f.worker_name

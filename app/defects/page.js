@@ -475,7 +475,7 @@ export default function DefectsPage() {
                     </svg>
                   </button>
                 </div>
-                <div className="p-2.5 text-[11px] md:text-xs">
+                <div className="p-2.5 text-xs md:text-xs">
                   <div className="font-medium text-text">
                     {(d.worker_name && (displayMap.get(d.worker_name) || d.worker_name)) || '작업자 미상'}
                   </div>

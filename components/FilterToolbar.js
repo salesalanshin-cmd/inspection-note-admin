@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 
 const mobileTouchClass =
-  '[&_button]:min-h-[44px] [&_select]:min-h-[44px] [&_input]:min-h-[44px]';
+  '[&_button]:min-h-[44px] [&_select]:min-h-[44px] [&_input:not([type=checkbox]):not([type=radio])]:min-h-[44px] [&_input]:min-w-0 [&_select]:min-w-0';
 
 /**
  * 데스크톱: 가로 배치 / 모바일: primary·pinned는 항상 보이고 나머지는 필터 아코디언
@@ -14,11 +14,11 @@ export default function FilterToolbar({ primary, pinned, children, aside, classN
   const hasFilters = Boolean(children) || Boolean(aside);
 
   return (
-    <div className={className}>
+    <div className={`min-w-0 ${className}`}>
       {/* Desktop */}
       <div className="hidden md:block">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2 md:gap-3">
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 md:gap-3">
             {primary}
             {pinned}
             {children}

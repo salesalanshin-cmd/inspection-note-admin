@@ -146,7 +146,7 @@ function ShiftBadge({ shift, shiftSource }) {
         {isDay ? '주간' : '야간'}
       </span>
       {shiftSource === 'manual' ? (
-        <span className="text-[11px] text-muted" title="작업자 관리에서 고정 설정됨">
+        <span className="text-xs text-muted" title="작업자 관리에서 고정 설정됨">
           🔒
         </span>
       ) : null}
@@ -750,7 +750,7 @@ export default function FrequentCheckPage() {
                             <ResultBadge record={r} />
                           </div>
                         </div>
-                        <div className="p-2.5 text-[11px] md:text-xs">
+                        <div className="p-2.5 text-xs md:text-xs">
                           <div className="font-medium text-text">{displayName}</div>
                           <div className="mt-0.5 text-muted">
                             {r.created_at ? new Date(r.created_at).toLocaleString('ko-KR') : ''}

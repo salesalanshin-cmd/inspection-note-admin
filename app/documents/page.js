@@ -1006,7 +1006,7 @@ export default function KnowledgeDocumentsPage() {
                           >
                             추천값으로 진행
                           </button>
-                          <span className="self-center text-[11px] text-muted">
+                          <span className="self-center text-xs text-muted">
                             또는 아래에서 시트·모드를 고른 뒤 「업로드 시작」
                           </span>
                         </div>
@@ -1055,7 +1055,7 @@ export default function KnowledgeDocumentsPage() {
                         {isOldVersion ? (
                           <span
                             title="이 문서는 검색에서 제외됩니다"
-                            className="inline-flex cursor-help rounded-full bg-surface2 px-2 py-0.5 text-[10px] font-medium text-muted"
+                            className="inline-flex cursor-help rounded-full bg-surface2 px-2 py-0.5 text-xs font-medium text-muted"
                           >
                             구버전
                           </span>
@@ -1147,7 +1147,7 @@ export default function KnowledgeDocumentsPage() {
                 onChange={(e) => setEditTitle(e.target.value)}
                 className="w-full rounded-xl border border-border px-3 py-2 text-sm"
               />
-              <p className="mt-1 text-[11px] text-muted">파일명({editDoc.file_name})은 변경되지 않습니다.</p>
+              <p className="mt-1 text-xs text-muted">파일명({editDoc.file_name})은 변경되지 않습니다.</p>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted">폴더</label>
@@ -1186,7 +1186,7 @@ export default function KnowledgeDocumentsPage() {
                   e.target.value = '';
                 }}
               />
-              <p className="mt-1 text-[11px] text-muted">
+              <p className="mt-1 text-xs text-muted">
                 같은 파일명 개정 시 이전 버전은 자동 비활성화됩니다.
               </p>
             </div>
@@ -1303,12 +1303,12 @@ export default function KnowledgeDocumentsPage() {
                         <span>{item.title || item.file_name}</span>
                         <VersionBadge version={item.version} isOldVersion={isOld} />
                         {index === historyChain.length - 1 ? (
-                          <span className="text-[10px] font-normal text-good">최신</span>
+                          <span className="text-xs font-normal text-good">최신</span>
                         ) : null}
                       </div>
                       <div className="text-xs text-muted">{formatDateTime(item.created_at)}</div>
                       {isOld ? (
-                        <p className="mt-1 text-[11px] text-muted">검색에서 제외됩니다</p>
+                        <p className="mt-1 text-xs text-muted">검색에서 제외됩니다</p>
                       ) : null}
                     </div>
                     <StatusBadge status={item.status} />

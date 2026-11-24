@@ -83,7 +83,7 @@ function RecentActivityCell({ lastFrequentCheckAt, lastFivesAt }) {
   function fmtLine(label, iso) {
     if (!iso) {
       return (
-        <div className="text-[11px]">
+        <div className="text-xs">
           <span className="text-muted">{label} · </span>
           <span className="text-muted">기록 없음</span>
         </div>
@@ -93,7 +93,7 @@ function RecentActivityCell({ lastFrequentCheckAt, lastFivesAt }) {
     const md = `${d.getMonth() + 1}/${d.getDate()}`;
     const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     return (
-      <div className="text-[11px]">
+      <div className="text-xs">
         <span className="text-muted">{label} · </span>
         <span className="text-text">
           {md} {hm}

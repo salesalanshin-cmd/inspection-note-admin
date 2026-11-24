@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
+import ModalShell, { ModalFooterActions } from '../../components/ModalShell';
+import records from '../../components/RecordTable.module.css';
 import { WORKER_PROCESSES } from '../../lib/constants';
 import { kindLabel } from '../../lib/inspection/adminAccess';
 import {
@@ -50,125 +52,124 @@ function toForm(row) {
 function ItemModal({ open, title, form, setForm, error, saving, onClose, onSave }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-surface shadow-xl">
-        <div className="border-b border-border px-5 py-4">
-          <div className="text-base font-semibold text-text">{title}</div>
+    <ModalShell
+      title={title}
+      onClose={onClose}
+      maxWidthClass="md:max-w-lg"
+      footer={
+        <ModalFooterActions
+          onCancel={onClose}
+          onConfirm={onSave}
+          confirmDisabled={saving}
+          confirmLabel={saving ? '저장 중…' : '저장'}
+        />
+      }
+    >
+      <div className="space-y-3 px-5 py-4">
+        <label className="block text-xs text-muted">
+          공정
+          <select
+            className={`${selectClass} mt-1 w-full`}
+            value={form.process}
+            onChange={(e) => setForm((prev) => ({ ...prev, process: e.target.value }))}
+          >
+            {WORKER_PROCESSES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs text-muted">
+          종류
+          <select
+            className={`${selectClass} mt-1 w-full`}
+            value={form.kind}
+            onChange={(e) => setForm((prev) => ({ ...prev, kind: e.target.value }))}
+          >
+            <option value="equipment_check">설비일상점검</option>
+            <option value="production_condition">생산조건</option>
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block text-xs text-muted">
+            항목 번호
+            <input
+              type="number"
+              min={1}
+              className={`${inputClass} mt-1`}
+              value={form.item_no}
+              onChange={(e) => setForm((prev) => ({ ...prev, item_no: e.target.value }))}
+            />
+          </label>
+          <label className="block text-xs text-muted">
+            정렬 순서
+            <input
+              type="number"
+              className={`${inputClass} mt-1`}
+              value={form.sort_order}
+              onChange={(e) => setForm((prev) => ({ ...prev, sort_order: e.target.value }))}
+              placeholder="비우면 항목 번호"
+            />
+          </label>
         </div>
-        <div className="space-y-3 px-5 py-4">
+        <label className="block text-xs text-muted">
+          항목명
+          <input
+            className={`${inputClass} mt-1`}
+            value={form.title}
+            onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+          />
+        </label>
+        <label className="block text-xs text-muted">
+          세부
+          <textarea
+            className={`${inputClass} mt-1 min-h-[72px]`}
+            value={form.detail}
+            onChange={(e) => setForm((prev) => ({ ...prev, detail: e.target.value }))}
+          />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-3">
           <label className="block text-xs text-muted">
-            공정
-            <select
-              className={`${selectClass} mt-1 w-full`}
-              value={form.process}
-              onChange={(e) => setForm((prev) => ({ ...prev, process: e.target.value }))}
-            >
-              {WORKER_PROCESSES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-xs text-muted">
-            종류
-            <select
-              className={`${selectClass} mt-1 w-full`}
-              value={form.kind}
-              onChange={(e) => setForm((prev) => ({ ...prev, kind: e.target.value }))}
-            >
-              <option value="equipment_check">설비일상점검</option>
-              <option value="production_condition">생산조건</option>
-            </select>
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-xs text-muted">
-              항목 번호
-              <input
-                type="number"
-                min={1}
-                className={`${inputClass} mt-1`}
-                value={form.item_no}
-                onChange={(e) => setForm((prev) => ({ ...prev, item_no: e.target.value }))}
-              />
-            </label>
-            <label className="block text-xs text-muted">
-              정렬 순서
-              <input
-                type="number"
-                className={`${inputClass} mt-1`}
-                value={form.sort_order}
-                onChange={(e) => setForm((prev) => ({ ...prev, sort_order: e.target.value }))}
-                placeholder="비우면 항목 번호"
-              />
-            </label>
-          </div>
-          <label className="block text-xs text-muted">
-            항목명
+            주기
             <input
               className={`${inputClass} mt-1`}
-              value={form.title}
-              onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+              value={form.cycle}
+              onChange={(e) => setForm((prev) => ({ ...prev, cycle: e.target.value }))}
             />
           </label>
           <label className="block text-xs text-muted">
-            세부
-            <textarea
-              className={`${inputClass} mt-1 min-h-[72px]`}
-              value={form.detail}
-              onChange={(e) => setForm((prev) => ({ ...prev, detail: e.target.value }))}
-            />
-          </label>
-          <div className="grid grid-cols-3 gap-3">
-            <label className="block text-xs text-muted">
-              주기
-              <input
-                className={`${inputClass} mt-1`}
-                value={form.cycle}
-                onChange={(e) => setForm((prev) => ({ ...prev, cycle: e.target.value }))}
-              />
-            </label>
-            <label className="block text-xs text-muted">
-              방법
-              <input
-                className={`${inputClass} mt-1`}
-                value={form.method}
-                onChange={(e) => setForm((prev) => ({ ...prev, method: e.target.value }))}
-              />
-            </label>
-            <label className="block text-xs text-muted">
-              단위
-              <input
-                className={`${inputClass} mt-1`}
-                value={form.unit}
-                onChange={(e) => setForm((prev) => ({ ...prev, unit: e.target.value }))}
-              />
-            </label>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-text">
+            방법
             <input
-              type="checkbox"
-              checked={form.is_active}
-              onChange={(e) => setForm((prev) => ({ ...prev, is_active: e.target.checked }))}
+              className={`${inputClass} mt-1`}
+              value={form.method}
+              onChange={(e) => setForm((prev) => ({ ...prev, method: e.target.value }))}
             />
-            사용 중
           </label>
-          {error ? (
-            <div className="rounded-xl border border-danger/30 bg-dangerSoft px-3 py-2 text-sm text-danger">
-              {error}
-            </div>
-          ) : null}
+          <label className="block text-xs text-muted">
+            단위
+            <input
+              className={`${inputClass} mt-1`}
+              value={form.unit}
+              onChange={(e) => setForm((prev) => ({ ...prev, unit: e.target.value }))}
+            />
+          </label>
         </div>
-        <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
-          <button type="button" className={btnClass} onClick={onClose} disabled={saving}>
-            취소
-          </button>
-          <button type="button" className={primaryBtn} onClick={onSave} disabled={saving}>
-            {saving ? '저장 중…' : '저장'}
-          </button>
-        </div>
+        <label className="flex items-center gap-2 text-sm text-text">
+          <input
+            type="checkbox"
+            checked={form.is_active}
+            onChange={(e) => setForm((prev) => ({ ...prev, is_active: e.target.checked }))}
+          />
+          사용 중
+        </label>
+        {error ? (
+          <div className="rounded-xl border border-danger/30 bg-dangerSoft px-3 py-2 text-sm text-danger">
+            {error}
+          </div>
+        ) : null}
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -356,8 +357,8 @@ export default function InspectionItemsPage() {
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-          <table className="min-w-full text-left text-sm">
+        <div className={`${records.region} shrink-0 overflow-x-auto rounded-2xl border border-border bg-surface`}>
+          <table aria-label="점검 항목" className={`${records.table} w-full text-left text-sm`}>
             <thead className="border-b border-border bg-surface2 text-xs text-muted">
               <tr>
                 <th className="px-3 py-3 font-medium">순서</th>
@@ -385,7 +386,7 @@ export default function InspectionItemsPage() {
               ) : (
                 sorted.map((row, index) => (
                   <tr key={row.id} className="border-t border-border">
-                    <td className="px-3 py-3">
+                    <td data-label="순서" className="px-3 py-3">
                       <div className="flex gap-1">
                         <button
                           type="button"
@@ -407,15 +408,15 @@ export default function InspectionItemsPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-text">{row.item_no}</td>
-                    <td className="px-3 py-3 font-medium text-text">{row.title}</td>
-                    <td className="max-w-[240px] px-3 py-3 text-muted">
-                      <span className="line-clamp-2">{row.detail || '—'}</span>
+                    <td data-label="번호" className="px-3 py-3 text-text">{row.item_no}</td>
+                    <td data-heading="" className="px-3 py-3 font-semibold text-text">{row.title}</td>
+                    <td data-label="세부" data-wide="" className="max-w-[22rem] px-3 py-3 text-muted">
+                      {row.detail || '—'}
                     </td>
-                    <td className="px-3 py-3 text-xs text-muted">
+                    <td data-label="주기/방법/단위" className="px-3 py-3 text-sm text-muted">
                       {[row.cycle, row.method, row.unit].filter(Boolean).join(' · ') || '—'}
                     </td>
-                    <td className="px-3 py-3">
+                    <td data-label="상태" className="px-3 py-3">
                       {row.is_active ? (
                         <span className="rounded-full bg-goodSoft px-2 py-0.5 text-xs text-good">
                           사용
@@ -426,7 +427,7 @@ export default function InspectionItemsPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-3">
+                    <td data-wide="" className="px-3 py-3">
                       <div className="flex flex-wrap gap-1">
                         <button type="button" className={btnClass} onClick={() => openEdit(row)}>
                           수정

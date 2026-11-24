@@ -51,7 +51,7 @@ function ShiftBadge({ shift, shiftSource }) {
         {isDay ? '주간' : '야간'}
       </span>
       {shiftSource === 'manual' ? (
-        <span className="text-[11px] text-muted" title="작업자 관리에서 고정 설정됨">
+        <span className="text-xs text-muted" title="작업자 관리에서 고정 설정됨">
           🔒
         </span>
       ) : null}

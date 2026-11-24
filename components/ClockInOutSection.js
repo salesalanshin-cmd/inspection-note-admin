@@ -178,8 +178,8 @@ function ClockProgressSummaryBar({ cards, onOpenMissList }) {
   }
 
   return (
-    <div className="mb-2 rounded-xl border border-border bg-surface px-2 py-1.5">
-      <p className="mb-1.5 text-center text-[10px] font-medium text-muted sm:text-left">
+    <div className="mb-2 rounded-xl border border-border bg-surface p-3">
+      <p className="mb-2 text-sm font-semibold text-text">
         출퇴근 완료 현황
       </p>
       <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -198,9 +198,9 @@ function ClockProgressSummaryBar({ cards, onOpenMissList }) {
               }
               className="cursor-pointer rounded-lg border border-border bg-surface2/50 px-2 py-1.5 text-left transition-colors hover:border-accent/40 hover:bg-surface2"
             >
-              <div className="flex items-baseline justify-between gap-0.5">
-                <span className="text-[11px] font-medium text-text">{card.title}</span>
-                <span className="whitespace-nowrap text-[9px] text-muted">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+                <span className="text-sm font-semibold text-text">{card.title}</span>
+                <span className="text-xs tabular-nums text-muted">
                   완료 {card.completed} / 대상 {card.target}
                 </span>
               </div>
@@ -421,7 +421,7 @@ export default function ClockInOutSection({ fives, workerDirectory }) {
             <span className="ml-1 text-xs font-normal text-muted">(오늘)</span>
           ) : null}
           {includeHolidays && dateIsWeekend ? (
-            <span className="ml-1.5 inline-flex align-middle rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+            <span className="ml-1.5 inline-flex align-middle rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
               주말/휴일
             </span>
           ) : null}

@@ -15,7 +15,7 @@ export default function PageTableShell({
 }) {
   const toolbarEl = toolbar ? (
     <div
-      className={`shrink-0 space-y-3 bg-bg pb-4 ${stickyToolbar ? 'sticky z-10' : ''}`.trim()}
+      className={`min-w-0 shrink-0 space-y-3 bg-bg pb-4 ${stickyToolbar ? 'md:sticky md:z-10' : ''}`.trim()}
       style={stickyToolbar ? { top: stickyTop } : undefined}
     >
       {toolbar}
@@ -24,7 +24,7 @@ export default function PageTableShell({
 
   if (variant === 'flow') {
     return (
-      <div>
+      <div className="min-w-0">
         {toolbarEl}
         <div className="rounded-xl bg-surface shadow-card max-md:rounded-none max-md:bg-transparent max-md:shadow-none">
           <div className="max-md:px-0 max-md:py-1">{table}</div>
@@ -35,10 +35,10 @@ export default function PageTableShell({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="min-h-0 min-w-0 flex-1 overflow-y-auto md:flex md:flex-col md:overflow-visible">
       {toolbarEl}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-surface shadow-card max-md:rounded-none max-md:bg-transparent max-md:shadow-none">
-        <div className="min-h-0 flex-1 overflow-y-auto max-md:px-0 max-md:py-1">{table}</div>
+      <div className="min-w-0 md:flex md:min-h-0 md:flex-1 md:flex-col md:overflow-hidden md:rounded-xl md:bg-surface md:shadow-card">
+        <div className="min-w-0 max-md:py-1 md:min-h-0 md:flex-1 md:overflow-auto">{table}</div>
       </div>
       {footer ? <div className="shrink-0 pt-3">{footer}</div> : null}
     </div>

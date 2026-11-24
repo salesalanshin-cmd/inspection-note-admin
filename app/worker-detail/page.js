@@ -123,7 +123,7 @@ function extraLabel(item) {
 function TypeTag({ kind, label }) {
   return (
     <span
-      className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${TYPE_TAG_CLASS[kind] || 'bg-surface2 text-muted'}`}
+      className={`inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_TAG_CLASS[kind] || 'bg-surface2 text-muted'}`}
     >
       {label}
     </span>
@@ -557,7 +557,7 @@ function WorkerDetailContent() {
               </div>
             ) : null}
 
-            <div className="flex flex-wrap gap-2 text-[11px] text-muted">
+            <div className="flex flex-wrap gap-2 text-xs text-muted">
               <span className={`rounded-full px-2 py-0.5 ${TYPE_TAG_CLASS.frequent}`}>자주검사</span>
               <span className={`rounded-full px-2 py-0.5 ${TYPE_TAG_CLASS.defect}`}>불량기록</span>
               <span className={`rounded-full px-2 py-0.5 ${TYPE_TAG_CLASS.fives}`}>3정5S</span>
@@ -578,11 +578,11 @@ function WorkerDetailContent() {
                         {formatMd(group.workDate)} ({weekdayLabel(group.workDate)}) 근무일
                       </span>
                       <span className="text-xs text-muted">{group.workDate}</span>
-                      <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-text">
+                      <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-text">
                         {shiftLabel(group.shiftInfo?.shift)}
                         {group.shiftInfo?.shiftSource === 'manual' ? ' · 수동지정' : ' · 자동판단'}
                       </span>
-                      <span className="text-[11px] text-muted">{group.items.length}건</span>
+                      <span className="text-xs text-muted">{group.items.length}건</span>
                     </header>
                     <ul className="divide-y divide-border">
                       {group.items.map((item) => (
@@ -595,10 +595,10 @@ function WorkerDetailContent() {
                                 {formatDateTimeSeconds(item.createdAt)}
                               </span>
                               {item.extra ? (
-                                <span className="truncate text-[11px] text-muted">{item.extra}</span>
+                                <span className="truncate text-xs text-muted">{item.extra}</span>
                               ) : null}
                             </div>
-                            <div className="mt-1 text-[11px] leading-relaxed text-muted">
+                            <div className="mt-1 text-xs leading-relaxed text-muted">
                               소속 근무일 {formatMd(item.workDate)} · 그날 근무조 {shiftLabel(item.shiftInfo?.shift)}
                               {item.shiftInfo?.shiftSource === 'manual' ? '(수동)' : '(자동)'}
                               <span className="mx-1.5 text-border">·</span>

@@ -232,7 +232,7 @@ function RateCell({ row }) {
     <div className="flex flex-wrap items-center gap-2">
       <span>{formatAccuracyPercent(row.rate)}</span>
       {row.lowSample ? (
-        <span className="rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
+        <span className="rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
           표본 적음
         </span>
       ) : null}

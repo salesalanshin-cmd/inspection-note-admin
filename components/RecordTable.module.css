@@ -1,0 +1,71 @@
+.region {
+  container: records / inline-size;
+  position: relative;
+  min-width: 0;
+}
+
+.editable {
+  min-width: 76rem;
+}
+
+/* Use the panel's width: the worklog editor can share a wide screen with a photo. */
+@container records (max-width: 50rem) {
+  .table,
+  .table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .table thead {
+    @apply sr-only;
+  }
+
+  .table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem 1rem;
+    padding: 1rem;
+  }
+
+  .table tbody tr + tr {
+    border-top: 1px solid theme('colors.border');
+  }
+
+  .table tbody td {
+    display: block;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .table td[data-label]::before {
+    display: block;
+    margin-bottom: 0.2rem;
+    color: theme('colors.muted');
+    font-size: 0.8125rem;
+    font-weight: 600;
+    content: attr(data-label);
+  }
+
+  .table td[data-wide],
+  .table td[colspan] {
+    grid-column: 1 / -1;
+  }
+
+  .table td[data-heading] {
+    order: -1;
+    grid-column: 1 / -1;
+    font-size: 1.0625rem;
+  }
+
+  .editable td[title]::after {
+    display: block;
+    margin-top: 0.25rem;
+    color: theme('colors.muted');
+    font-size: 0.8125rem;
+    content: attr(title);
+  }
+}

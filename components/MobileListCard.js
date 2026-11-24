@@ -2,8 +2,8 @@
 
 export function MobileCardField({ label, children, className = '' }) {
   return (
-    <div className={className}>
-      <div className="text-xs text-muted">{label}</div>
+    <div className={`min-w-0 ${className}`}>
+      <div className="text-xs font-medium text-muted">{label}</div>
       <div className="mt-0.5 text-sm text-text">{children}</div>
     </div>
   );
@@ -33,11 +33,11 @@ export default function MobileListCard({ header, badge, leading, children, class
       <div className="flex items-start gap-3">
         {leading ? <div className="shrink-0 pt-0.5">{leading}</div> : null}
         <div className="min-w-0 flex-1">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div className="min-w-0 truncate text-base font-semibold text-text">{header}</div>
-            {badge ? <div className="shrink-0">{badge}</div> : null}
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-x-2 gap-y-1.5">
+            <div className="min-w-0 flex-auto basis-32 text-base font-semibold text-text">{header}</div>
+            {badge ? <div className="max-w-full">{badge}</div> : null}
           </div>
-          <div className="grid grid-cols-2 gap-2">{children}</div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">{children}</div>
         </div>
       </div>
     </div>

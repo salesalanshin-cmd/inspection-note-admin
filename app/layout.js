@@ -1,8 +1,6 @@
-import { Inter } from 'next/font/google';
+import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
 import './globals.css';
 import AppShell from '../components/AppShell';
-
-const body = Inter({ subsets: ['latin'], variable: '--font-body' });
 
 export const metadata = {
   title: '검사노트 관리자',
@@ -12,7 +10,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="ko">
-      <body className={`${body.variable} font-body font-normal antialiased h-screen overflow-hidden`}>
+      <body className="font-body">
         <AppShell>{children}</AppShell>
       </body>
     </html>

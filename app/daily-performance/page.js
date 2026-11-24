@@ -220,16 +220,16 @@ function FrequentShiftStageSummaryBar({ data, compliance, eligibleNames, onOpenM
   }
 
   return (
-    <div className="mb-2 rounded-xl border border-border bg-surface px-2 py-1.5">
-      <p className="mb-1.5 text-center text-[10px] font-medium text-muted sm:text-left">
+    <div className="mb-3 space-y-3 rounded-xl border border-border bg-surface p-3 sm:p-4">
+      <p className="font-semibold text-text">
         자주검사 완료 현황 (담당자 기준)
       </p>
       {data.map((group) => (
-        <div key={group.shift} className="mb-1.5 flex items-stretch gap-1.5 last:mb-0">
-          <span className="flex w-7 shrink-0 items-center justify-center text-[10px] font-semibold text-muted">
+        <div key={group.shift} className="grid gap-2 sm:grid-cols-[3rem_minmax(0,1fr)] sm:items-center">
+          <span className="text-sm font-semibold text-text">
             {group.shiftLabel}
           </span>
-          <div className="grid flex-1 grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-2">
             {group.stages.map((row) => {
               const pct = row.target > 0 ? Math.round((row.completed / row.target) * 100) : 0;
               return (
@@ -246,12 +246,14 @@ function FrequentShiftStageSummaryBar({ data, compliance, eligibleNames, onOpenM
                       ),
                     })
                   }
-                  className="cursor-pointer rounded-lg border border-border bg-surface2/50 px-2 py-1.5 text-left transition-colors hover:border-accent/40 hover:bg-surface2"
+                  className="min-w-0 cursor-pointer rounded-lg border border-border bg-surface2/50 px-3 py-2 text-left transition-colors hover:border-accent/40 hover:bg-surface2"
                 >
-                  <div className="flex items-baseline justify-between gap-0.5">
-                    <span className="text-[11px] font-medium text-text">{row.stage}</span>
-                    <span className="whitespace-nowrap text-[9px] text-muted">
-                      완료 {row.completed} / 대상 {row.target}
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                    <span className="text-sm font-semibold text-text">{row.stage}</span>
+                    <span className="text-xs font-medium tabular-nums text-muted">
+                      <span className="whitespace-nowrap">완료 {row.completed}</span>
+                      {' / '}
+                      <span className="whitespace-nowrap">대상 {row.target}</span>
                     </span>
                   </div>
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-goodSoft">
@@ -281,14 +283,15 @@ function StageMissPopover({ section, displayMap, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="relative w-full max-w-xs rounded-xl border border-border bg-surface p-4 shadow-card"
+        className="relative max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-xl border border-border bg-surface p-5 shadow-card"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
+        aria-modal="true"
         aria-labelledby="stage-miss-title"
       >
         <button
@@ -320,7 +323,7 @@ function PriorityMissSection({ workers, displayMap, onSelectWorker, onRefresh })
           <h2 className="text-sm font-medium text-text">
             지금 확인이 필요한 사람 ({workers.length}명)
           </h2>
-          <p className="text-[11px] text-muted">
+          <p className="text-xs text-muted">
             시간대가 끝났는데 아직 기록이 없는 담당자 (초품 미실시 우선)
           </p>
         </div>
@@ -556,7 +559,7 @@ export default function DailyPerformancePage() {
         <span className="min-w-0 flex-1 text-center text-sm font-medium text-text md:min-w-[10rem]">
           {formatWorkDate(date)}
           {includeHolidays && dateIsWeekend ? (
-            <span className="ml-1.5 inline-flex align-middle rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+            <span className="ml-1.5 inline-flex align-middle rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
               주말/휴일
             </span>
           ) : null}

@@ -53,7 +53,7 @@ function DataPreview({ data, columns }) {
             {preview.map((row, i) => (
               <tr key={i} className="border-t border-border">
                 {cols.map((col) => (
-                  <td key={col} className="px-2 py-1.5 text-text whitespace-nowrap max-w-[12rem] truncate">
+                  <td key={col} className="min-w-[6rem] max-w-[20rem] break-words px-2 py-1.5 align-top text-text">
                     {row[col] == null ? '' : String(row[col])}
                   </td>
                 ))}
@@ -63,7 +63,7 @@ function DataPreview({ data, columns }) {
         </table>
       </div>
       {data.length > 10 ? (
-        <p className="text-[11px] text-muted">미리보기 10행 / 전체 {data.length}행</p>
+        <p className="text-xs text-muted">미리보기 10행 / 전체 {data.length}행</p>
       ) : null}
       <button
         type="button"
@@ -117,7 +117,7 @@ function InsightLabHeader() {
         </span>
         <h1 className="text-lg font-semibold tracking-tight text-text">인사이트 랩</h1>
       </div>
-      <p className="mt-1.5 flex items-center gap-1.5 text-[11px] leading-snug text-muted">
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs leading-snug text-muted">
         <Lock className="h-3 w-3 shrink-0 opacity-70" strokeWidth={2} />
         DB에 저장된 데이터를 기반으로 답변하는 AI 베타 서비스입니다. 조회만 가능하며 데이터를 수정하거나 지우지는 않습니다.
       </p>
@@ -190,10 +190,10 @@ export default function InsightLabPage() {
   }
 
   return (
-    <div className="flex h-screen min-h-0 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <InsightLabHeader />
 
-      <div className="flex flex-1 flex-col gap-3 p-6 min-h-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3 sm:p-5 lg:p-6">
         <div className="flex flex-nowrap gap-2 shrink-0 overflow-x-auto pb-1">
           {EXAMPLE_PROMPTS.map((prompt) => (
             <button
@@ -242,7 +242,7 @@ export default function InsightLabPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="flex gap-2 border-t border-border p-4 shrink-0"
+              className="flex shrink-0 gap-2 border-t border-border p-2 sm:p-4"
             >
               <input
                 type="text"
@@ -250,7 +250,8 @@ export default function InsightLabPage() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="데이터 조회 질문을 입력하세요..."
                 disabled={loading}
-                className="flex-1 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none disabled:opacity-50"
+                aria-label="데이터 조회 질문"
+                className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2.5 text-base text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none disabled:opacity-50"
               />
               <button
                 type="submit"

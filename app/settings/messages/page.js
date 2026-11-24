@@ -644,7 +644,7 @@ export default function MessagesSettingsPage() {
                                   <span className="inline-flex items-center rounded-full bg-dangerSoft px-2.5 py-0.5 text-xs font-medium text-danger">
                                     {display}
                                   </span>
-                                  <span className="text-[11px] text-muted">
+                                  <span className="text-xs text-muted">
                                     {issueText}
                                   </span>
                                 </span>
@@ -735,7 +735,7 @@ export default function MessagesSettingsPage() {
                       {getDisplayName(row.worker_name, workerDirectory)}
                     </span>
                     <span className="text-xs text-muted">{formatDateTime(logTimestamp(row))}</span>
-                    <span className="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-muted">
+                    <span className="rounded-full bg-surface2 px-2 py-0.5 text-xs text-muted">
                       {TEMPLATE_LABELS[row.template_type] || row.template_type || '—'}
                     </span>
                     <span
@@ -773,7 +773,7 @@ export default function MessagesSettingsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold text-text">{def.title}</span>
                         {!def.ready ? (
-                          <span className="rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+                          <span className="rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
                             준비 중
                           </span>
                         ) : null}

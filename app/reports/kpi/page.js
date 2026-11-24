@@ -106,7 +106,7 @@ export default function ProjectKpiPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[960px] space-y-6 px-4 py-6 md:px-8 print:max-w-none print:px-0 print:py-0">
+    <div className="mx-auto w-full min-w-0 max-w-[960px] space-y-6 px-4 py-6 md:px-8 print:max-w-none print:px-0 print:py-0">
       <style>{'@media print { @page { size: A4 portrait; margin: 12mm; } }'}</style>
       <header>
         <p className="text-xs font-medium text-accent">과제 성과지표</p>
@@ -129,8 +129,8 @@ export default function ProjectKpiPage() {
           {' · '}
           기준 {basisLabel(digital?.basis)}
         </p>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full border-collapse text-sm">
+        <div className="mt-4 overflow-x-auto print:overflow-visible">
+          <table className="w-full min-w-[30rem] border-collapse text-sm print:min-w-0">
             <thead className="text-left text-xs text-muted">
               <tr>
                 {['월', '기준', '가동 근무일', '디지털 근무일', '관리율'].map((label) => (
@@ -194,8 +194,8 @@ export default function ProjectKpiPage() {
       <section className="rounded-xl border border-border bg-surface p-5">
         <h2 className="text-base font-semibold text-text">4. 생산성</h2>
         <p className="mt-1 text-xs text-muted">현재 기준 1,760 → 목표 2,000 EA/일. 계획서가 일평균인지 1인 1일인지 정해지지 않아 둘 다 표시합니다.</p>
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full border-collapse text-sm">
+        <div className="mt-4 overflow-x-auto print:overflow-visible">
+          <table className="w-full min-w-[30rem] border-collapse text-sm print:min-w-0">
             <thead className="text-left text-xs text-muted">
               <tr>
                 {['월', '근무일', '일평균 검사수량', '검사자 1인 1일 평균'].map((label) => (
@@ -224,13 +224,13 @@ export default function ProjectKpiPage() {
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data?.monthly || []}>
               <CartesianGrid stroke="#E8EAF0" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" stroke="#8B94A7" fontSize={11} tickLine={false} />
-              <YAxis stroke="#8B94A7" fontSize={11} tickLine={false} domain={[0, rateMax]} tickFormatter={(value) => `${(value * 100).toFixed(1)}%`} />
+              <XAxis dataKey="month" stroke="#506178" fontSize={13} tickLine={false} />
+              <YAxis stroke="#506178" fontSize={13} tickLine={false} domain={[0, rateMax]} tickFormatter={(value) => `${(value * 100).toFixed(1)}%`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatRate(value)} />
               <Legend />
-              <ReferenceLine y={0.03} stroke="#D89614" strokeDasharray="4 4" />
+              <ReferenceLine y={0.03} stroke="#8A590D" strokeDasharray="4 4" />
               <ReferenceLine y={0.026} stroke="#1FAA59" strokeDasharray="4 4" />
-              <Line dataKey="defectRate" name="불량률" stroke="#E4483A" strokeWidth={2} dot />
+              <Line dataKey="defectRate" name="불량률" stroke="#B5322A" strokeWidth={2} dot />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -245,32 +245,34 @@ export default function ProjectKpiPage() {
           <label className="text-xs text-muted">기간 B 시작<input className={`${controlClass} mt-1 block`} type="date" value={fromB} onChange={(event) => setFromB(event.target.value)} /></label>
           <label className="text-xs text-muted">기간 B 끝<input className={`${controlClass} mt-1 block`} type="date" value={toB || compare?.b?.to || ''} onChange={(event) => setToB(event.target.value)} /></label>
         </div>
-        <table className="min-w-full border-collapse text-sm">
-          <thead className="text-left text-xs text-muted">
-            <tr>
-              <th className="border-b border-border px-2 py-2 font-medium">지표</th>
-              <th className="border-b border-border px-2 py-2 font-medium">A 도입 초기<br />{compare?.a?.from} ~ {compare?.a?.to}</th>
-              <th className="border-b border-border px-2 py-2 font-medium">B 최근<br />{compare?.b?.from} ~ {compare?.b?.to}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="border-b border-border px-2 py-2">일평균 검사수량</td>
-              <td className="border-b border-border px-2 py-2 tabular-nums">{formatQty(compare?.a?.dailyAverage)}</td>
-              <td className="border-b border-border px-2 py-2 tabular-nums">{formatQty(compare?.b?.dailyAverage)}</td>
-            </tr>
-            <tr>
-              <td className="border-b border-border px-2 py-2">검사자 1인 1일 평균</td>
-              <td className="border-b border-border px-2 py-2 tabular-nums">{formatQty(compare?.a?.perPersonDaily)}</td>
-              <td className="border-b border-border px-2 py-2 tabular-nums">{formatQty(compare?.b?.perPersonDaily)}</td>
-            </tr>
-            <tr>
-              <td className="border-b border-border px-2 py-2">불량률</td>
-              <td className="border-b border-border px-2 py-2 tabular-nums">{formatRate(compare?.a?.defectRate)}</td>
-              <td className="border-b border-border px-2 py-2 tabular-nums">{formatRate(compare?.b?.defectRate)}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="overflow-x-auto print:overflow-visible">
+          <table className="w-full min-w-[29rem] border-collapse text-sm print:min-w-0">
+            <thead className="text-left text-xs text-muted">
+              <tr>
+                <th className="border-b border-border px-2 py-2 font-medium">지표</th>
+                <th className="border-b border-border px-2 py-2 font-medium">A 도입 초기<br />{compare?.a?.from} ~ {compare?.a?.to}</th>
+                <th className="border-b border-border px-2 py-2 font-medium">B 최근<br />{compare?.b?.from} ~ {compare?.b?.to}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border-b border-border px-2 py-2">일평균 검사수량</td>
+                <td className="border-b border-border px-2 py-2 tabular-nums">{formatQty(compare?.a?.dailyAverage)}</td>
+                <td className="border-b border-border px-2 py-2 tabular-nums">{formatQty(compare?.b?.dailyAverage)}</td>
+              </tr>
+              <tr>
+                <td className="border-b border-border px-2 py-2">검사자 1인 1일 평균</td>
+                <td className="border-b border-border px-2 py-2 tabular-nums">{formatQty(compare?.a?.perPersonDaily)}</td>
+                <td className="border-b border-border px-2 py-2 tabular-nums">{formatQty(compare?.b?.perPersonDaily)}</td>
+              </tr>
+              <tr>
+                <td className="border-b border-border px-2 py-2">불량률</td>
+                <td className="border-b border-border px-2 py-2 tabular-nums">{formatRate(compare?.a?.defectRate)}</td>
+                <td className="border-b border-border px-2 py-2 tabular-nums">{formatRate(compare?.b?.defectRate)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="rounded-xl border border-border bg-surface p-5">

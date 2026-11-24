@@ -146,7 +146,7 @@ export default function NoticeEditModal({
             rows={10}
             className={`${inputClass} min-h-[180px] resize-y`}
           />
-          <p className="mt-1.5 text-[11px] text-muted">
+          <p className="mt-1.5 text-xs text-muted">
             지금은 한국어로만 작성합니다. 저장 시 body와 body_ko에 같은 값이
             들어갑니다.
           </p>

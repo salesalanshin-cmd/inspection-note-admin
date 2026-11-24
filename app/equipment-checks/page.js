@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import SignedImage from '../../components/SignedImage';
+import records from '../../components/RecordTable.module.css';
 import { getWorkDateForRecord } from '../../lib/analytics';
 import {
   fetchInspectionHeaderDetail,
@@ -126,8 +127,8 @@ export default function EquipmentChecksPage() {
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-          <table className="min-w-full text-left text-sm">
+        <div className={`${records.region} shrink-0 overflow-x-auto rounded-2xl border border-border bg-surface`}>
+          <table aria-label={`${kindLabel(kind)} 등록 현황`} className={`${records.table} w-full text-left text-sm`}>
             <thead className="border-b border-border bg-surface2 text-xs text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">설비</th>
@@ -162,16 +163,16 @@ export default function EquipmentChecksPage() {
                     }`}
                     onClick={() => openDetail(row.id)}
                   >
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-text">
+                    <td data-wide="" className="px-4 py-3">
+                      <button type="button" className="text-left text-base font-semibold text-text hover:text-accent" aria-expanded={selectedId === row.id}>
                         {row.equipment_name || row.equipment_code || '—'}
-                      </div>
+                      </button>
                       {row.equipment_name ? (
                         <div className="text-xs text-muted">{row.equipment_code}</div>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 text-text">{row.progress_label}</td>
-                    <td className="px-4 py-3">
+                    <td data-label="진행" className="px-4 py-3 text-text">{row.progress_label}</td>
+                    <td data-label="상태" className="px-4 py-3">
                       {row.is_completed ? (
                         <span className="rounded-full bg-goodSoft px-2 py-0.5 text-xs font-medium text-good">
                           완료
@@ -182,12 +183,12 @@ export default function EquipmentChecksPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-muted">
+                    <td data-label="완료 시각" className="px-4 py-3 text-muted">
                       {formatCapturedAt(row.completed_at)}
                     </td>
-                    <td className="px-4 py-3 text-text">{row.worker_name || '—'}</td>
+                    <td data-label="작업자" className="px-4 py-3 text-text">{row.worker_name || '—'}</td>
                     {kind === 'production_condition' ? (
-                      <td className="px-4 py-3 text-muted">{row.part_no || '—'}</td>
+                      <td data-label="품번" data-wide="" className="px-4 py-3 text-muted">{row.part_no || '—'}</td>
                     ) : null}
                   </tr>
                 ))
@@ -229,7 +230,7 @@ export default function EquipmentChecksPage() {
                 {detailError}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,9rem),1fr))] gap-3">
                 {(detail?.items || []).map((item) => (
                   <div
                     key={item.id}
@@ -254,10 +255,10 @@ export default function EquipmentChecksPage() {
                       <div className="text-xs font-medium text-text">
                         {item.item_no}. {item.title}
                       </div>
-                      <div className="text-[11px] text-muted">
+                      <div className="text-xs text-muted">
                         {formatCapturedAt(item.active_photo?.captured_at)}
                       </div>
-                      <div className="text-[11px] text-muted">
+                      <div className="text-xs text-muted">
                         교체 {item.replaced_count || 0}건
                       </div>
                     </div>

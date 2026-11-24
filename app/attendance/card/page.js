@@ -192,7 +192,7 @@ function AttendanceCardPage() {
         </div>
       </div>
 
-      <main className="attendance-card-sheet mx-auto flex max-w-[960px] flex-col gap-5 px-6 py-12 font-pretendard print:max-w-none print:gap-3 print:px-0 print:py-0">
+      <main className="attendance-card-sheet mx-auto flex max-w-[960px] flex-col gap-5 px-3 py-6 font-pretendard sm:px-6 sm:py-12 print:max-w-none print:gap-3 print:px-0 print:py-0">
         {error ? <p className="text-sm text-cardAmberInk">{error}</p> : null}
         {loading ? <p className="text-sm text-cardSub">불러오는 중…</p> : null}
         {!name && !loading ? (
@@ -203,7 +203,7 @@ function AttendanceCardPage() {
             <AttendanceCardHeader card={card} />
             <AttendanceKpis summary={card.summary} inspection={card.inspection} />
             <AttendanceCalendar days={card.days} />
-            <section className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-3">
+            <section className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-3">
               <InspectionCompliance inspection={card.inspection} />
               <AttendanceIssues issues={card.issues} summary={card.summary} />
             </section>

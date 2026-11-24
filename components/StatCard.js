@@ -9,9 +9,9 @@ export default function StatCard({ label, value, sub, tone = 'default' }) {
   }[tone];
 
   return (
-    <div className="bg-surface rounded-xl shadow-card p-5">
-      <div className="text-xs font-medium text-muted">{label}</div>
-      <div className={`text-3xl font-semibold mt-2 ${toneColor}`}>{value}</div>
+    <div className="min-w-0 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+      <div className="text-sm font-semibold text-muted">{label}</div>
+      <div className={`mt-2 text-2xl font-bold leading-tight tabular-nums sm:text-3xl ${toneColor}`}>{value}</div>
       {sub ? <div className="text-xs text-muted mt-1">{sub}</div> : null}
     </div>
   );

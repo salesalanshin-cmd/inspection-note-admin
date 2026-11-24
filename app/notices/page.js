@@ -168,7 +168,7 @@ function NoticeDetailModal({
             </button>
           </div>
           {!NOTICE_ALIMTALK_READY ? (
-            <p className="mb-2 text-[11px] text-muted">
+            <p className="mb-2 text-xs text-muted">
               승인된 알림톡 템플릿 6종에 공지용이 없어 발송할 수 없습니다.
               (Solapi 사전 승인 필요)
             </p>

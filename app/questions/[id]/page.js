@@ -38,7 +38,7 @@ function formatDateTime(iso) {
 
 function SourceBadge({ source }) {
   return (
-    <span className="inline-flex rounded-lg border border-border bg-surface px-2 py-0.5 text-[11px] text-muted">
+    <span className="inline-flex rounded-lg border border-border bg-surface px-2 py-0.5 text-xs text-muted">
       {source.label || source.documentTitle || '출처'}
       {source.pageFrom != null ? ` (${source.pageFrom}p)` : ''}
     </span>
@@ -48,14 +48,14 @@ function SourceBadge({ source }) {
 function OutcomeBadge({ outcome }) {
   if (outcome === 'effective') {
     return (
-      <span className="inline-flex rounded-full bg-goodSoft px-2 py-0.5 text-[11px] font-medium text-good">
+      <span className="inline-flex rounded-full bg-goodSoft px-2 py-0.5 text-xs font-medium text-good">
         해결됨
       </span>
     );
   }
   if (outcome === 'ineffective') {
     return (
-      <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+      <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
         미해결
       </span>
     );
@@ -232,7 +232,7 @@ export default function QuestionDetailPage() {
                         className="rounded-xl border border-warn/30 bg-surface px-3 py-2 text-sm text-text"
                       >
                         <p className="whitespace-pre-wrap">{m.body_ko || m.body}</p>
-                        <p className="mt-1 text-[10px] text-muted">
+                        <p className="mt-1 text-xs text-muted">
                           {formatDateTime(m.created_at)}
                         </p>
                       </li>
@@ -294,7 +294,7 @@ export default function QuestionDetailPage() {
                         <label className="mb-1 block text-xs font-medium text-text">
                           답변 (지식 본문)
                         </label>
-                        <p className="mb-1 text-[11px] text-muted">
+                        <p className="mb-1 text-xs text-muted">
                           현장 작업자가 스마트폰으로 읽습니다. 3~5줄로 짧게 다듬으세요.
                         </p>
                         <textarea

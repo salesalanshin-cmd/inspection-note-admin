@@ -1,36 +1,54 @@
 'use client';
 
 import Link from 'next/link';
-import { Home, MessageCircle, Sparkles } from 'lucide-react';
+import { Home, Menu, MessageCircle, Sparkles } from 'lucide-react';
 
-export default function TopBar() {
+const iconButton =
+  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text transition-colors hover:bg-surface2';
+
+export default function TopBar({ onMenuOpen, menuOpen }) {
   return (
-    <div className="sticky top-0 z-40 hidden h-14 shrink-0 items-center justify-end gap-2 border-b border-border bg-surface px-6 print:hidden md:flex">
-      <Link
-        href="/insight-lab"
-        aria-label="인사이트 랩(AI대화)로 이동"
-        title="인사이트 랩(AI대화)"
-        className="group relative inline-flex h-9 shrink-0 items-center gap-1.5 overflow-hidden rounded-xl border border-accent/30 bg-gradient-to-r from-accent/15 to-accent/0 px-2.5 text-xs font-medium text-text transition-colors hover:from-accent/25 hover:to-accent/5 hover:text-accent"
-      >
-        <Sparkles className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
-        <span>인사이트 랩(AI대화)</span>
-      </Link>
-      <Link
-        href="/settings/messages"
-        aria-label="메시지 관리로 이동"
-        title="메시지 관리"
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-[#FEE500] text-[#191919] shadow-sm transition-opacity hover:opacity-90"
-      >
-        <MessageCircle className="h-[18px] w-[18px]" strokeWidth={2.25} fill="currentColor" />
-      </Link>
-      <Link
-        href="/dashboard"
-        aria-label="대시보드로 이동"
-        title="대시보드"
-        className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted transition-colors hover:bg-surface2 hover:text-text"
-      >
-        <Home className="h-[18px] w-[18px]" strokeWidth={2} />
-      </Link>
-    </div>
+    <header className="relative z-40 shrink-0 border-b border-border bg-surface print:hidden">
+      <div className="mx-auto flex min-h-16 w-full max-w-[100rem] items-center gap-1.5 px-2.5 py-2 sm:gap-3 sm:px-6 lg:justify-end lg:px-8">
+        <button
+          type="button"
+          onClick={onMenuOpen}
+          aria-label="메뉴 열기"
+          aria-haspopup="dialog"
+          aria-expanded={menuOpen}
+          aria-controls="mobile-navigation"
+          className={`${iconButton} lg:hidden`}
+        >
+          <Menu aria-hidden="true" size={21} />
+        </button>
+        <Link href="/dashboard" className="flex min-h-11 min-w-0 flex-1 flex-col justify-center break-keep px-1 leading-tight lg:hidden">
+          <span className="block text-xs font-semibold text-muted">디케이메탈</span>
+          <span className="block text-base font-bold text-text">검사노트<span className="hidden sm:inline"> 관리</span></span>
+        </Link>
+        <Link
+          href="/insight-lab"
+          aria-label="인사이트 랩(AI대화)로 이동"
+          title="인사이트 랩(AI대화)"
+          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-accentSoft px-2 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white sm:px-3"
+        >
+          <Sparkles aria-hidden="true" size={19} />
+          <span className="hidden sm:inline">인사이트 랩(AI대화)</span>
+        </Link>
+        <Link
+          href="/settings/messages"
+          aria-label="메시지 관리로 이동"
+          title="메시지 관리"
+          className={`${iconButton} sm:w-auto sm:gap-2 sm:px-3`}
+        >
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#FEE500] text-[#191919]">
+            <MessageCircle aria-hidden="true" size={15} fill="currentColor" />
+          </span>
+          <span className="hidden text-sm font-semibold sm:inline">메시지 관리</span>
+        </Link>
+        <Link href="/dashboard" aria-label="대시보드로 이동" title="대시보드" className={iconButton}>
+          <Home aria-hidden="true" size={19} />
+        </Link>
+      </div>
+    </header>
   );
 }

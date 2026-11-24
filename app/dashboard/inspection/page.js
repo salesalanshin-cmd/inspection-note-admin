@@ -208,13 +208,13 @@ export default function InspectionDashboardPage() {
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data?.series || []}>
               <CartesianGrid stroke="#E8EAF0" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" stroke="#8B94A7" fontSize={11} tickLine={false} />
-              <YAxis yAxisId="qty" stroke="#8B94A7" fontSize={11} tickLine={false} allowDecimals={false} />
-              <YAxis yAxisId="rate" orientation="right" stroke="#E4483A" fontSize={11} tickLine={false} tickFormatter={(value) => `${(value * 100).toFixed(1)}%`} />
+              <XAxis dataKey="label" stroke="#506178" fontSize={13} tickLine={false} />
+              <YAxis yAxisId="qty" stroke="#506178" fontSize={13} tickLine={false} allowDecimals={false} />
+              <YAxis yAxisId="rate" orientation="right" stroke="#B5322A" fontSize={13} tickLine={false} tickFormatter={(value) => `${(value * 100).toFixed(1)}%`} />
               <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [name === '불량률' ? formatRate(value) : formatQty(value), name]} />
               <Legend />
               <Bar yAxisId="qty" dataKey="inspectedQty" name="검사수량" fill="#3D6EF5" radius={[4, 4, 0, 0]} />
-              <Line yAxisId="rate" dataKey="defectRate" name="불량률" stroke="#E4483A" strokeWidth={2} dot={false} connectNulls />
+              <Line yAxisId="rate" dataKey="defectRate" name="불량률" stroke="#B5322A" strokeWidth={2} dot={false} connectNulls />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -234,13 +234,13 @@ export default function InspectionDashboardPage() {
                 margin={{ left: 8, right: 16 }}
               >
                 <CartesianGrid stroke="#E8EAF0" strokeDasharray="3 3" horizontal={false} />
-                <XAxis xAxisId="qty" type="number" stroke="#8B94A7" fontSize={11} tickLine={false} allowDecimals={false} />
-                <XAxis xAxisId="ratio" type="number" orientation="top" stroke="#D89614" fontSize={11} tickLine={false} domain={[0, 1]} tickFormatter={(value) => `${Math.round(value * 100)}%`} />
-                <YAxis type="category" dataKey="label" stroke="#8B94A7" fontSize={11} width={148} tickLine={false} />
+                <XAxis xAxisId="qty" type="number" stroke="#506178" fontSize={13} tickLine={false} allowDecimals={false} />
+                <XAxis xAxisId="ratio" type="number" orientation="top" stroke="#8A590D" fontSize={13} tickLine={false} domain={[0, 1]} tickFormatter={(value) => `${Math.round(value * 100)}%`} />
+                <YAxis type="category" dataKey="label" stroke="#506178" fontSize={13} width={148} tickLine={false} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [name === '누적비율' ? formatRate(value) : formatQty(value), name]} />
                 <Legend />
                 <Bar xAxisId="qty" dataKey="qty" name="수량" fill="#3D6EF5" radius={[0, 4, 4, 0]} barSize={14} />
-                <Line xAxisId="ratio" dataKey="cumRatio" name="누적비율" stroke="#D89614" strokeWidth={2} dot />
+                <Line xAxisId="ratio" dataKey="cumRatio" name="누적비율" stroke="#8A590D" strokeWidth={2} dot />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -252,13 +252,13 @@ export default function InspectionDashboardPage() {
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={data?.monthly || []}>
                 <CartesianGrid stroke="#E8EAF0" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" stroke="#8B94A7" fontSize={11} tickLine={false} />
-                <YAxis stroke="#8B94A7" fontSize={11} tickLine={false} domain={[0, rateDomainMax]} tickFormatter={(value) => `${(value * 100).toFixed(1)}%`} />
+                <XAxis dataKey="label" stroke="#506178" fontSize={13} tickLine={false} />
+                <YAxis stroke="#506178" fontSize={13} tickLine={false} domain={[0, rateDomainMax]} tickFormatter={(value) => `${(value * 100).toFixed(1)}%`} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [formatRate(value), name]} />
                 <Legend />
-                <ReferenceLine y={data?.planRate ?? 0.03} stroke="#D89614" strokeDasharray="4 4" />
+                <ReferenceLine y={data?.planRate ?? 0.03} stroke="#8A590D" strokeDasharray="4 4" />
                 <ReferenceLine y={data?.targetRate ?? 0.026} stroke="#1FAA59" strokeDasharray="4 4" />
-                <Line dataKey="defectRate" name="불량률" stroke="#E4483A" strokeWidth={2} dot />
+                <Line dataKey="defectRate" name="불량률" stroke="#B5322A" strokeWidth={2} dot />
               </ComposedChart>
             </ResponsiveContainer>
           </div>

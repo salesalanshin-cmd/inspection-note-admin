@@ -672,7 +672,7 @@ function MasterPageContent() {
                     }
                   />
                 </label>
-                <p className="text-[11px] text-muted">
+                <p className="text-xs text-muted">
                   api_key는 저장 시 자동 생성됩니다 (UUID).
                 </p>
                 <button
@@ -783,7 +783,7 @@ function MasterPageContent() {
                             </option>
                           ))}
                       </select>
-                      <div className="mt-1 text-[11px] text-muted">
+                      <div className="mt-1 text-xs text-muted">
                         마지막 교체 {meta.absolute}
                         {meta.hoursAgoLabel ? (
                           <span className="ml-1.5 text-muted">· {meta.hoursAgoLabel}</span>

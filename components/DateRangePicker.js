@@ -8,7 +8,7 @@ import {
 } from '../lib/dateRange';
 
 const inputClass =
-  'rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
+  'min-w-0 w-full rounded-xl border border-border bg-surface px-2 py-2 text-sm text-text focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none sm:w-auto sm:px-3';
 
 const presetBtnClass =
   'rounded-xl border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:bg-surface2 hover:text-text';
@@ -32,8 +32,8 @@ export default function DateRangePicker({ value, onChange }) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 max-w-full flex-col gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
         <input
           type="date"
           value={value.start}

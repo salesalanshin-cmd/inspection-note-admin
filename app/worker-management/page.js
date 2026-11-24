@@ -75,7 +75,7 @@ function WorkerStatusBadge({ row }) {
   const { label, tone } = getWorkerListStatus(row);
   return (
     <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE_CLASS[tone] ?? STATUS_BADGE_CLASS.muted}`}
+      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASS[tone] ?? STATUS_BADGE_CLASS.muted}`}
     >
       {label}
     </span>
@@ -279,7 +279,7 @@ function workerDetailHref(name) {
 
 function UnsetBadge() {
   return (
-    <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+    <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
       미설정
     </span>
   );
@@ -334,7 +334,7 @@ function WorkerRow({
           <WorkerNameLink name={name} displayName={displayName} />
           {isWorkerSetupIncomplete(row) ? <UnsetBadge /> : null}
         </div>
-        <div className="mt-0.5 flex items-center gap-2 text-[11px]">
+        <div className="mt-0.5 flex items-center gap-2 text-xs">
           <span className="text-muted">원본: {name}</span>
           <Link href={workerDetailHref(name)} className="text-accent hover:underline">
             상세
@@ -1228,7 +1228,7 @@ export default function WorkerManagementPage() {
                         <td className="px-2 py-2">{row.process || '—'}</td>
                         <td className="px-2 py-2">{row.organization || '—'}</td>
                         <td className="px-2 py-2">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${status.className}`}>
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}>
                             {status.label}
                           </span>
                           {row.message && row.status !== 'new' ? (

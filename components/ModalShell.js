@@ -28,11 +28,11 @@ export default function ModalShell({
         className={`flex h-full w-full flex-col overflow-hidden bg-surface md:h-auto md:rounded-xl md:shadow-card ${maxHeightClass} ${maxWidthClass}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[2.5rem_1fr_2.5rem] items-center border-b border-border bg-surface px-3 py-3 md:flex md:grid-cols-none md:items-center md:justify-between md:px-5 md:py-4">
+        <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center border-b border-border bg-surface px-3 py-2 md:flex md:justify-between md:px-5 md:py-4">
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface2 hover:text-text md:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface2 hover:text-text md:hidden"
             aria-label="닫기"
           >
             <X className="h-5 w-5" strokeWidth={2} />
@@ -41,7 +41,7 @@ export default function ModalShell({
             {eyebrow ? (
               <div className="hidden text-xs font-medium text-accent md:block">{eyebrow}</div>
             ) : null}
-            <h2 className="truncate text-base font-semibold text-text md:text-lg">{title}</h2>
+            <h2 className="text-lg font-bold leading-snug text-text md:text-xl">{title}</h2>
           </div>
           <button
             type="button"
@@ -53,10 +53,10 @@ export default function ModalShell({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</div>
 
         {footer ? (
-          <div className="sticky bottom-0 shrink-0 border-t border-border bg-surface px-4 py-3 md:static md:px-5 md:py-4">
+          <div className="sticky bottom-0 shrink-0 border-t border-border bg-surface px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:static md:px-5 md:py-4">
             {footer}
           </div>
         ) : null}

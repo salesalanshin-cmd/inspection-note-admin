@@ -38,7 +38,7 @@ export default function WorklogPhotoViewer({ src, alt }) {
   }
 
   return (
-    <div className="flex h-full min-h-[420px] flex-col rounded-xl border border-border bg-surface">
+    <div className="flex h-[46dvh] min-h-[17rem] flex-col rounded-xl border border-border bg-surface 2xl:sticky 2xl:top-3 2xl:h-[72dvh]">
       <div className="flex flex-wrap gap-2 border-b border-border px-3 py-2">
         <button type="button" className={toolClass} onClick={() => setScale((value) => Math.max(0.5, Number((value - 0.25).toFixed(2))))}>
           축소

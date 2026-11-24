@@ -7,19 +7,19 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        bg: '#F7F8FA',
+        bg: '#F3F5F8',
         surface: '#FFFFFF',
         surface2: '#F1F3F7',
-        border: '#E8EAF0',
-        text: '#1B2334',
-        muted: '#8B94A7',
-        accent: '#3D6EF5',
+        border: '#D6DEE8',
+        text: '#17263A',
+        muted: '#506178',
+        accent: '#2456C4',
         accentSoft: '#EAF0FE',
-        good: '#1FAA59',
+        good: '#187446',
         goodSoft: '#E5F8EC',
-        danger: '#E4483A',
+        danger: '#B5322A',
         dangerSoft: '#FDEAE8',
-        warn: '#D89614',
+        warn: '#8A590D',
         warnSoft: '#FFF6E0',
         // 근태 기록 카드 전용 (Industrial Calm). 기존 화면 토큰과 섞지 않는다.
         cardBg: '#F5F7F5',
@@ -37,8 +37,13 @@ module.exports = {
         cardOnBrand: '#FFFFFF',
       },
       fontFamily: {
-        body: ['var(--font-body)', 'Inter', 'sans-serif'],
-        pretendard: ['Pretendard', 'system-ui', 'sans-serif'],
+        body: ['"Pretendard Variable"', '"Apple SD Gothic Neo"', '"Malgun Gothic"', 'system-ui', 'sans-serif'],
+        pretendard: ['"Pretendard Variable"', 'system-ui', 'sans-serif'],
+      },
+      fontSize: {
+        xs: ['0.8125rem', { lineHeight: '1.5' }],
+        sm: ['0.9375rem', { lineHeight: '1.5' }],
+        base: ['1rem', { lineHeight: '1.55' }],
       },
       boxShadow: {
         card: '0 1px 2px rgba(16,24,40,0.05), 0 1px 3px rgba(16,24,40,0.1)',

@@ -30,7 +30,7 @@ const TABS = [
 
 function ReinquiryBadge() {
   return (
-    <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
+    <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
       재문의
     </span>
   );
@@ -468,7 +468,7 @@ export default function QuestionsPage() {
                       <div className="font-medium text-text">Q: {previewText(k.question_text, 60)}</div>
                       <div className="mt-1 text-muted">A: {previewText(k.answer_text, 80)}</div>
                       {!k.is_active ? (
-                        <span className="mt-1 inline-block text-[10px] text-muted">이미 비활성</span>
+                        <span className="mt-1 inline-block text-xs text-muted">이미 비활성</span>
                       ) : null}
                     </li>
                   ))}
@@ -487,7 +487,7 @@ export default function QuestionsPage() {
                     </span>
                   </label>
                 ) : (
-                  <p className="mt-2 text-[11px] text-muted">활성 상태인 연결 지식이 없습니다.</p>
+                  <p className="mt-2 text-xs text-muted">활성 상태인 연결 지식이 없습니다.</p>
                 )}
               </div>
             ) : (

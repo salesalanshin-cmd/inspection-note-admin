@@ -103,7 +103,7 @@ export default function ExcelUploadOptions({ file, value, onChange }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-xs font-medium text-text">엑셀 파싱 옵션</p>
-          <p className="mt-0.5 text-[11px] text-muted">
+          <p className="mt-0.5 text-xs text-muted">
             table = 기준서(표) · flow = 프로세스/규정. 추천은 참고용이며 직접 바꿀 수 있습니다.
           </p>
         </div>
@@ -111,7 +111,7 @@ export default function ExcelUploadOptions({ file, value, onChange }) {
           type="button"
           onClick={applyRecommended}
           disabled={!preview || loading}
-          className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[11px] font-medium text-text hover:bg-surface2 disabled:opacity-50"
+          className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text hover:bg-surface2 disabled:opacity-50"
         >
           추천값으로 맞추기
         </button>
@@ -164,10 +164,10 @@ export default function ExcelUploadOptions({ file, value, onChange }) {
                 {open && included ? (
                   <div className="border-t border-border px-3 py-2">
                     {sheet.metaText ? (
-                      <p className="mb-2 text-[11px] text-muted">메타: {sheet.metaText}</p>
+                      <p className="mb-2 text-xs text-muted">메타: {sheet.metaText}</p>
                     ) : null}
                     <div className="overflow-x-auto">
-                      <table className="min-w-full text-[11px]">
+                      <table className="min-w-full text-xs">
                         <thead className="bg-surface2 text-left text-muted">
                           <tr>
                             <th className="px-2 py-1 font-medium">행</th>

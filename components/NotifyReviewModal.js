@@ -283,7 +283,7 @@ export default function NotifyReviewModal({
       zClass="z-[80]"
       footer={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[11px] text-muted md:text-xs">
+          <p className="text-xs text-muted md:text-xs">
             {sendFinished
               ? hasFailures
                 ? '실패 건은 옆의 재시도 또는 메시지 복사로 처리할 수 있습니다.'
@@ -368,11 +368,11 @@ export default function NotifyReviewModal({
                   {hasPhone ? (
                     <span className="text-xs text-muted">{target.phoneNumber}</span>
                   ) : (
-                    <span className="inline-block rounded-full bg-warnSoft px-2 py-0.5 text-[11px] font-medium text-warn">
+                    <span className="inline-block rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
                       연락처 미등록
                     </span>
                   )}
-                  <span className="inline-block rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-muted">
+                  <span className="inline-block rounded-full bg-surface2 px-2 py-0.5 text-xs text-muted">
                     {TEMPLATE_TYPE_LABELS[target.templateType] || target.templateType}
                   </span>
                 </div>
@@ -393,7 +393,7 @@ export default function NotifyReviewModal({
                           type="button"
                           onClick={() => handleRetryOne(target.workerName)}
                           disabled={busy}
-                          className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
+                          className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50"
                         >
                           {isRetrying ? (
                             <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />
@@ -413,7 +413,7 @@ export default function NotifyReviewModal({
               </pre>
 
               {!hasPhone ? (
-                <p className="mt-2 text-[11px] text-warn">연락처 먼저 등록하세요</p>
+                <p className="mt-2 text-xs text-warn">연락처 먼저 등록하세요</p>
               ) : null}
             </div>
           );

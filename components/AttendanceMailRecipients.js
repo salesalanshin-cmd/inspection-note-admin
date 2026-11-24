@@ -179,7 +179,7 @@ export default function AttendanceMailRecipients() {
         </button>
       </form>
       {firstActive ? (
-        <p className="mb-3 text-[11px] text-muted">
+        <p className="mb-3 text-xs text-muted">
           시험 발송은 활성 수신자 중 첫 번째({firstActive.email})로만 갑니다.
         </p>
       ) : null}
@@ -198,7 +198,7 @@ export default function AttendanceMailRecipients() {
                   <span className="ml-2 text-xs text-muted">{row.display_name}</span>
                 ) : null}
                 {!row.is_active ? (
-                  <span className="ml-2 text-[11px] text-warn">비활성</span>
+                  <span className="ml-2 text-xs text-warn">비활성</span>
                 ) : null}
               </div>
               <div className="flex gap-2">

@@ -185,9 +185,9 @@ export default function WorkerEditModal({
       >
         <div className="space-y-5 px-4 py-5 md:px-6">
           <div className="rounded-xl border border-border bg-surface2/50 px-3 py-3">
-            <p className="text-[11px] font-medium text-muted">원본 이름</p>
+            <p className="text-xs font-medium text-muted">원본 이름</p>
             <p className="mt-0.5 text-sm font-medium text-text">{workerName}</p>
-            <p className="mt-3 text-[11px] font-medium text-muted">목록에서 바로 수정</p>
+            <p className="mt-3 text-xs font-medium text-muted">목록에서 바로 수정</p>
             <dl className="mt-1.5 space-y-1 text-xs text-text">
               <div className="flex gap-2">
                 <dt className="w-16 shrink-0 text-muted">역할</dt>
@@ -206,7 +206,7 @@ export default function WorkerEditModal({
                 <dd className={row?.process ? '' : 'text-muted'}>{processLabel}</dd>
               </div>
             </dl>
-            <p className="mt-2 text-[11px] leading-relaxed text-muted">
+            <p className="mt-2 text-xs leading-relaxed text-muted">
               역할·근무조·담당업무·공정은 목록에서 인라인으로 변경하세요.
             </p>
           </div>
@@ -266,7 +266,7 @@ export default function WorkerEditModal({
               ))}
             </select>
             {langHint ? (
-              <p className="text-[11px] leading-relaxed text-warn">
+              <p className="text-xs leading-relaxed text-warn">
                 국적이 {nationality.trim()}입니다. 언어를 {langHint.suggested}({langHint.label}
                 )로 변경하시겠습니까?
               </p>
@@ -300,7 +300,7 @@ export default function WorkerEditModal({
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-3">
             <div>
               <p className="text-sm font-medium text-text">불량관리</p>
-              <p className="mt-0.5 text-[11px] text-muted">
+              <p className="mt-0.5 text-xs text-muted">
                 꺼두면 불량 기록 목록에서 이 작업자가 빠집니다.
               </p>
             </div>
@@ -337,7 +337,7 @@ export default function WorkerEditModal({
               <Trash2 className="h-4 w-4" strokeWidth={2} />
               목록에서 숨김
             </button>
-            <p className="mt-2 text-[11px] text-muted">
+            <p className="mt-2 text-xs text-muted">
               목록에서만 숨기며, 검사 데이터는 유지됩니다.
             </p>
           </div>

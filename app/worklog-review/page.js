@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import WorklogPhotoViewer from '../../components/WorklogPhotoViewer';
+import records from '../../components/RecordTable.module.css';
 
 const FORM_LABEL = {
   final_inspection: '최종검사',
   working_report: '작업일보',
 };
 
-const inputClass = 'w-full min-w-[88px] rounded-lg border border-border bg-white px-2 py-1 text-xs text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20';
+const inputClass = 'w-full min-w-0 rounded-lg border border-border bg-surface px-2 py-2 text-base text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 md:text-sm';
 
 const RAW_KEY = {
   workDate: 'date',
@@ -297,7 +298,7 @@ export default function WorklogReviewPage() {
             검토 남은 행 {list?.summary?.remainingRows ?? '—'}개 / 사진 {list?.summary?.photoCount ?? '—'}장
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap items-end gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
           <label className="text-xs text-muted">
             범위
             <select className={`${inputClass} mt-1`} value={scope} onChange={(event) => setScope(event.target.value)}>
@@ -325,7 +326,7 @@ export default function WorklogReviewPage() {
         {listError ? <p className="mt-3 text-sm text-danger">{listError}</p> : null}
       </header>
 
-      <div className="grid min-h-[720px] flex-1 grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="grid min-w-0 flex-1 grid-cols-1 content-start lg:min-h-[720px] lg:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)]">
         <aside className="border-b border-border bg-surface lg:border-b-0 lg:border-r">
           <div className="max-h-[240px] overflow-y-auto lg:max-h-[720px]">
             {(list?.photos || []).map((photo) => (
@@ -337,8 +338,8 @@ export default function WorklogReviewPage() {
                   photo.id === selectedId ? 'bg-accentSoft' : 'hover:bg-surface2'
                 }`}
               >
-                <div className="text-xs font-medium text-text">{photo.capturedAt || '촬영 시각 없음'}</div>
-                <div className="mt-0.5 text-[11px] text-muted">
+                <div className="text-sm font-medium text-text">{photo.capturedAt || '촬영 시각 없음'}</div>
+                <div className="mt-0.5 text-xs text-muted">
                   {FORM_LABEL[photo.formType] || photo.formType || '양식 없음'}
                   {' · '}
                   검토 {photo.needsReviewCount}
@@ -351,18 +352,18 @@ export default function WorklogReviewPage() {
           </div>
         </aside>
 
-        <section className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-2">
+        <section className="grid min-w-0 grid-cols-1 gap-3 p-3 2xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <WorklogPhotoViewer src={detail?.photo?.imageUrl} alt="작업일보 원본" />
           <div className="flex min-w-0 flex-col rounded-xl border border-border bg-surface">
             <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
-              <div className="min-w-0 flex-1 text-xs text-muted">
+              <div className="min-w-0 basis-full text-sm text-muted">
                 {detail?.photo ? (
                   <>
                     <span className="font-medium text-text">{FORM_LABEL[detail.photo.formType] || detail.photo.formType}</span>
                     {' · '}
                     {detail.photo.capturedAt}
                     {detail.photo.workerName ? ` · ${detail.photo.workerName}` : ''}
-                    {detail.photo.formEvidence ? <div className="mt-1 truncate" title={detail.photo.formEvidence}>{detail.photo.formEvidence}</div> : null}
+                    {detail.photo.formEvidence ? <div className="mt-1 break-words">{detail.photo.formEvidence}</div> : null}
                   </>
                 ) : '사진을 고르세요.'}
               </div>
@@ -372,11 +373,11 @@ export default function WorklogReviewPage() {
               </button>
               <button type="button" className={actionClass} disabled={!selectedId || busy} onClick={goNext}>다음 사진</button>
             </div>
-            <p className="px-3 pt-2 text-[11px] text-muted">Ctrl+Enter = 이 사진 검토 완료 후 다음 사진. 노란 행은 검토 필요이고, 신뢰도 low 칸은 OCR 원문을 툴팁으로 보여 줍니다.</p>
+            <p className="px-3 py-2 text-xs text-muted">Ctrl+Enter = 이 사진 검토 완료 후 다음 사진. 노란 행은 검토가 필요하며, 신뢰도 low인 입력값은 OCR 원문과 비교할 수 있습니다.</p>
             {detailError ? <p className="px-3 pt-2 text-sm text-danger">{detailError}</p> : null}
             {notice ? <p className="px-3 pt-2 text-sm text-good">{notice}</p> : null}
-            <div className="min-h-0 flex-1 overflow-auto">
-              <table className="w-full border-collapse text-xs">
+            <div className={`${records.region} min-h-0 flex-1 overflow-auto`}>
+              <table aria-label="작업일보 검토 행" className={`${records.table} ${records.editable} w-full border-collapse text-sm`}>
                 <thead className="sticky top-0 bg-surface2 text-left text-muted">
                   <tr>
                     {['근무일', '품번', 'LOT', '시작', '종료', '수량', '불량', '메모', '공정', '신뢰도', '중복', ''].map((label) => (
@@ -390,39 +391,39 @@ export default function WorklogReviewPage() {
                     const low = row.confidence === 'low';
                     return (
                       <tr key={row.id} className={row.needsReview ? 'bg-warnSoft' : ''}>
-                        <FieldCell tip={rawTip(row, 'workDate')} low={low}>
+                        <FieldCell label="근무일" tip={rawTip(row, 'workDate')} low={low}>
                           <input className={inputClass} type="date" value={values.workDate} onChange={(event) => updateDraft(row.id, { workDate: event.target.value })} />
                         </FieldCell>
-                        <FieldCell tip={rawTip(row, 'itemCode')} low={low}>
+                        <FieldCell label="품번" tip={rawTip(row, 'itemCode')} low={low}>
                           <input className={inputClass} value={values.itemCode} onChange={(event) => updateDraft(row.id, { itemCode: event.target.value })} />
                         </FieldCell>
-                        <FieldCell tip={rawTip(row, 'lotNo')} low={low}>
+                        <FieldCell label="LOT" tip={rawTip(row, 'lotNo')} low={low}>
                           <input className={inputClass} value={values.lotNo} onChange={(event) => updateDraft(row.id, { lotNo: event.target.value })} />
                         </FieldCell>
-                        <FieldCell tip={rawTip(row, 'startTime')} low={low}>
+                        <FieldCell label="시작" tip={rawTip(row, 'startTime')} low={low}>
                           <input className={inputClass} value={values.startTime} onChange={(event) => updateDraft(row.id, { startTime: event.target.value })} />
                         </FieldCell>
-                        <FieldCell tip={rawTip(row, 'endTime')} low={low}>
+                        <FieldCell label="종료" tip={rawTip(row, 'endTime')} low={low}>
                           <input className={inputClass} value={values.endTime} onChange={(event) => updateDraft(row.id, { endTime: event.target.value })} />
                         </FieldCell>
-                        <FieldCell tip={rawTip(row, 'qty')} low={low}>
+                        <FieldCell label="수량" tip={rawTip(row, 'qty')} low={low}>
                           <input className={inputClass} inputMode="numeric" value={values.qty} onChange={(event) => updateDraft(row.id, { qty: event.target.value })} />
                         </FieldCell>
-                        <td className="px-2 py-1 align-top" title={rawTip(row, 'defectBreakdown')}>
+                        <td data-label="불량" data-wide="" className="px-2 py-1 align-top" title={rawTip(row, 'defectBreakdown')}>
                           <DefectFields
                             items={values.defectBreakdown}
                             onChange={(defectBreakdown) => updateDraft(row.id, { defectBreakdown })}
                           />
                         </td>
-                        <FieldCell tip={rawTip(row, 'taskNote')} low={low}>
+                        <FieldCell label="메모" tip={rawTip(row, 'taskNote')} low={low}>
                           <input className={inputClass} value={values.taskNote} onChange={(event) => updateDraft(row.id, { taskNote: event.target.value })} />
                         </FieldCell>
-                        <FieldCell tip={rawTip(row, 'processCode')} low={low}>
+                        <FieldCell label="공정" tip={rawTip(row, 'processCode')} low={low}>
                           <input className={inputClass} value={values.processCode} onChange={(event) => updateDraft(row.id, { processCode: event.target.value })} />
                         </FieldCell>
-                        <td className={`whitespace-nowrap px-2 py-2 ${low ? 'font-medium text-warn' : 'text-muted'}`}>{row.confidence || '—'}</td>
-                        <td className="whitespace-nowrap px-2 py-2 text-muted">{row.isDuplicate ? '예' : '아니오'}</td>
-                        <td className="whitespace-nowrap px-2 py-1">
+                        <td data-label="신뢰도" className={`whitespace-nowrap px-2 py-2 ${low ? 'font-medium text-warn' : 'text-muted'}`}>{row.confidence || '—'}</td>
+                        <td data-label="중복" className="whitespace-nowrap px-2 py-2 text-muted">{row.isDuplicate ? '예' : '아니오'}</td>
+                        <td data-wide="" className="whitespace-nowrap px-2 py-1">
                           <button type="button" className={actionClass} disabled={busy} onClick={() => saveRow(row.id)}>행 저장</button>
                           <button type="button" className={`${actionClass} ml-1`} disabled={busy} onClick={() => deleteRow(row.id)}>행 삭제</button>
                         </td>
@@ -439,7 +440,7 @@ export default function WorklogReviewPage() {
       <footer className="border-t border-border bg-surface px-4 py-4 md:px-6">
         <h2 className="text-sm font-semibold text-text">OCR 인식 정확도</h2>
         <p className="mt-1 text-xs text-muted">수량 정확도 = 1 - (qty를 수정한 행 / 검토한 행)</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <Stat label="검토한 행" value={stats ? `${stats.reviewedRows}행` : '—'} />
           <Stat label="수정된 행" value={stats ? `${stats.editedRows}행` : '—'} />
           <Stat label="날짜 수정" value={stats ? `${stats.fieldCounts.work_date}회` : '—'} />
@@ -456,10 +457,13 @@ export default function WorklogReviewPage() {
   );
 }
 
-function FieldCell({ children, tip, low }) {
+function FieldCell({ label, children, tip, low }) {
   return (
-    <td className={`px-2 py-1 align-top ${low ? 'outline outline-1 outline-warn/50' : ''}`} title={tip}>
-      {children}
+    <td data-label={label} className={`px-2 py-1 align-top ${low ? 'outline outline-1 outline-warn/50' : ''}`} title={tip}>
+      <label className="block">
+        <span className="sr-only">{label}</span>
+        {children}
+      </label>
     </td>
   );
 }
@@ -467,12 +471,13 @@ function FieldCell({ children, tip, low }) {
 function DefectFields({ items, onChange }) {
   const list = items || [];
   return (
-    <div className="min-w-[140px] space-y-1">
+    <div className="space-y-1">
       {list.map((item, index) => (
         <div key={index} className="flex gap-1">
           <input
             className={inputClass}
             placeholder="코드"
+            aria-label="불량 코드"
             value={item.raw_code}
             onChange={(event) => {
               const next = list.slice();
@@ -483,6 +488,7 @@ function DefectFields({ items, onChange }) {
           <input
             className={`${inputClass} max-w-[64px]`}
             placeholder="수량"
+            aria-label="불량 수량"
             inputMode="numeric"
             value={item.qty}
             onChange={(event) => {
@@ -495,7 +501,7 @@ function DefectFields({ items, onChange }) {
       ))}
       <button
         type="button"
-        className="text-[11px] text-accent"
+        className="min-h-10 text-sm font-medium text-accent"
         onClick={() => onChange([...list, { raw_code: '', qty: '' }])}
       >
         + 불량
@@ -507,7 +513,7 @@ function DefectFields({ items, onChange }) {
 function Stat({ label, value }) {
   return (
     <div className="rounded-xl bg-surface2 px-3 py-2">
-      <div className="text-[11px] text-muted">{label}</div>
+      <div className="text-xs text-muted">{label}</div>
       <div className="mt-1 text-sm font-medium text-text">{value}</div>
     </div>
   );

@@ -84,14 +84,14 @@ function isCsvRowValid(row) {
 function SignalBadge({ unused, review }) {
   if (review) {
     return (
-      <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-[10px] font-medium text-warn">
+      <span className="inline-flex rounded-full bg-warnSoft px-2 py-0.5 text-xs font-medium text-warn">
         검토 필요
       </span>
     );
   }
   if (unused) {
     return (
-      <span className="inline-flex rounded-full bg-surface2 px-2 py-0.5 text-[10px] font-medium text-muted">
+      <span className="inline-flex rounded-full bg-surface2 px-2 py-0.5 text-xs font-medium text-muted">
         미사용
       </span>
     );
@@ -396,7 +396,7 @@ export default function KnowledgePage() {
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span>{previewText(item.question_text, 60)}</span>
                           {!item.is_active ? (
-                            <span className="inline-flex rounded-full bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                            <span className="inline-flex rounded-full bg-surface2 px-1.5 py-0.5 text-xs font-medium text-muted">
                               비활성
                             </span>
                           ) : null}
@@ -407,7 +407,7 @@ export default function KnowledgePage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="text-text">{item.source_label || '—'}</div>
-                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
                           <span>{SOURCE_TYPE_LABELS[item.source_type] || item.source_type}</span>
                           {item.created_from_thread_id ? (
                             <>
@@ -503,7 +503,7 @@ export default function KnowledgePage() {
                   <li key={i} className="px-3 py-2">
                     <span className="font-medium text-text">{previewText(row.question_text, 40)}</span>
                     <span className="text-muted"> → {previewText(row.answer_text, 40)}</span>
-                    <span className="ml-2 text-[10px] text-accent">[{row.source_label}]</span>
+                    <span className="ml-2 text-xs text-accent">[{row.source_label}]</span>
                   </li>
                 ))}
                 {parsedCsv.rows.filter(isCsvRowValid).length > 20 ? (
@@ -563,7 +563,7 @@ export default function KnowledgePage() {
                 className="w-full rounded-xl border border-border px-3 py-2 text-sm"
                 placeholder="현장에서 바로 읽을 수 있는 답변"
               />
-              <p className="mt-1 text-[11px] text-muted">
+              <p className="mt-1 text-xs text-muted">
                 3~5줄 권장. 스마트폰으로 읽는 현장 작업자용 — 짧고 구체적으로 작성하세요.
               </p>
             </div>
@@ -578,7 +578,7 @@ export default function KnowledgePage() {
                 className="w-full rounded-xl border border-border px-3 py-2 text-sm"
                 placeholder="표준작업서 4.1"
               />
-              <p className="mt-1 text-[11px] text-muted">
+              <p className="mt-1 text-xs text-muted">
                 앱 출처 배지에 표시됩니다. 사람이 검증 가능한 문자열이어야 합니다.
               </p>
             </div>
@@ -652,7 +652,7 @@ export default function KnowledgePage() {
                 rows={5}
                 className="w-full rounded-xl border border-border px-3 py-2 text-sm"
               />
-              <p className="mt-1 text-[11px] text-muted">3~5줄 권장 (현장 스마트폰 가독성)</p>
+              <p className="mt-1 text-xs text-muted">3~5줄 권장 (현장 스마트폰 가독성)</p>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted">출처 라벨</label>
