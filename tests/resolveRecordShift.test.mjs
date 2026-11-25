@@ -17,6 +17,40 @@ const AT_0830 = at(2026, 11, 6, 8, 30);
 const AT_0750 = at(2026, 11, 6, 7, 50);
 const EVENING = at(2026, 11, 5, 21, 0);
 
+describe('자주검사 사진의 단계 표시', () => {
+  const dir = (shift) => [{ worker_name: WORKER, default_shift: shift }];
+  const record = (time) => ({ worker_name: WORKER, created_at: time });
+
+  it('오전과 오후의 양품 사진을 근태 유무와 관계없이 주간 초품·중품으로 나눈다', () => {
+    const times = ['08:18:54', '08:19:46', '08:20:05', '13:09:41', '13:10:32', '13:10:54'];
+    const records = times.map((time) => record(`2026-11-25T${time}+09:00`));
+    const expected = ['초품', '초품', '초품', '중품', '중품', '중품'];
+    const attendance = [{ worker_name: WORKER, work_date: '2026-11-25', shift: 'day' }];
+    for (const rows of [[], attendance]) {
+      assert.deepEqual(records.map((r) => tagInspectionStage(r, [], records, rows).stage), expected);
+    }
+  });
+
+  it('정규 단계의 시작 시각을 포함하며 교대 바깥에만 사진 표시 유예를 적용한다', () => {
+    const cases = [
+      ['day', '2026-11-05T07:45:00', '초품'],
+      ['day', '2026-11-05T12:59:59.999', '초품'],
+      ['day', '2026-11-05T13:00:00', '중품'],
+      ['day', '2026-11-05T17:59:59.999', '중품'],
+      ['day', '2026-11-05T18:00:00', '종품'],
+      ['day', '2026-11-05T20:14:59.999', '종품'],
+      ['day', '2026-11-05T20:15:00', '일반'],
+      ['night', '2026-11-06T00:59:59.999', '초품'],
+      ['night', '2026-11-06T01:00:00', '중품'],
+      ['night', '2026-11-06T05:00:00', '종품'],
+    ];
+    for (const [shift, time, expected] of cases) {
+      const r = record(`${time}+09:00`);
+      assert.equal(tagInspectionStage(r, dir(shift), [r]).stage, expected, time);
+    }
+  });
+});
+
 function nightRow(extra = {}) {
   return {
     worker_name: WORKER,

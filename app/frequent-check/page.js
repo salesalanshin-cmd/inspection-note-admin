@@ -48,10 +48,8 @@ import WorkerHistoryModal from '../../components/WorkerHistoryModal';
 import ProcessFilterSelect from '../../components/ProcessFilterSelect';
 import SignedImage from '../../components/SignedImage';
 import GalleryFloatingBar from '../../components/GalleryFloatingBar';
-import InspectionHistoryDetailModal, {
-  ResultBadge,
-  StageBadge,
-} from '../../components/InspectionHistoryDetailModal';
+import InspectionHistoryDetailModal from '../../components/InspectionHistoryDetailModal';
+import InspectionBadges from '../../components/InspectionBadges';
 
 const exportBtnClass =
   'rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0';
@@ -710,7 +708,7 @@ export default function FrequentCheckPage() {
                         className="group overflow-hidden rounded-xl bg-surface shadow-card"
                       >
                         <div
-                          className="relative aspect-square cursor-pointer bg-surface2"
+                          className="inspection-photo cursor-pointer"
                           onClick={() => setSelectedPhoto(r)}
                           role="button"
                           tabIndex={0}
@@ -745,15 +743,12 @@ export default function FrequentCheckPage() {
                               이미지 없음
                             </div>
                           )}
-                          <div className="absolute bottom-2 left-2 right-2 z-20 flex flex-wrap gap-1">
-                            <StageBadge stage={r.stage} />
-                            <ResultBadge record={r} />
-                          </div>
+                          <InspectionBadges record={r} className="mx-2 mb-2 mt-12 self-end" />
                         </div>
                         <div className="p-2.5 text-xs md:text-xs">
                           <div className="font-medium text-text">{displayName}</div>
                           <div className="mt-0.5 text-muted">
-                            {r.created_at ? new Date(r.created_at).toLocaleString('ko-KR') : ''}
+                            {r.created_at ? new Date(r.created_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : ''}
                           </div>
                         </div>
                       </div>

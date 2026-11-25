@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .inspection-photo {
+    @apply relative grid bg-surface2;
+  }
+
+  /* A square photo can grow when a long defect name wraps on a narrow card. */
+  .inspection-photo::before {
+    content: '';
+    grid-area: 1 / 1;
+    @apply aspect-square w-full;
+  }
+
+  .inspection-photo > .inspection-badges {
+    grid-area: 1 / 1;
+    @apply z-20 min-w-0;
+  }
+}
+
 @layer base {
   body {
     @apply bg-bg text-base text-text;

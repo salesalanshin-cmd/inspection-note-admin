@@ -12,7 +12,7 @@ import DefectMarkerOverlay from './DefectMarkerOverlay';
 import ModalShell from './ModalShell';
 import SignedImage from './SignedImage';
 import ImageZoom from './ImageZoom';
-import { ResultBadge, StageBadge } from './InspectionHistoryDetailModal';
+import InspectionBadges from './InspectionBadges';
 
 function formatDateListLabel(dateStr) {
   const d = new Date(`${dateStr}T00:00:00`);
@@ -174,13 +174,8 @@ export default function WorkerHistoryModal({
                     onClick={() => setPreviewRecord(r)}
                     className="group overflow-hidden rounded-xl border border-border bg-surface text-left transition-colors hover:border-accent/40"
                   >
-                    <div className="relative aspect-square bg-surface2">
-                      <div className="absolute left-1.5 top-1.5 z-20">
-                        <StageBadge stage={r.stage} />
-                      </div>
-                      <div className="absolute right-1.5 top-1.5 z-20">
-                        <ResultBadge record={r} />
-                      </div>
+                    <div className="inspection-photo">
+                      <InspectionBadges record={r} className="m-1.5 self-start" />
                       {r.image_url ? (
                         <SignedImage
                           url={r.image_url}
@@ -195,7 +190,7 @@ export default function WorkerHistoryModal({
                       )}
                     </div>
                     <div className="p-2 text-[10px] text-muted md:text-xs">
-                      {r.created_at ? new Date(r.created_at).toLocaleTimeString('ko-KR') : ''}
+                      {r.created_at ? new Date(r.created_at).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' }) : ''}
                     </div>
                   </button>
                 ))}
@@ -210,10 +205,7 @@ export default function WorkerHistoryModal({
 
           {previewItem ? (
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <StageBadge stage={previewItem.stage} />
-                <ResultBadge record={previewItem} />
-              </div>
+              <InspectionBadges record={previewItem} />
               <div
                 className="relative mx-auto w-full overflow-hidden bg-surface2 md:rounded-xl"
                 style={{
@@ -248,7 +240,7 @@ export default function WorkerHistoryModal({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-muted">
                   {previewItem.created_at
-                    ? new Date(previewItem.created_at).toLocaleString('ko-KR')
+                    ? new Date(previewItem.created_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
                     : ''}
                 </p>
                 {previewItem.image_url ? (

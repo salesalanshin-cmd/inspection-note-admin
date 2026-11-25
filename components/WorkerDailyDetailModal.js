@@ -5,7 +5,7 @@ import { fivesErrorCode } from '../lib/constants';
 import { getDisplayName, recordsForWorkerInWorkRange, tagInspectionStage } from '../lib/analytics';
 import ModalShell from './ModalShell';
 import SignedImage from './SignedImage';
-import { ResultBadge, StageBadge } from './InspectionHistoryDetailModal';
+import InspectionBadges from './InspectionBadges';
 
 function formatWorkDateTitle(date) {
   return date.toLocaleDateString('ko-KR', {
@@ -19,13 +19,8 @@ function formatWorkDateTitle(date) {
 function FrequentRecordCard({ record }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
-      <div className="relative aspect-square bg-surface2">
-        <div className="absolute left-1.5 top-1.5 z-20">
-          <StageBadge stage={record.stage} />
-        </div>
-        <div className="absolute right-1.5 top-1.5 z-20">
-          <ResultBadge record={record} />
-        </div>
+      <div className="inspection-photo">
+        <InspectionBadges record={record} className="m-1.5 self-start" />
         {record.image_url ? (
           <SignedImage
             url={record.image_url}
@@ -39,7 +34,7 @@ function FrequentRecordCard({ record }) {
         )}
       </div>
       <div className="p-2 text-[10px] text-muted md:text-xs">
-        {record.created_at ? new Date(record.created_at).toLocaleString('ko-KR') : ''}
+        {record.created_at ? new Date(record.created_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : ''}
       </div>
     </div>
   );

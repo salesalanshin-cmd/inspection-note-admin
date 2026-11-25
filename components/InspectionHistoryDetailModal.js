@@ -11,38 +11,7 @@ import {
 import DefectMarkerOverlay from './DefectMarkerOverlay';
 import ModalShell from './ModalShell';
 import ImageZoom from './ImageZoom';
-
-function StageBadge({ stage }) {
-  const isRegular = stage === '초품' || stage === '중품' || stage === '종품';
-  return (
-    <span
-      className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
-        isRegular ? 'bg-accentSoft text-accent' : 'bg-surface2 text-muted'
-      }`}
-    >
-      {stage}
-    </span>
-  );
-}
-
-function ResultBadge({ record }) {
-  if (record.recordType === 'good') {
-    return (
-      <span className="inline-block rounded-full bg-goodSoft px-2 py-0.5 text-[10px] font-medium text-good">
-        양품
-      </span>
-    );
-  }
-
-  return (
-    <span className="inline-flex max-w-[7rem] flex-col items-end gap-0.5">
-      <span className="inline-block rounded-full bg-dangerSoft px-2 py-0.5 text-[10px] font-medium text-danger">
-        불량
-      </span>
-      <span className="truncate text-[10px] text-danger">{defectLabel(record)}</span>
-    </span>
-  );
-}
+import InspectionBadges from './InspectionBadges';
 
 export default function InspectionHistoryDetailModal({ record, workerDirectory, onClose }) {
   const [downloading, setDownloading] = useState(false);
@@ -112,10 +81,7 @@ export default function InspectionHistoryDetailModal({ record, workerDirectory, 
       footer={footerContent}
     >
       <div className="space-y-4 p-4 md:p-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <StageBadge stage={record.stage} />
-          <ResultBadge record={record} />
-        </div>
+        <InspectionBadges record={record} />
 
         <div
           className="relative mx-auto w-full overflow-hidden bg-surface2 md:rounded-xl"
@@ -160,7 +126,7 @@ export default function InspectionHistoryDetailModal({ record, workerDirectory, 
           <div>
             <div className="text-xs text-muted">촬영시각</div>
             <div className="font-medium text-text">
-              {record.created_at ? new Date(record.created_at).toLocaleString('ko-KR') : '-'}
+              {record.created_at ? new Date(record.created_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '-'}
             </div>
           </div>
           <div>
@@ -178,5 +144,3 @@ export default function InspectionHistoryDetailModal({ record, workerDirectory, 
     </ModalShell>
   );
 }
-
-export { StageBadge, ResultBadge };
