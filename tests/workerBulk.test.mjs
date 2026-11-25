@@ -102,6 +102,14 @@ describe('classifyWorkerImport', () => {
     });
   });
 
+  it('복원할 때 지원하는 언어를 선택한 경우에만 기존 사용 언어를 변경한다', () => {
+    assert.deepEqual(buildRestorePatch({ lang: 'ko' }), { removed: false, lang: 'ko' });
+    assert.deepEqual(buildRestorePatch({ lang: 'km' }), { removed: false, lang: 'km' });
+    for (const lang of [undefined, '', 'unsupported']) {
+      assert.deepEqual(buildRestorePatch({ lang }), { removed: false });
+    }
+  });
+
   it('오류 행은 등록 대상이 아니다', () => {
     const [row] = classifyWorkerImport(parseWorkerPaste('홍길동,한국,낮'), directory);
     assert.equal(row.status, 'error');
@@ -131,7 +139,17 @@ describe('buildNewWorkerRow', () => {
     assert.equal(row.organization, null);
     assert.equal(row.note, '');
     assert.equal(row.role, 'worker');
+    assert.equal(row.lang, 'ko');
     assert.equal(row.excluded, false);
+  });
+
+  it('국적과 별도로 선택한 사용 언어를 저장한다', () => {
+    for (const lang of ['ko', 'en', 'vi', 'th', 'km']) {
+      const row = buildNewWorkerRow({ name: '신규자', nationality: '베트남', lang }, 'company-1');
+      assert.equal(row.nationality, '베트남');
+      assert.equal(row.lang, lang);
+    }
+    assert.equal(buildNewWorkerRow({ name: '신규자', lang: 'unsupported' }, 'company-1').lang, 'ko');
   });
 });
 

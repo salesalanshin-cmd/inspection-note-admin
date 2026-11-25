@@ -13,8 +13,10 @@ import {
   getWorkerListStatus,
 } from '../../lib/analytics';
 import {
+  WORKER_LANGS,
   WORKER_PROCESSES,
   WORKER_ROLES,
+  normalizeWorkerLang,
   normalizeWorkerRole,
 } from '../../lib/constants';
 import { getCompanyId } from '../../lib/company';
@@ -42,6 +44,18 @@ import { useWorkerMesSync } from '../../hooks/useWorkerMesSync';
 
 const inputClass =
   'rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
+
+const emptyAddForm = {
+  name: '',
+  displayName: '',
+  nationality: '',
+  shift: '',
+  process: '',
+  organization: '',
+  lang: '',
+  role: 'inspector',
+  note: '',
+};
 
 function hasEquipmentAssigned(row) {
   return Boolean(row?.default_equipment_id);
@@ -512,16 +526,7 @@ export default function WorkerManagementPage() {
   const [bulkOrganization, setBulkOrganization] = useState('');
   const [bulkOrganizationText, setBulkOrganizationText] = useState('');
   const [bulkSaving, setBulkSaving] = useState(false);
-  const [addForm, setAddForm] = useState({
-    name: '',
-    displayName: '',
-    nationality: '',
-    shift: '',
-    process: '',
-    organization: '',
-    role: 'inspector',
-    note: '',
-  });
+  const [addForm, setAddForm] = useState(emptyAddForm);
   const [pasteText, setPasteText] = useState('');
   const [importSummary, setImportSummary] = useState(null);
   const [filterUnset, setFilterUnset] = useState(false);
@@ -567,6 +572,12 @@ export default function WorkerManagementPage() {
     }
     return map;
   }, [workerDirectory]);
+
+  const [workerToAdd] = useMemo(
+    () => classifyWorkerImport([{ name: addForm.name }], workerDirectory),
+    [addForm.name, workerDirectory]
+  );
+  const addLanguage = addForm.lang || normalizeWorkerLang(workerToAdd.existing?.lang);
 
   const allNames = useMemo(
     () => collectAllWorkerNames(defects, goods, fives, workerDirectory),
@@ -748,32 +759,19 @@ export default function WorkerManagementPage() {
   async function handleAddWorker() {
     const name = addForm.name.trim();
     if (!name) return;
-    const [classified] = classifyWorkerImport(
-      [
-        {
-          name,
-          nationality: addForm.nationality,
-          shift: addForm.shift || null,
-          process: addForm.process,
-          organization: addForm.organization,
-          error: null,
-        },
-      ],
-      workerDirectory
-    );
-    if (classified.status === 'duplicate') {
+    if (workerToAdd.status === 'duplicate') {
       setFormError(MSG_ALREADY_REGISTERED);
       return;
     }
-    if (classified.status === 'restore' && !window.confirm(MSG_RESTORE_CONFIRM)) return;
+    if (workerToAdd.status === 'restore' && !window.confirm(MSG_RESTORE_CONFIRM)) return;
 
     setSaving('__new__');
     setFormError(null);
     try {
       if (!mes.ready) throw new Error('MES 연동 대기 목록을 먼저 새로고침한 뒤 등록하세요.');
       const companyId = await getCompanyId();
-      if (classified.status === 'restore') {
-        const existing = classified.existing;
+      if (workerToAdd.status === 'restore') {
+        const existing = workerToAdd.existing;
         const { error: restoreError } = await writeWorker(existing.worker_name, existing, buildRestorePatch(addForm), companyId);
         setSaving(null);
         if (restoreError) {
@@ -793,19 +791,10 @@ export default function WorkerManagementPage() {
           return;
         }
       }
-      const savedName = classified.existing?.worker_name ?? name;
+      const savedName = workerToAdd.existing?.worker_name ?? name;
       setHiddenNames(prev => { const next = new Set(prev); next.delete(savedName); return next; });
       void mes.sync([savedName]);
-      setAddForm({
-        name: '',
-        displayName: '',
-        nationality: '',
-        shift: '',
-        process: '',
-        organization: '',
-        role: 'inspector',
-        note: '',
-      });
+      setAddForm(emptyAddForm);
       refetch();
     } catch (err) {
       setSaving(null);
@@ -1024,7 +1013,7 @@ export default function WorkerManagementPage() {
       <PageHeader
         eyebrow="SETTINGS"
         title="작업자 관리"
-        description="역할·근무조·담당업무·공정·담당 설비·제외는 목록에서 바로 바꾸고, 사용언어·국적·별칭·연락처·메모는 편집에서 설정합니다."
+        description="작업자를 추가할 때 앱에서 사용할 언어를 선택하세요. 등록 후에는 작업자 편집에서 변경할 수 있습니다."
       />
 
       <div className="space-y-6 p-4 md:p-8">
@@ -1142,6 +1131,20 @@ export default function WorkerManagementPage() {
               </datalist>
             </label>
             <label className="block text-xs text-muted">
+              언어
+              <select
+                value={addLanguage}
+                onChange={(e) => patchAddForm({ lang: e.target.value })}
+                className={`${inputClass} mt-1.5 w-full`}
+              >
+                {WORKER_LANGS.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs text-muted">
               역할
               <select
                 value={addForm.role}
@@ -1155,7 +1158,7 @@ export default function WorkerManagementPage() {
                 ))}
               </select>
             </label>
-            <label className="block text-xs text-muted sm:col-span-2">
+            <label className="col-span-full block text-xs text-muted">
               메모
               <input
                 type="text"
