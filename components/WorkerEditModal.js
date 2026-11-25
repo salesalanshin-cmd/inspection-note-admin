@@ -347,7 +347,7 @@ export default function WorkerEditModal({
       <ConfirmDialog
         open={confirmDelete}
         title="작업자 숨김"
-        message={`${workerName}을 작업자 관리 목록에서 숨김 처리하시겠습니까? 목록에서만 숨김 처리되며, 검사 데이터는 유지됩니다.`}
+          message={`${workerName}을 작업자 관리 목록에서 숨김 처리하시겠습니까? 디케이메탈 MES에서는 개인 코드가 미사용으로 전환되며 기존 검사 기록은 유지됩니다.`}
         confirmLabel="숨김"
         confirmTone="danger"
         loading={saving}

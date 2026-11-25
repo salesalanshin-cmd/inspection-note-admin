@@ -29,6 +29,16 @@
 
 `document_folder` 등 신규 테이블·컬럼도 defect-inspector 레포에서 마이그레이션을 작성·적용합니다.
 
+### 디케이메탈 작업자 MES 연동
+
+작업자 관리에서 등록·복원·제외·숨김 또는 개인 정보(표시명, 공정, 역할)를 변경하면 운용과 개발 MES에 각각 반영합니다. 제외·숨김 시 개인 코드를 미사용으로 전환하고 과거 검사 이력을 보존합니다.
+
+1. 앱 저장소의 `20261125143000_mes_worker_sync_outbox.sql` 마이그레이션을 적용하고 두 MES 환경에 작업자 연동 API를 배포합니다.
+2. Vercel에 서버 루트 주소 `MES_WORKER_SYNC_BASE_URL`을 설정합니다. 개발 서버가 별도 주소이면 `MES_WORKER_SYNC_DEV_BASE_URL`도 설정합니다. API 경로는 자동으로 붙습니다.
+3. Vercel의 `MES_WORKER_SYNC_SECRET`과 MES 서버의 `MobileMaterials__WorkerSync__Secret`에 같은 32바이트 이상의 임의 비밀값을 설정합니다. 관리자 웹의 `SUPABASE_SERVICE_ROLE_KEY`, 회사 코드와 `CRON_SECRET`도 설정되어 있어야 합니다.
+
+웹은 원본 명단을 저장한 직후 연동을 시도합니다. 창을 일찍 닫으면 Cron이 아직 전송하지 않은 변경을 처리합니다. 응답이 끊어지거나 한 환경만 실패한 경우 작업자 관리의 **MES 작업자 연동 대기**에서 해당 환경의 **MES 연동 재시도**를 누릅니다. 성공 응답 서명이 확인된 환경만 대기 목록에서 사라집니다.
+
 ## 실행 방법
 
 ```bash

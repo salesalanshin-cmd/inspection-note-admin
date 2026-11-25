@@ -16,7 +16,6 @@ import {
   WORKER_PROCESSES,
   WORKER_ROLES,
   normalizeWorkerRole,
-  normalizeWorkerLang,
 } from '../../lib/constants';
 import { getCompanyId } from '../../lib/company';
 import { supabase } from '../../lib/supabase';
@@ -39,12 +38,19 @@ import PageHeader from '../../components/PageHeader';
 import ListTruncationNotice from '../../components/ListTruncationNotice';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
 import WorkerEditModal from '../../components/WorkerEditModal';
+import { useWorkerMesSync } from '../../hooks/useWorkerMesSync';
 
 const inputClass =
   'rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none';
 
 function hasEquipmentAssigned(row) {
   return Boolean(row?.default_equipment_id);
+}
+
+function changesMesWorker(existing, patch) {
+  return !existing || ['display_name', 'process', 'role', 'removed', 'excluded'].some(
+    field => Object.hasOwn(patch, field) && patch[field] !== existing[field]
+  );
 }
 
 const IMPORT_STATUS = {
@@ -491,6 +497,7 @@ function WorkerMobileCard({
 }
 
 export default function WorkerManagementPage() {
+  const mes = useWorkerMesSync();
   const { loading, error, truncated, defects, goods, fives, workerDirectory, refetch } = useReports();
   const [saving, setSaving] = useState(null);
   const [formError, setFormError] = useState(null);
@@ -672,31 +679,16 @@ export default function WorkerManagementPage() {
     });
   }
 
-  function workerUpsertPayload(worker_name, existing, patch, companyId) {
-    return {
-      worker_name,
-      company_id: existing?.company_id ?? companyId,
-      excluded: existing?.excluded ?? false,
-      note: existing?.note ?? '',
-      default_shift:
-        existing?.default_shift === 'day' || existing?.default_shift === 'night'
-          ? existing.default_shift
-          : null,
-      handles_frequent_check: existing?.handles_frequent_check ?? true,
-      handles_fives: existing?.handles_fives ?? true,
-      handles_documents: existing?.handles_documents ?? true,
-      handles_defects: existing?.handles_defects ?? existing?.defect_enabled ?? true,
-      phone_number: existing?.phone_number ?? '',
-      display_name: existing?.display_name ?? '',
-      nationality: existing?.nationality ?? '',
-      role: normalizeWorkerRole(existing?.role),
-      lang: normalizeWorkerLang(existing?.lang),
-      process: existing?.process || null,
-      organization: existing?.organization ?? null,
-      removed: existing?.removed ?? false,
-      default_equipment_id: existing?.default_equipment_id ?? null,
-      ...patch,
-    };
+  async function writeWorker(name, existing, patch, companyId) {
+    if (changesMesWorker(existing, patch) && !mes.ready) {
+      throw new Error('MES 연동 대기 목록을 먼저 새로고침한 뒤 저장하세요.');
+    }
+    const directory = supabase.from('worker_directory');
+    if (!existing) return directory.insert({
+      ...buildNewWorkerRow({ name }, companyId), display_name: '', nationality: '', removed: false, ...patch,
+    });
+    return directory.update(patch).eq('worker_name', name).eq('company_id', companyId)
+      .select('worker_name').single();
   }
 
   async function upsertWorker(worker_name, patch) {
@@ -705,15 +697,14 @@ export default function WorkerManagementPage() {
     const existing = directoryMap.get(worker_name);
     try {
       const companyId = await getCompanyId();
-      const { error: upsertError } = await supabase
-        .from('worker_directory')
-        .upsert(workerUpsertPayload(worker_name, existing, patch, companyId));
+      const { error: upsertError } = await writeWorker(worker_name, existing, patch, companyId);
       setSaving(null);
       if (upsertError) {
         setFormError(upsertError.message);
         return false;
       }
       refetch();
+      if (changesMesWorker(existing, patch)) void mes.sync([worker_name]);
       return true;
     } catch (err) {
       setSaving(null);
@@ -735,14 +726,10 @@ export default function WorkerManagementPage() {
       const companyId = await getCompanyId();
       for (const worker_name of names) {
         const existing = directoryMap.get(worker_name);
-        const { error: upsertError } = await supabase
-          .from('worker_directory')
-          .upsert(
-            workerUpsertPayload(worker_name, existing, {
-              default_equipment_id: equipmentId,
-            }, companyId)
-          );
+        const { error: upsertError } = await writeWorker(worker_name, existing,
+          { default_equipment_id: equipmentId }, companyId);
         if (upsertError) throw new Error(upsertError.message);
+        if (!existing) void mes.sync([worker_name]);
       }
       setSelectedNames(new Set());
       setBulkEquipmentId('');
@@ -783,22 +770,11 @@ export default function WorkerManagementPage() {
     setSaving('__new__');
     setFormError(null);
     try {
+      if (!mes.ready) throw new Error('MES 연동 대기 목록을 먼저 새로고침한 뒤 등록하세요.');
       const companyId = await getCompanyId();
       if (classified.status === 'restore') {
         const existing = classified.existing;
-        const { error: restoreError } = await supabase.from('worker_directory').upsert(
-          workerUpsertPayload(
-            existing.worker_name,
-            existing,
-            buildRestorePatch({
-              nationality: addForm.nationality,
-              shift: addForm.shift || null,
-              process: addForm.process,
-              organization: addForm.organization,
-            }),
-            companyId
-          )
-        );
+        const { error: restoreError } = await writeWorker(existing.worker_name, existing, buildRestorePatch(addForm), companyId);
         setSaving(null);
         if (restoreError) {
           setFormError(restoreError.message);
@@ -817,6 +793,9 @@ export default function WorkerManagementPage() {
           return;
         }
       }
+      const savedName = classified.existing?.worker_name ?? name;
+      setHiddenNames(prev => { const next = new Set(prev); next.delete(savedName); return next; });
+      void mes.sync([savedName]);
       setAddForm({
         name: '',
         displayName: '',
@@ -853,24 +832,21 @@ export default function WorkerManagementPage() {
     let doneNew = 0;
     let doneRestore = 0;
     let failed = 0;
+    const savedNames = [];
     try {
+      if (!mes.ready) throw new Error('MES 연동 대기 목록을 먼저 새로고침한 뒤 등록하세요.');
       const companyId = await getCompanyId();
       for (const row of fresh) {
         if (row.status === 'restore') {
-          const { error: restoreError } = await supabase.from('worker_directory').upsert(
-            workerUpsertPayload(
-              row.existing.worker_name,
-              row.existing,
-              buildRestorePatch(row),
-              companyId
-            )
-          );
+          const { error: restoreError } = await writeWorker(row.existing.worker_name, row.existing,
+            buildRestorePatch(row), companyId);
           if (restoreError) {
             failed += 1;
             setFormError(restoreError.message);
             continue;
           }
           doneRestore += 1;
+          savedNames.push(row.existing.worker_name);
         } else {
           const { error: insertError } = await supabase.from('worker_directory').insert(
             buildNewWorkerRow(
@@ -891,6 +867,7 @@ export default function WorkerManagementPage() {
             continue;
           }
           doneNew += 1;
+          savedNames.push(row.name);
         }
       }
       setImportSummary(
@@ -905,6 +882,10 @@ export default function WorkerManagementPage() {
     } catch (err) {
       setFormError(err?.message || '일괄 등록에 실패했습니다.');
     } finally {
+      if (savedNames.length) {
+        setHiddenNames(prev => { const next = new Set(prev); savedNames.forEach(name => next.delete(name)); return next; });
+        void mes.sync(savedNames);
+      }
       setBulkSaving(false);
     }
   }
@@ -929,10 +910,9 @@ export default function WorkerManagementPage() {
       const companyId = await getCompanyId();
       for (const worker_name of names) {
         const existing = directoryMap.get(worker_name);
-        const { error: upsertError } = await supabase.from('worker_directory').upsert(
-          workerUpsertPayload(worker_name, existing, { default_shift: nextShift }, companyId)
-        );
+        const { error: upsertError } = await writeWorker(worker_name, existing, { default_shift: nextShift }, companyId);
         if (upsertError) throw new Error(upsertError.message);
+        if (!existing) void mes.sync([worker_name]);
       }
       setBulkShiftChoice('');
       refetch();
@@ -968,10 +948,9 @@ export default function WorkerManagementPage() {
       const companyId = await getCompanyId();
       for (const worker_name of names) {
         const existing = directoryMap.get(worker_name);
-        const { error: upsertError } = await supabase.from('worker_directory').upsert(
-          workerUpsertPayload(worker_name, existing, { organization: nextOrganization }, companyId)
-        );
+        const { error: upsertError } = await writeWorker(worker_name, existing, { organization: nextOrganization }, companyId);
         if (upsertError) throw new Error(upsertError.message);
+        if (!existing) void mes.sync([worker_name]);
       }
       setBulkOrganization('');
       setBulkOrganizationText('');
@@ -994,9 +973,7 @@ export default function WorkerManagementPage() {
 
     try {
       const companyId = await getCompanyId();
-      const { error: removeError } = await supabase
-        .from('worker_directory')
-        .upsert(workerUpsertPayload(name, existing, { removed: true }, companyId));
+      const { error: removeError } = await writeWorker(name, existing, { removed: true }, companyId);
       setSaving(null);
 
       if (removeError) {
@@ -1009,6 +986,7 @@ export default function WorkerManagementPage() {
         return;
       }
       refetch();
+      void mes.sync([name]);
     } catch (err) {
       setSaving(null);
       setHiddenNames((prev) => {
@@ -1050,6 +1028,21 @@ export default function WorkerManagementPage() {
       />
 
       <div className="space-y-6 p-4 md:p-8">
+        {(mes.error || mes.count > 0) && (
+          <section aria-live="polite" className="space-y-2 rounded-xl border border-warn/30 bg-warnSoft px-4 py-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-semibold">MES 작업자 연동{mes.count ? ` 대기 ${mes.count}건` : ''}</h2>
+              <button type="button" className="underline" onClick={mes.refresh}>상태 새로고침</button>
+            </div>
+            {mes.error && <p>{mes.error}</p>}
+            {mes.pending.map(row => (
+              <div key={row.change_id} className="flex flex-wrap items-center justify-between gap-2">
+                <span>{row.worker_name} · {row.environment === 'production' ? '운용' : '개발'}</span>
+                <button type="button" className="underline" onClick={() => mes.sync([row.worker_name], row.environment)}>MES 연동 재시도</button>
+              </div>
+            ))}
+          </section>
+        )}
         {truncated ? <ListTruncationNotice show /> : null}
         {unassignedCount > 0 ? (
           <div className="rounded-xl border border-warn/30 bg-warnSoft px-4 py-3 text-sm text-text">
@@ -1505,7 +1498,7 @@ export default function WorkerManagementPage() {
         </div>
 
         <p className="text-xs text-muted">
-          제외된 작업자는 작업자 현황, 자주검사, 대시보드 등 집계 화면에서 표시되지 않습니다.
+          제외된 작업자는 집계에서 제외됩니다. 디케이메탈의 MES 개인 코드는 제외·숨김 시 미사용으로 전환되며 기존 검사 기록은 유지됩니다.
           표시 이름(별칭)은 화면·엑셀에만 쓰이며, 저장·필터·조회 키는 원본 이름을 유지합니다. 근무조를
           주간/야간으로 고정하면 자동 판단보다 우선 적용됩니다. 담당공정은 현황·대시보드 공정 필터에
           사용되며, 미지정 작업자는 &quot;전체&quot;에서만 보입니다. 담당 설비는 불량 기록에 자동

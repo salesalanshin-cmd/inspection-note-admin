@@ -2,6 +2,10 @@
   "regions": ["hnd1"],
   "crons": [
     {
+      "path": "/api/cron/mes-worker-sync",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/auto-notify",
       "schedule": "*/15 * * * *"
     },
