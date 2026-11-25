@@ -1,5 +1,8 @@
 'use client';
 
+import { confirmedWrite } from '../../lib/confirmedWrite';
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ClipboardCheck, FileText, LayoutGrid, Pencil } from 'lucide-react';
@@ -690,16 +693,21 @@ export default function WorkerManagementPage() {
     });
   }
 
+  function insertWorker(data) {
+    return confirmedWrite(supabase.from('worker_directory').insert(data), 'worker_name');
+  }
+
   async function writeWorker(name, existing, patch, companyId) {
     if (changesMesWorker(existing, patch) && !mes.ready) {
       throw new Error('MES 연동 대기 목록을 먼저 새로고침한 뒤 저장하세요.');
     }
-    const directory = supabase.from('worker_directory');
-    if (!existing) return directory.insert({
+    if (!existing) return insertWorker({
       ...buildNewWorkerRow({ name }, companyId), display_name: '', nationality: '', removed: false, ...patch,
     });
-    return directory.update(patch).eq('worker_name', name).eq('company_id', companyId)
-      .select('worker_name').single();
+    return confirmedWrite(
+      supabase.from('worker_directory').update(patch).eq('worker_name', name).eq('company_id', companyId),
+      'worker_name'
+    );
   }
 
   async function upsertWorker(worker_name, patch) {
@@ -712,14 +720,17 @@ export default function WorkerManagementPage() {
       setSaving(null);
       if (upsertError) {
         setFormError(upsertError.message);
+        notifyAction('작업자 정보를 저장하지 못했습니다.', 'error');
         return false;
       }
       refetch();
       if (changesMesWorker(existing, patch)) void mes.sync([worker_name]);
+      notifyAction('작업자 정보를 저장했습니다.');
       return true;
     } catch (err) {
       setSaving(null);
       setFormError(err?.message || '저장에 실패했습니다.');
+      notifyAction('작업자 정보를 저장하지 못했습니다.', 'error');
       return false;
     }
   }
@@ -733,6 +744,7 @@ export default function WorkerManagementPage() {
     setBulkSaving(true);
     setFormError(null);
     const equipmentId = bulkEquipmentId === '' ? null : bulkEquipmentId;
+    let updated = 0;
     try {
       const companyId = await getCompanyId();
       for (const worker_name of names) {
@@ -740,13 +752,17 @@ export default function WorkerManagementPage() {
         const { error: upsertError } = await writeWorker(worker_name, existing,
           { default_equipment_id: equipmentId }, companyId);
         if (upsertError) throw new Error(upsertError.message);
+        updated += 1;
         if (!existing) void mes.sync([worker_name]);
       }
       setSelectedNames(new Set());
       setBulkEquipmentId('');
       refetch();
+      notifyAction(`작업자 ${updated}명의 설비 정보를 저장했습니다.`);
     } catch (err) {
       setFormError(err?.message || '일괄 지정에 실패했습니다.');
+      if (updated) refetch();
+      notifyAction(`설비 일괄 변경 중단 · ${updated}/${names.length}명 저장`, updated ? 'warning' : 'error');
     } finally {
       setBulkSaving(false);
     }
@@ -761,6 +777,7 @@ export default function WorkerManagementPage() {
     if (!name) return;
     if (workerToAdd.status === 'duplicate') {
       setFormError(MSG_ALREADY_REGISTERED);
+      notifyAction(MSG_ALREADY_REGISTERED, 'warning');
       return;
     }
     if (workerToAdd.status === 'restore' && !window.confirm(MSG_RESTORE_CONFIRM)) return;
@@ -776,10 +793,11 @@ export default function WorkerManagementPage() {
         setSaving(null);
         if (restoreError) {
           setFormError(restoreError.message);
+          notifyAction('작업자를 복원하지 못했습니다.', 'error');
           return;
         }
       } else {
-        const { error: insertError } = await supabase.from('worker_directory').insert(
+        const { error: insertError } = await insertWorker(
           buildNewWorkerRow(
             { ...addForm, name, role: normalizeWorkerRole(addForm.role) },
             companyId
@@ -788,6 +806,7 @@ export default function WorkerManagementPage() {
         setSaving(null);
         if (insertError) {
           setFormError(insertError.message);
+          notifyAction('작업자를 등록하지 못했습니다.', 'error');
           return;
         }
       }
@@ -795,10 +814,12 @@ export default function WorkerManagementPage() {
       setHiddenNames(prev => { const next = new Set(prev); next.delete(savedName); return next; });
       void mes.sync([savedName]);
       setAddForm(emptyAddForm);
+      notifyAction(workerToAdd.status === 'restore' ? '작업자를 복원했습니다.' : '작업자를 등록했습니다.');
       refetch();
     } catch (err) {
       setSaving(null);
       setFormError(err?.message || '추가에 실패했습니다.');
+      notifyAction('작업자를 등록하지 못했습니다.', 'error');
     }
   }
 
@@ -837,7 +858,7 @@ export default function WorkerManagementPage() {
           doneRestore += 1;
           savedNames.push(row.existing.worker_name);
         } else {
-          const { error: insertError } = await supabase.from('worker_directory').insert(
+          const { error: insertError } = await insertWorker(
             buildNewWorkerRow(
               {
                 name: row.name,
@@ -864,12 +885,18 @@ export default function WorkerManagementPage() {
           failed ? ` 실패 ${failed}명.` : ''
         }`
       );
+      const skipped = skippedDup + skippedErr;
+      notifyAction(
+        `신규 ${doneNew}명 · 복원 ${doneRestore}명 · 건너뜀 ${skipped}명 · 실패 ${failed}명`,
+        failed || skipped ? 'warning' : 'success'
+      );
       if (doneNew || doneRestore) {
         setPasteText('');
         refetch();
       }
     } catch (err) {
       setFormError(err?.message || '일괄 등록에 실패했습니다.');
+      notifyAction(`작업자 일괄 등록이 중단되었습니다. ${savedNames.length}명 처리 완료`, savedNames.length ? 'warning' : 'error');
     } finally {
       if (savedNames.length) {
         setHiddenNames(prev => { const next = new Set(prev); savedNames.forEach(name => next.delete(name)); return next; });
@@ -895,18 +922,23 @@ export default function WorkerManagementPage() {
 
     setBulkSaving(true);
     setFormError(null);
+    let updated = 0;
     try {
       const companyId = await getCompanyId();
       for (const worker_name of names) {
         const existing = directoryMap.get(worker_name);
         const { error: upsertError } = await writeWorker(worker_name, existing, { default_shift: nextShift }, companyId);
         if (upsertError) throw new Error(upsertError.message);
+        updated += 1;
         if (!existing) void mes.sync([worker_name]);
       }
       setBulkShiftChoice('');
       refetch();
+      notifyAction(`작업자 ${updated}명의 근무조 정보를 저장했습니다.`);
     } catch (err) {
       setFormError(err?.message || '교대 일괄 변경에 실패했습니다.');
+      if (updated) refetch();
+      notifyAction(`근무조 일괄 변경 중단 · ${updated}/${names.length}명 저장`, updated ? 'warning' : 'error');
     } finally {
       setBulkSaving(false);
     }
@@ -933,22 +965,32 @@ export default function WorkerManagementPage() {
 
     setBulkSaving(true);
     setFormError(null);
+    let updated = 0;
     try {
       const companyId = await getCompanyId();
       for (const worker_name of names) {
         const existing = directoryMap.get(worker_name);
         const { error: upsertError } = await writeWorker(worker_name, existing, { organization: nextOrganization }, companyId);
         if (upsertError) throw new Error(upsertError.message);
+        updated += 1;
         if (!existing) void mes.sync([worker_name]);
       }
       setBulkOrganization('');
       setBulkOrganizationText('');
       refetch();
+      notifyAction(`작업자 ${updated}명의 조직 정보를 저장했습니다.`);
     } catch (err) {
       setFormError(err?.message || '조직 일괄 변경에 실패했습니다.');
+      if (updated) refetch();
+      notifyAction(`조직 일괄 변경 중단 · ${updated}/${names.length}명 저장`, updated ? 'warning' : 'error');
     } finally {
       setBulkSaving(false);
     }
+  }
+
+  function showWorker(name) {
+    setEditTarget(name);
+    notifyAction('작업자 정보를 조회했습니다.');
   }
 
   async function handleRemoveWorker(name) {
@@ -972,10 +1014,12 @@ export default function WorkerManagementPage() {
           return next;
         });
         setFormError(removeError.message);
+        notifyAction('작업자를 삭제하지 못했습니다.', 'error');
         return;
       }
       refetch();
       void mes.sync([name]);
+      notifyAction('작업자를 삭제했습니다.');
     } catch (err) {
       setSaving(null);
       setHiddenNames((prev) => {
@@ -984,6 +1028,7 @@ export default function WorkerManagementPage() {
         return next;
       });
       setFormError(err?.message || '삭제에 실패했습니다.');
+      notifyAction('작업자를 삭제하지 못했습니다.', 'error');
     }
   }
 
@@ -1021,7 +1066,7 @@ export default function WorkerManagementPage() {
           <section aria-live="polite" className="space-y-2 rounded-xl border border-warn/30 bg-warnSoft px-4 py-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-semibold">MES 작업자 연동{mes.count ? ` 대기 ${mes.count}건` : ''}</h2>
-              <button type="button" className="underline" onClick={mes.refresh}>상태 새로고침</button>
+              <button type="button" className="underline" onClick={() => mes.refresh(true)}>상태 새로고침</button>
             </div>
             {mes.error && <p>{mes.error}</p>}
             {mes.pending.map(row => (
@@ -1438,7 +1483,7 @@ export default function WorkerManagementPage() {
               selected={selectedNames.has(name)}
               onToggleSelect={toggleSelect}
               onUpsert={upsertWorker}
-              onEdit={setEditTarget}
+              onEdit={showWorker}
             />
           ))}
           {tableNames.length === 0 ? (
@@ -1486,7 +1531,7 @@ export default function WorkerManagementPage() {
                   selected={selectedNames.has(name)}
                   onToggleSelect={toggleSelect}
                   onUpsert={upsertWorker}
-                  onEdit={setEditTarget}
+                  onEdit={showWorker}
                 />
               ))}
               {tableNames.length === 0 && (

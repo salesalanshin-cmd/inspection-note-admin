@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import useFilteredQueryFeedback from '../../../hooks/useFilteredQueryFeedback';
 import PageHeader from '../../../components/PageHeader';
 import { attendanceFieldLabel, displayAttendanceValue, summarizeAttendanceEdits } from '../../../lib/attendance/excelImport';
 import { fetchAttendanceDaily, fetchAttendanceEditLogs } from '../../../lib/attendance/clientApi';
@@ -23,6 +24,7 @@ function formatEditedAt(value) {
 }
 
 export default function AttendanceEditsPage() {
+  const queryFeedback = useFilteredQueryFeedback('근태 수정 이력');
   const initial = getRecentDaysRange(30);
   const [start, setStart] = useState(initial.start);
   const [end, setEnd] = useState(initial.end);
@@ -41,6 +43,7 @@ export default function AttendanceEditsPage() {
       return undefined;
     }
     let cancelled = false;
+    const finish = queryFeedback.begin();
     setLoading(true);
     setError(null);
     (async () => {
@@ -57,11 +60,13 @@ export default function AttendanceEditsPage() {
         setLogs(logResult.rows || []);
         setDailyRows(dailyResult.rows || []);
         setTruncated(Boolean(logResult.truncated || dailyResult.truncated));
+        finish();
       } catch (err) {
         if (!cancelled) {
           setLogs([]);
           setDailyRows([]);
           setError(err?.message || '수정 이력을 불러오지 못했습니다.');
+          finish(false);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -70,7 +75,7 @@ export default function AttendanceEditsPage() {
     return () => {
       cancelled = true;
     };
-  }, [start, end]);
+  }, [start, end, queryFeedback]);
 
   const summary = useMemo(() => summarizeAttendanceEdits(logs, dailyRows), [logs, dailyRows]);
 
@@ -83,9 +88,15 @@ export default function AttendanceEditsPage() {
       />
       <div className="space-y-4 px-4 pb-8 pt-4 md:px-8">
         <div className="flex flex-wrap items-center gap-2">
-          <input type="date" value={start} onChange={(event) => setStart(event.target.value)} className={inputClass} />
+          <input type="date" value={start} onChange={(event) => {
+            queryFeedback.mark();
+            setStart(event.target.value);
+          }} className={inputClass} />
           <span className="text-sm text-muted">~</span>
-          <input type="date" value={end} onChange={(event) => setEnd(event.target.value)} className={inputClass} />
+          <input type="date" value={end} onChange={(event) => {
+            queryFeedback.mark();
+            setEnd(event.target.value);
+          }} className={inputClass} />
         </div>
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         {truncated ? <p className="text-xs text-warn">{LIST_TRUNCATION_MESSAGE}</p> : null}

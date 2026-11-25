@@ -1,5 +1,9 @@
 'use client';
 
+import useFilteredQueryFeedback from '../../hooks/useFilteredQueryFeedback';
+
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useCallback, useEffect, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import SignedImage from '../../components/SignedImage';
@@ -38,6 +42,7 @@ const KINDS = [
 ];
 
 export default function EquipmentChecksPage() {
+  const queryFeedback = useFilteredQueryFeedback('점검 목록');
   const [date, setDate] = useState(() => getWorkDateForRecord(new Date()));
   const [kind, setKind] = useState('equipment_check');
   const [rows, setRows] = useState([]);
@@ -49,19 +54,22 @@ export default function EquipmentChecksPage() {
   const [detailError, setDetailError] = useState(null);
 
   const loadList = useCallback(async () => {
+    const finish = queryFeedback.begin();
     setLoading(true);
     setError(null);
     try {
       const data = await fetchInspectionHeaders({ date, kind });
       setRows(data.rows || []);
+      finish();
       if (data.date && data.date !== date) setDate(data.date);
     } catch (err) {
       setRows([]);
       setError(err?.message || '목록을 불러오지 못했습니다.');
+      finish(false);
     } finally {
       setLoading(false);
     }
-  }, [date, kind]);
+  }, [date, kind, queryFeedback]);
 
   useEffect(() => {
     loadList();
@@ -81,8 +89,10 @@ export default function EquipmentChecksPage() {
     try {
       const data = await fetchInspectionHeaderDetail(id);
       setDetail(data);
+      notifyAction('점검 상세 기록을 조회했습니다.');
     } catch (err) {
       setDetailError(err?.message || '상세를 불러오지 못했습니다.');
+      notifyAction('점검 상세 기록을 조회하지 못했습니다.', 'error');
     } finally {
       setDetailLoading(false);
     }
@@ -103,7 +113,7 @@ export default function EquipmentChecksPage() {
             <input
               type="date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => { queryFeedback.mark(); setDate(e.target.value); }}
               className={selectClass}
             />
           </label>
@@ -113,7 +123,12 @@ export default function EquipmentChecksPage() {
                 key={tab.value}
                 type="button"
                 className={tabClass(kind === tab.value)}
-                onClick={() => setKind(tab.value)}
+                onClick={() => {
+                  if (kind !== tab.value) {
+                    queryFeedback.mark();
+                    setKind(tab.value);
+                  }
+                }}
               >
                 {tab.label}
               </button>

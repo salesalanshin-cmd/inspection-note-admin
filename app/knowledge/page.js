@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { notifyAction } from '../../lib/actionFeedback';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Plus, RefreshCw, Upload } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
@@ -132,7 +134,10 @@ export default function KnowledgePage() {
 
   const [togglingId, setTogglingId] = useState(null);
 
-  const load = useCallback(async () => {
+  const latestQuery = useRef(0);
+  const previousQuery = useRef(null);
+  const load = useCallback(async (announce = false) => {
+    const request = ++latestQuery.current;
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -143,19 +148,26 @@ export default function KnowledgePage() {
 
       const res = await fetch(`/api/knowledge?${params}`);
       const json = await res.json();
+      if (request !== latestQuery.current) return;
       if (!res.ok) throw new Error(json.error || '목록 조회 실패');
       setItems(json.items || []);
       setActiveCount(json.activeCount ?? 0);
       setError(null);
+      if (announce) notifyAction('지식 목록을 조회했습니다.');
     } catch (err) {
+      if (request !== latestQuery.current) return;
       setError(err.message || '목록을 불러오지 못했습니다.');
+      if (announce) notifyAction('지식 목록을 불러오지 못했습니다.', 'error');
     } finally {
-      setLoading(false);
+      if (request === latestQuery.current) setLoading(false);
     }
   }, [sourceType, includeInactive, search, sort]);
 
   useEffect(() => {
-    load();
+    const changed = previousQuery.current !== null && previousQuery.current !== load;
+    previousQuery.current = load;
+    load(changed);
+    return () => { latestQuery.current += 1; };
   }, [load]);
 
   useEffect(() => {
@@ -196,10 +208,11 @@ export default function KnowledgePage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '저장 실패');
+      notifyAction('지식을 수정했습니다.');
       setEditItem(null);
       await load();
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '지식을 수정하지 못했습니다.', 'error');
     } finally {
       setSavingEdit(false);
     }
@@ -216,9 +229,10 @@ export default function KnowledgePage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '변경 실패');
+      notifyAction(item.is_active ? '지식을 비활성화했습니다.' : '지식을 활성화했습니다.');
       await load();
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '지식 상태를 변경하지 못했습니다.', 'error');
     } finally {
       setTogglingId(null);
     }
@@ -241,7 +255,9 @@ export default function KnowledgePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '등록 실패');
       if (!json.embeddingSaved) {
-        alert(`등록됐으나 임베딩 실패: ${json.embeddingError || '알 수 없음'}`);
+        notifyAction('지식을 등록했지만 검색 색인을 만들지 못했습니다.', 'warning');
+      } else {
+        notifyAction('지식을 등록했습니다.');
       }
       setShowCreate(false);
       setCreateQuestion('');
@@ -249,7 +265,7 @@ export default function KnowledgePage() {
       setCreateSourceLabel('');
       await load();
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '지식을 등록하지 못했습니다.', 'error');
     } finally {
       setCreating(false);
     }
@@ -275,10 +291,14 @@ export default function KnowledgePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '일괄 등록 실패');
       setBulkResult(json);
+      const summary = [`지식 ${json.created}건 등록`];
+      if (json.skipped) summary.push(`${json.skipped}건 건너뜀`);
+      if (json.embeddingErrors) summary.push(`색인 실패 ${json.embeddingErrors}건`);
+      notifyAction(summary.join(' · '), summary.length > 1 ? 'warning' : 'success');
       setCsvText('');
       await load();
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '지식을 일괄 등록하지 못했습니다.', 'error');
     } finally {
       setBulkImporting(false);
     }
@@ -296,7 +316,7 @@ export default function KnowledgePage() {
               <Plus className="h-4 w-4" />
               직접 등록
             </button>
-            <button type="button" onClick={load} className={btnSecondary}>
+            <button type="button" onClick={() => load(true)} className={btnSecondary}>
               <RefreshCw className="h-4 w-4" />
               새로고침
             </button>

@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useMemo, useRef, useState } from 'react';
 import { Lock, Sparkles } from 'lucide-react';
 import { exportDateStamp, exportToExcel } from '../../lib/exportExcel';
@@ -160,6 +162,7 @@ export default function InsightLabPage() {
         // eslint-disable-next-line no-console
         console.error('[insight-lab]', payload.error || res.statusText);
         setError(payload.error || '인사이트 랩을 사용할 수 없습니다. 관리자에게 문의하세요.');
+        notifyAction('답변을 불러오지 못했습니다.', 'error');
         return;
       }
 
@@ -172,10 +175,12 @@ export default function InsightLabPage() {
           columns: payload.columns,
         },
       ]);
+      notifyAction('분석 답변을 받았습니다.');
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[insight-lab]', err);
       setError('인사이트 랩을 사용할 수 없습니다. 관리자에게 문의하세요.');
+      notifyAction('답변을 불러오지 못했습니다.', 'error');
     } finally {
       setLoading(false);
       requestAnimationFrame(() => {

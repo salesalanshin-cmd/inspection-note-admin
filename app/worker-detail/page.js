@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useReports } from '../../lib/useReports';
@@ -222,6 +224,7 @@ function WorkerDetailContent() {
 
   function handleSelectWorker(name) {
     setSelectedName(name);
+    if (name) notifyAction('작업자 상세 기록을 조회했습니다.');
     const params = new URLSearchParams(searchParams.toString());
     if (name) params.set('name', name);
     else params.delete('name');

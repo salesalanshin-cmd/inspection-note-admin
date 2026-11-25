@@ -1,9 +1,12 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Trash2 } from 'lucide-react';
+import { confirmedWrite } from '../../lib/confirmedWrite';
 import { supabase } from '../../lib/supabase';
 import {
   clearCompanyIdCache,
@@ -42,7 +45,7 @@ function draftId() {
 function validateEquipmentRow(row) {
   const name = (row.name ?? '').trim();
   if (!name) return { valid: false, errors: ['name 필수'] };
-  const cap = (row.max_capacity ?? '').trim();
+  const cap = String(row.max_capacity ?? '').trim();
   if (cap && Number.isNaN(Number(cap))) {
     return { valid: false, errors: ['max_capacity 숫자'] };
   }
@@ -55,14 +58,14 @@ function validateProductMoldRow(row) {
   const errors = [];
   if (!productName) errors.push('product_name 필수');
   if (!moldCode) errors.push('mold_code 필수');
-  const cycle = (row.standard_cycle_time_sec ?? '').trim();
+  const cycle = String(row.standard_cycle_time_sec ?? '').trim();
   if (cycle && Number.isNaN(Number(cycle))) errors.push('standard_cycle_time_sec 숫자');
   if (errors.length) return { valid: false, errors };
   return { valid: true };
 }
 
 function equipmentPayload(row, companyId) {
-  const cap = (row.max_capacity ?? '').trim();
+  const cap = String(row.max_capacity ?? '').trim();
   const installed = (row.installed_at ?? '').trim();
   return {
     company_id: companyId,
@@ -74,7 +77,7 @@ function equipmentPayload(row, companyId) {
 }
 
 function productMoldPayload(row, companyId) {
-  const cycle = (row.standard_cycle_time_sec ?? '').trim();
+  const cycle = String(row.standard_cycle_time_sec ?? '').trim();
   return {
     company_id: companyId,
     product_name: row.product_name.trim(),
@@ -106,6 +109,8 @@ function MasterPageContent() {
   const [regenConfirm, setRegenConfirm] = useState(false);
   const [newCompany, setNewCompany] = useState({ name: '', code: '' });
   const prefillApplied = useRef(false);
+  const storedEquipment = useRef(new Map());
+  const storedProductMolds = useRef(new Map());
 
   const companyId = company?.id ?? null;
 
@@ -142,6 +147,8 @@ function MasterPageContent() {
     setCompany(co);
     setCompanyName(co?.name ?? '');
     setShowApiKey(false);
+    storedEquipment.current = new Map((equipmentRes.data ?? []).map((row) => [row.id, row]));
+    storedProductMolds.current = new Map((moldRes.data ?? []).map((row) => [row.id, row]));
     setEquipment(equipmentRes.data ?? []);
     setProductMolds(moldRes.data ?? []);
   }, []);
@@ -188,6 +195,16 @@ function MasterPageContent() {
     });
   }, [prefillProductName, loading]);
 
+  async function refreshAfterSave(message, tone = 'success') {
+    try {
+      await fetchAll();
+      notifyAction(message, tone);
+    } catch (err) {
+      setFormError(err?.message || '목록을 새로고침하지 못했습니다.');
+      notifyAction(`${message} 목록 새로고침에 실패했습니다.`, 'warning');
+    }
+  }
+
   async function handleSaveCompany() {
     const name = companyName.trim();
     if (!name) {
@@ -200,32 +217,34 @@ function MasterPageContent() {
     }
     setSaving('company');
     setFormError(null);
-    const { error: updateError } = await supabase
+    const { error: updateError } = await confirmedWrite(supabase
       .from('company')
       .update({ name })
-      .eq('id', company.id);
+      .eq('id', company.id));
     setSaving(null);
     if (updateError) {
       setFormError(updateError.message);
+      notifyAction('회사 이름을 저장하지 못했습니다.', 'error');
       return;
     }
-    await fetchAll();
+    await refreshAfterSave('회사 이름을 저장했습니다.');
   }
 
   async function handleToggleActive() {
     if (!company?.id) return;
     setSaving('company-active');
     setFormError(null);
-    const { error: updateError } = await supabase
+    const { error: updateError } = await confirmedWrite(supabase
       .from('company')
       .update({ is_active: !company.is_active })
-      .eq('id', company.id);
+      .eq('id', company.id));
     setSaving(null);
     if (updateError) {
       setFormError(updateError.message);
+      notifyAction('회사 사용 상태를 변경하지 못했습니다.', 'error');
       return;
     }
-    await fetchAll();
+    await refreshAfterSave('회사 사용 상태를 변경했습니다.');
   }
 
   async function handleRegenerateApiKey() {
@@ -233,18 +252,19 @@ function MasterPageContent() {
     setSaving('company-key');
     setFormError(null);
     const nextKey = crypto.randomUUID();
-    const { error: updateError } = await supabase
+    const { error: updateError } = await confirmedWrite(supabase
       .from('company')
       .update({ api_key: nextKey })
-      .eq('id', company.id);
+      .eq('id', company.id));
     setSaving(null);
     setRegenConfirm(false);
     if (updateError) {
       setFormError(updateError.message);
+      notifyAction('회사 API 키를 재발급하지 못했습니다.', 'error');
       return;
     }
     setShowApiKey(true);
-    await fetchAll();
+    await refreshAfterSave('회사 API 키를 재발급했습니다.');
   }
 
   async function handleCreateCompany() {
@@ -260,21 +280,21 @@ function MasterPageContent() {
     }
     setSaving('company-create');
     setFormError(null);
-    const { data, error: insertError } = await supabase
+    const { data, error: insertError } = await confirmedWrite(supabase
       .from('company')
       .insert({
         name,
         code,
         api_key: crypto.randomUUID(),
         is_active: true,
-      })
-      .select()
-      .single();
+      }), 'id', 'id,code');
     setSaving(null);
     if (insertError) {
       setFormError(insertError.message);
+      notifyAction('회사를 등록하지 못했습니다.', 'error');
       return;
     }
+    notifyAction('새 회사를 등록했습니다.');
     setNewCompany({ name: '', code: '' });
     clearCompanyIdCache();
     setFormError(
@@ -290,34 +310,28 @@ function MasterPageContent() {
     const name = (row.name ?? '').trim();
     if (!name) return false;
 
+    const payload = equipmentPayload(row, companyId);
+    const stored = storedEquipment.current.get(row.id);
+    if (stored) {
+      const previous = equipmentPayload(stored, companyId);
+      if (Object.keys(payload).every((key) => payload[key] === previous[key])) return true;
+    }
     setSaving(`eq-${row.id}`);
     setFormError(null);
-    const payload = equipmentPayload(row, companyId);
-
-    let dbError;
-    if (row.id && !String(row.id).startsWith('draft-')) {
-      ({ error: dbError } = await supabase
-        .from('equipment')
-        .update(payload)
-        .eq('id', row.id)
-        .eq('company_id', companyId));
-    } else {
-      const { data, error: insertError } = await supabase
-        .from('equipment')
-        .insert(payload)
-        .select()
-        .single();
-      dbError = insertError;
-      if (!insertError && data) {
-        setEquipment((prev) => prev.map((r) => (r.id === row.id ? data : r)));
-      }
-    }
+    const table = supabase.from('equipment');
+    const mutation = row._draft
+      ? table.insert(payload)
+      : table.update(payload).eq('id', row.id).eq('company_id', companyId);
+    const { data: saved, error: dbError } = await confirmedWrite(mutation, 'id', '*');
     setSaving(null);
     if (dbError) {
       setFormError(dbError.message);
+      notifyAction('설비 정보를 저장하지 못했습니다.', 'error');
       return false;
     }
-    await fetchAll();
+    storedEquipment.current.set(saved.id, saved);
+    setEquipment((prev) => prev.map((r) => (r.id === row.id ? saved : r)));
+    notifyAction('설비 정보를 저장했습니다.');
     return true;
   }
 
@@ -327,17 +341,18 @@ function MasterPageContent() {
       return;
     }
     setSaving(`eq-del-${id}`);
-    const { error: delError } = await supabase
+    const { error: delError } = await confirmedWrite(supabase
       .from('equipment')
       .delete()
       .eq('id', id)
-      .eq('company_id', companyId);
+      .eq('company_id', companyId));
     setSaving(null);
     if (delError) {
       setFormError(delError.message);
+      notifyAction('설비를 삭제하지 못했습니다.', 'error');
       return;
     }
-    await fetchAll();
+    await refreshAfterSave('설비를 삭제했습니다.');
   }
 
   /**
@@ -361,6 +376,12 @@ function MasterPageContent() {
         source: 'manual',
       });
       if (!result.skipped) {
+        if (result.logError) {
+          setFormError(result.logError.message);
+          notifyAction('설비 금형을 변경했지만 교체 이력 저장을 확인하지 못했습니다.', 'warning');
+        } else {
+          notifyAction('설비의 현재 금형을 변경했습니다.');
+        }
         setEquipment((prevList) =>
           prevList.map((r) =>
             r.id === row.id
@@ -376,6 +397,7 @@ function MasterPageContent() {
       }
     } catch (err) {
       setFormError(err?.message || '금형 변경에 실패했습니다.');
+      notifyAction('금형 변경을 완료하지 못했습니다.', 'error');
     } finally {
       setSaving(null);
     }
@@ -389,34 +411,28 @@ function MasterPageContent() {
     const validation = validateProductMoldRow(row);
     if (!validation.valid) return false;
 
+    const payload = productMoldPayload(row, companyId);
+    const stored = storedProductMolds.current.get(row.id);
+    if (stored) {
+      const previous = productMoldPayload(stored, companyId);
+      if (Object.keys(payload).every((key) => payload[key] === previous[key])) return true;
+    }
     setSaving(`pm-${row.id}`);
     setFormError(null);
-    const payload = productMoldPayload(row, companyId);
-
-    let dbError;
-    if (row.id && !String(row.id).startsWith('draft-')) {
-      ({ error: dbError } = await supabase
-        .from('product_mold')
-        .update(payload)
-        .eq('id', row.id)
-        .eq('company_id', companyId));
-    } else {
-      const { data, error: insertError } = await supabase
-        .from('product_mold')
-        .insert(payload)
-        .select()
-        .single();
-      dbError = insertError;
-      if (!insertError && data) {
-        setProductMolds((prev) => prev.map((r) => (r.id === row.id ? data : r)));
-      }
-    }
+    const table = supabase.from('product_mold');
+    const mutation = row._draft
+      ? table.insert(payload)
+      : table.update(payload).eq('id', row.id).eq('company_id', companyId);
+    const { data: saved, error: dbError } = await confirmedWrite(mutation, 'id', '*');
     setSaving(null);
     if (dbError) {
       setFormError(dbError.message);
+      notifyAction('제품 금형 정보를 저장하지 못했습니다.', 'error');
       return false;
     }
-    await fetchAll();
+    storedProductMolds.current.set(saved.id, saved);
+    setProductMolds((prev) => prev.map((r) => (r.id === row.id ? saved : r)));
+    notifyAction('제품 금형 정보를 저장했습니다.');
     return true;
   }
 
@@ -426,17 +442,18 @@ function MasterPageContent() {
       return;
     }
     setSaving(`pm-del-${id}`);
-    const { error: delError } = await supabase
+    const { error: delError } = await confirmedWrite(supabase
       .from('product_mold')
       .delete()
       .eq('id', id)
-      .eq('company_id', companyId);
+      .eq('company_id', companyId));
     setSaving(null);
     if (delError) {
       setFormError(delError.message);
+      notifyAction('제품 금형을 삭제하지 못했습니다.', 'error');
       return;
     }
-    await fetchAll();
+    await refreshAfterSave('제품 금형을 삭제했습니다.');
   }
 
   function updateEquipmentLocal(id, patch) {
@@ -467,21 +484,22 @@ function MasterPageContent() {
     ]);
   }
 
-  async function importEquipmentCsv(rows) {
+  async function importMasterRows(rows, table, label, makePayload) {
     if (!companyId) return { ok: false, message: '회사를 먼저 등록하세요.' };
-    const payloads = rows.map((row) => equipmentPayload(row, companyId));
-    const { error: insertError } = await supabase.from('equipment').insert(payloads);
-    if (insertError) return { ok: false, message: insertError.message };
-    await fetchAll();
-    return { ok: true };
-  }
-
-  async function importProductMoldCsv(rows) {
-    if (!companyId) return { ok: false, message: '회사를 먼저 등록하세요.' };
-    const payloads = rows.map((row) => productMoldPayload(row, companyId));
-    const { error: insertError } = await supabase.from('product_mold').insert(payloads);
-    if (insertError) return { ok: false, message: insertError.message };
-    await fetchAll();
+    const payloads = rows.map((row) => makePayload(row, companyId));
+    const { data, count, error: insertError } = await supabase.from(table)
+      .insert(payloads, { count: 'exact' }).select('id');
+    if (insertError) {
+      notifyAction(`${label} 일괄 등록에 실패했습니다.`, 'error');
+      return { ok: false, message: insertError.message };
+    }
+    const storedCount = count ?? data?.length;
+    if (storedCount !== rows.length) {
+      const message = `${label} 등록 ${rows.length}건 중 ${storedCount ?? 0}건을 확인했습니다. 목록을 확인해 주세요.`;
+      await refreshAfterSave(message, 'warning');
+      return { ok: false, message };
+    }
+    await refreshAfterSave(`${label} ${storedCount}건을 등록했습니다.`);
     return { ok: true };
   }
 
@@ -712,7 +730,7 @@ function MasterPageContent() {
               expectedHeaders={EQUIPMENT_CSV_HEADERS}
               headerHelp="첫 줄은 아래 헤더명과 동일해야 합니다. name은 필수입니다."
               validateRow={validateEquipmentRow}
-              onImport={importEquipmentCsv}
+              onImport={(rows) => importMasterRows(rows, 'equipment', '설비', equipmentPayload)}
               disabled={!companyId}
             />
 
@@ -947,7 +965,7 @@ function MasterPageContent() {
               expectedHeaders={PRODUCT_MOLD_CSV_HEADERS}
               headerHelp="product_name, mold_code는 필수입니다."
               validateRow={validateProductMoldRow}
-              onImport={importProductMoldCsv}
+              onImport={(rows) => importMasterRows(rows, 'product_mold', '제품 금형', productMoldPayload)}
               disabled={!companyId}
             />
 

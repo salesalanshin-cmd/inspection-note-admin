@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import Link from 'next/link';
 import { Fragment, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
@@ -122,7 +124,13 @@ export default function InspectionHistoryPage() {
 
   const groupedCompliance = useMemo(() => groupComplianceByShift(compliance), [compliance]);
 
+  function openWorkerHistory(name) {
+    setModalWorker(name);
+    notifyAction('작업자 검사 이력을 조회했습니다.');
+  }
+
   function shiftDay(delta) {
+    notifyAction('자주검사 이력을 조회했습니다.');
     setDate((prev) => {
       const next = new Date(prev);
       next.setDate(next.getDate() + delta);
@@ -192,7 +200,7 @@ export default function InspectionHistoryPage() {
                         header={displayMap.get(row.worker_name) || row.worker_name}
                         badge={<OverallBadge row={row} />}
                         className={clickableRowClass}
-                        onClick={() => setModalWorker(row.worker_name)}
+                        onClick={() => openWorkerHistory(row.worker_name)}
                       >
                         <MobileCardField label="조">
                           <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
@@ -230,11 +238,11 @@ export default function InspectionHistoryPage() {
                         <tr
                           key={row.worker_name}
                           className={`border-b border-border last:border-0 ${clickableRowClass}`}
-                          onClick={() => setModalWorker(row.worker_name)}
+                          onClick={() => openWorkerHistory(row.worker_name)}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
-                              setModalWorker(row.worker_name);
+                              openWorkerHistory(row.worker_name);
                             }
                           }}
                           tabIndex={0}

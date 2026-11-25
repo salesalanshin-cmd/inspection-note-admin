@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import PageHeader from '../../components/PageHeader';
+import { notifyAction } from '../../lib/actionFeedback';
 import { attendanceCardPath } from '../../lib/attendance/card';
 import { buildWorkerDisplayNameMap } from '../../lib/analytics';
 import { judgmentLabel } from '../../lib/attendance/judge';
@@ -90,6 +91,7 @@ export default function AttendancePage() {
   const [loadError, setLoadError] = useState(null);
   const [error, setError] = useState(null);
   const loadRequestRef = useRef(0);
+  const lastLoadedDate = useRef(date);
   const [savingId, setSavingId] = useState(null);
   const [recomputing, setRecomputing] = useState(false);
   const [filter, setFilter] = useState('all'); // all | unconfirmed | present | unreviwed
@@ -153,7 +155,7 @@ export default function AttendancePage() {
       );
   }, [directory, displayMap, hiddenNames, includeHidden]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (announce = false) => {
     const requestId = ++loadRequestRef.current;
     setLoading(true);
     setLoadError(null);
@@ -176,20 +178,24 @@ export default function AttendancePage() {
       );
       setRows(sorted);
       setDirectory(dirRes.data || []);
+      if (announce) notifyAction(`${date} 근태 ${sorted.length}건을 조회했습니다.`);
     } catch (err) {
       if (requestId !== loadRequestRef.current) return;
       // eslint-disable-next-line no-console
       console.warn('[attendance/load]', err?.message || err);
       setRows([]);
       setLoadError('근태 데이터를 불러오지 못했습니다');
+      if (announce) notifyAction('근태를 조회하지 못했습니다.', 'error');
     } finally {
       if (requestId === loadRequestRef.current) setLoading(false);
     }
   }, [date]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    const changed = lastLoadedDate.current !== date;
+    lastLoadedDate.current = date;
+    load(changed);
+  }, [load, date]);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,9 +267,11 @@ export default function AttendancePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '재계산 실패');
+      notifyAction(`${date} 근태를 재계산했습니다.`);
       await load();
     } catch (err) {
       setError(err?.message || '재계산 실패');
+      notifyAction('근태를 재계산하지 못했습니다.', 'error');
     } finally {
       setRecomputing(false);
     }
@@ -294,22 +302,28 @@ export default function AttendancePage() {
       });
       if (result.logWarning) {
         setLogWarning(`수정은 저장됐지만 이력 기록에 실패했습니다. ${result.logWarning}`);
+        notifyAction('근태를 저장했습니다. 수정 이력 기록에 실패했습니다.', 'warning');
+      } else {
+        notifyAction('근태 변경 사항을 저장했습니다.');
       }
       setPatternToken((token) => token + 1);
       await load();
     } catch (err) {
       setError(err?.message || '저장 실패');
+      notifyAction('근태 변경 사항을 저장하지 못했습니다.', 'error');
     } finally {
       setSavingId(null);
     }
   }
 
   function handleExport() {
-    const excelRows = attendanceRowsForExcel(filtered, displayMap, organizationByWorker);
-    exportToExcel(
-      excelRows,
-      `근태_${formatDateRangeForFilename(date, date)}.xlsx`
-    );
+    try {
+      const excelRows = attendanceRowsForExcel(filtered, displayMap, organizationByWorker);
+      exportToExcel(excelRows, `근태_${formatDateRangeForFilename(date, date)}.xlsx`);
+    } catch (err) {
+      setError(err?.message || '근태 엑셀 다운로드 실패');
+      notifyAction('근태 엑셀을 내보내지 못했습니다.', 'error');
+    }
   }
 
   const importColumns =
@@ -357,8 +371,10 @@ export default function AttendancePage() {
         directory,
       });
       setExcelPreview({ companyId, planned });
+      notifyAction('근태 엑셀 반영 미리보기를 준비했습니다.');
     } catch (err) {
       setError(err?.message || '엑셀 반영 실패');
+      notifyAction('근태 엑셀 파일을 불러오지 못했습니다.', 'error');
     } finally {
       setImporting(false);
       if (excelInputRef.current) excelInputRef.current.value = '';
@@ -382,6 +398,15 @@ export default function AttendancePage() {
         setLogWarning(`근태는 반영됐지만 이력 기록에 실패했습니다. ${result.logWarning}`);
       }
       const errorLines = planned.errors.slice(0, 8).map((item) => `${item.row}행: ${item.message}`);
+      const applied = result.updated + result.confirmed;
+      const exceptions = [
+        planned.errors.length && `오류 ${planned.errors.length}건`,
+        result.logWarning && '수정 이력 기록 실패',
+      ].filter(Boolean);
+      notifyAction(
+        `근태 ${applied}건을 반영했습니다.${exceptions.length ? ' ' + exceptions.join(' · ') : ''}`,
+        exceptions.length ? 'warning' : 'success'
+      );
       setImportNotice(
         `반영 ${planned.updates.length + planned.confirms.length}건, 건너뜀 ${planned.skipped}건, 오류 ${planned.errors.length}건.${
           errorLines.length ? ` ${errorLines.join(' / ')}` : ''
@@ -392,12 +417,13 @@ export default function AttendancePage() {
       await load();
     } catch (err) {
       setError(err?.message || '엑셀 반영 실패');
+      notifyAction('근태 엑셀 반영 중 오류가 발생했습니다.', 'error');
     } finally {
       setImporting(false);
     }
   }
 
-  async function downloadRangeExcel() {
+  async function downloadRangeExcel(recomputeResult) {
     const check = describeAttendanceExportRange({ start: rangeStart, end: rangeEnd });
     if (!check.ok) return false;
     setRangeExporting(true);
@@ -446,9 +472,14 @@ export default function AttendancePage() {
         },
         `근태_${formatDateRangeForFilename(rangeStart, rangeEnd)}.xlsx`
       );
+      const failedDays = recomputeResult?.failed?.length || 0;
+      notifyAction(failedDays
+        ? `재계산 실패 ${failedDays}일을 포함해 근태 엑셀을 내보냈습니다.`
+        : '기간별 근태 엑셀을 내보냈습니다.', failedDays ? 'warning' : 'success');
       return true;
     } catch (err) {
       setRangeNotice(err?.message || '다운로드 실패');
+      notifyAction('기간별 근태 엑셀을 내보내지 못했습니다.', 'error');
       return false;
     } finally {
       setRangeExporting(false);
@@ -509,13 +540,22 @@ export default function AttendancePage() {
   }
 
   async function handleRangeRecompute() {
-    await runRangeRecompute();
+    const result = await runRangeRecompute();
+    if (result) notifyRangeResult(result);
+  }
+
+  function notifyRangeResult({ processed, total, failed, cancelled }) {
+    const done = processed - failed.length;
+    if (cancelled) notifyAction(`근태 재계산을 중단했습니다. ${done}/${total}일 완료`, 'warning');
+    else if (failed.length) notifyAction(`근태 재계산 성공 ${done}일 · 실패 ${failed.length}일`, 'warning');
+    else notifyAction(`${done}일의 근태를 재계산했습니다.`);
   }
 
   async function handleRecomputeThenExport() {
     const result = await runRangeRecompute();
-    if (!result || result.cancelled) return;
-    await downloadRangeExcel();
+    if (!result) return;
+    if (result.cancelled) notifyRangeResult(result);
+    else await downloadRangeExcel(result);
   }
 
   function shiftDate(delta) {
@@ -669,7 +709,7 @@ export default function AttendancePage() {
             <button
               type="button"
               className={btnClass}
-              onClick={downloadRangeExcel}
+              onClick={() => downloadRangeExcel()}
               disabled={!rangeCheck.ok || rangeJob?.phase === 'running' || rangeExporting}
             >
               {rangeExporting ? '만드는 중…' : '엑셀 다운로드'}
@@ -735,7 +775,7 @@ export default function AttendancePage() {
         {loadError ? (
           <div className="rounded-xl border border-border bg-surface px-4 py-8 text-center">
             <p className="text-sm text-danger">{loadError}</p>
-            <button type="button" className={`${btnClass} mt-3`} onClick={load}>
+            <button type="button" className={`${btnClass} mt-3`} onClick={() => load(true)}>
               다시 시도
             </button>
           </div>

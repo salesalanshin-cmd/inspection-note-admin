@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import useFilteredQueryFeedback from '../../hooks/useFilteredQueryFeedback';
 import PageHeader from '../../components/PageHeader';
 import { getCompanyId } from '../../lib/company';
 import { supabase } from '../../lib/supabase';
@@ -19,6 +20,7 @@ const buttonClass =
   'min-h-[44px] rounded-xl border border-border px-3 py-2 text-sm text-muted transition-colors hover:bg-surface2 hover:text-text disabled:opacity-50 md:min-h-0';
 
 export default function AiAccuracyPage() {
+  const queryFeedback = useFilteredQueryFeedback('AI 오진율');
   const [weekStart, setWeekStart] = useState(() => startOfKstWeek(new Date()));
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +31,7 @@ export default function AiAccuracyPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const finish = queryFeedback.begin();
     setLoading(true);
     setError(null);
 
@@ -38,9 +41,13 @@ export default function AiAccuracyPage() {
         const from = addKstWeeks(weekStart, -(ACCURACY_TREND_WEEKS - 1)).toISOString();
         const to = addKstWeeks(weekStart, 1).toISOString();
         const data = await fetchAccuracyRows(companyId, from, to);
-        if (!cancelled) setRows(data);
+        if (cancelled) return;
+        setRows(data);
+        finish();
       } catch (err) {
-        if (!cancelled) setError(err?.message || '오진율을 불러오지 못했습니다.');
+        if (cancelled) return;
+        setError(err?.message || '오진율을 불러오지 못했습니다.');
+        finish(false);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -49,7 +56,12 @@ export default function AiAccuracyPage() {
     return () => {
       cancelled = true;
     };
-  }, [weekStart]);
+  }, [weekStart, queryFeedback]);
+
+  function changeWeek(offset) {
+    queryFeedback.mark();
+    setWeekStart((current) => addKstWeeks(current, offset));
+  }
 
   const byType = useMemo(() => summarizeWeekAccuracy(rows, weekStart), [rows, weekStart]);
   const trend = useMemo(
@@ -77,7 +89,7 @@ export default function AiAccuracyPage() {
             <button
               type="button"
               className={buttonClass}
-              onClick={() => setWeekStart((current) => addKstWeeks(current, -1))}
+              onClick={() => changeWeek(-1)}
             >
               이전 주
             </button>
@@ -88,7 +100,7 @@ export default function AiAccuracyPage() {
               type="button"
               className={buttonClass}
               disabled={atCurrentWeek}
-              onClick={() => setWeekStart((current) => addKstWeeks(current, 1))}
+              onClick={() => changeWeek(1)}
             >
               다음 주
             </button>

@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { notifyAction } from '../../lib/actionFeedback';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BellOff, Pencil, Plus, Trash2 } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
@@ -195,6 +197,7 @@ export default function NoticesPage() {
   const [rows, setRows] = useState([]);
 
   const [detailRow, setDetailRow] = useState(null);
+  const detailRequest = useRef(0);
   const [detailBody, setDetailBody] = useState('');
   const [detailMessageId, setDetailMessageId] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -258,6 +261,7 @@ export default function NoticesPage() {
     })();
     return () => {
       cancelled = true;
+      detailRequest.current += 1;
     };
   }, [loadList]);
 
@@ -270,20 +274,30 @@ export default function NoticesPage() {
     );
   }, [detailRow, audience, workerDirectory]);
 
-  async function openDetail(row) {
+  async function openDetail(row, announce = true) {
+    const request = ++detailRequest.current;
     setDetailRow(row);
     setDetailBody('');
     setDetailMessageId(null);
     setDetailLoading(true);
     try {
       const message = await fetchNoticeMessage(row.id);
+      if (request !== detailRequest.current) return;
       setDetailBody(message?.body_ko || message?.body || '');
       setDetailMessageId(message?.id ?? null);
+      if (announce) notifyAction('공지 내용을 조회했습니다.');
     } catch (err) {
+      if (request !== detailRequest.current) return;
+      if (announce) notifyAction('공지 내용을 불러오지 못했습니다.', 'error');
       setError(err?.message || '본문을 불러오지 못했습니다.');
     } finally {
-      setDetailLoading(false);
+      if (request === detailRequest.current) setDetailLoading(false);
     }
+  }
+
+  function closeDetail() {
+    detailRequest.current += 1;
+    setDetailRow(null);
   }
 
   function openCreate() {
@@ -299,6 +313,7 @@ export default function NoticesPage() {
   async function handleSave({ title, body, createdByWorker, resetReads }) {
     setSaving(true);
     try {
+      let savedId;
       if (editMode === 'create') {
         const thread = await createNotice({
           title,
@@ -306,10 +321,7 @@ export default function NoticesPage() {
           companyId,
           createdByWorker,
         });
-        setEditOpen(false);
-        const list = await loadList();
-        const listRow = list.find((r) => r.id === thread.id);
-        if (listRow) await openDetail(listRow);
+        savedId = thread.id;
       } else if (detailRow) {
         await updateNotice({
           threadId: detailRow.id,
@@ -318,16 +330,27 @@ export default function NoticesPage() {
           body,
           resetReads,
         });
-        setEditOpen(false);
+        savedId = detailRow.id;
+      } else {
+        return;
+      }
+      setEditOpen(false);
+      notifyAction(editMode === 'create' ? '공지를 등록했습니다.' : '공지를 수정했습니다.');
+      try {
         const list = await loadList();
-        const listRow = list.find((r) => r.id === detailRow.id);
+        const listRow = list.find((r) => r.id === savedId);
         if (listRow) {
           // 읽음 초기화 시 readCount=0 인 행으로 상세·진행률 갱신
-          await openDetail(listRow);
+          await openDetail(listRow, false);
         } else {
-          setDetailRow(null);
+          closeDetail();
         }
+      } catch (err) {
+        setError(err?.message || '공지 목록을 새로 불러오지 못했습니다.');
       }
+    } catch (err) {
+      notifyAction('공지를 저장하지 못했습니다.', 'error');
+      throw err;
     } finally {
       setSaving(false);
     }
@@ -339,11 +362,13 @@ export default function NoticesPage() {
     try {
       await deleteNotice(detailRow.id);
       setDeleteConfirm(false);
-      setDetailRow(null);
+      closeDetail();
       setEditOpen(false);
-      await loadList();
+      notifyAction('공지를 삭제했습니다.');
+      await loadList().catch((err) => setError(err?.message || '공지 목록을 새로 불러오지 못했습니다.'));
     } catch (err) {
       setError(err?.message || '삭제에 실패했습니다.');
+      notifyAction('공지를 삭제하지 못했습니다.', 'error');
       setDeleteConfirm(false);
     } finally {
       setDeleting(false);
@@ -459,7 +484,7 @@ export default function NoticesPage() {
         body={detailLoading ? '불러오는 중...' : detailBody}
         readList={detailSplit.read}
         unreadList={detailSplit.unread}
-        onClose={() => setDetailRow(null)}
+        onClose={closeDetail}
         onEdit={openEditFromDetail}
         onDelete={() => setDeleteConfirm(true)}
       />

@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../lib/actionFeedback';
+
 import { useEffect, useRef, useState } from 'react';
 import { Crosshair } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -107,12 +109,14 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
           : [],
       };
       setAiSuggestion(suggestion);
+      notifyAction('사진 분석을 완료했습니다.');
       setAiCompletedAt(new Date());
 
       if (!suggestion.code) return;
       if (suggestion.code === (errorCodeRef.current || null)) return;
       setPendingAi(suggestion);
     } catch (err) {
+      notifyAction('사진을 분석하지 못했습니다.', 'error');
       setError(err.message);
     } finally {
       setClassifying(false);
@@ -173,13 +177,22 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
 
     setSaving(true);
     const companyId = await getCompanyId();
-    const { error: updateError } = await supabase
+    const { data: saved, error: updateError } = await supabase
       .from('ocr_results')
       .update(payload)
       .eq('id', report.id)
-      .eq('company_id', companyId);
+      .eq('company_id', companyId)
+      .select('id')
+      .maybeSingle();
 
+    if (!updateError && !saved) {
+      setSaving(false);
+      setError('수정된 기록이 없습니다. 목록을 새로고침해 주세요.');
+      notifyAction('수정된 기록이 없습니다.', 'error');
+      return;
+    }
     if (updateError) {
+      notifyAction('기록을 저장하지 못했습니다.', 'error');
       setSaving(false);
       setError(
         updateError.message?.includes('marking_data')
@@ -197,6 +210,7 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
         markers: nextMarkers,
       });
     } catch (queueErr) {
+      notifyAction('기록은 저장했지만 알림 대기열 갱신에 실패했습니다.', 'warning');
       setSaving(false);
       setError(
         queueErr.message?.includes('document_notification_queue') ||
@@ -228,6 +242,7 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
     });
 
     setSaving(false);
+    notifyAction('문서 스캔 기록을 수정했습니다.');
     onSaved?.();
     onClose?.();
   }
@@ -235,7 +250,15 @@ export default function DocumentEditModal({ report, onClose, onSaved }) {
   const footerButtons = (
     <ModalFooterActions
       onCancel={onClose}
-      onConfirm={handleSave}
+      onConfirm={async () => {
+        try {
+          await handleSave();
+        } catch (err) {
+          setSaving(false);
+          setError(err?.message || '저장 결과를 확인해 주세요.');
+          notifyAction('저장 결과를 확인해 주세요.', 'error');
+        }
+      }}
       cancelLabel="취소"
       confirmLabel={saving ? '저장 중...' : '저장'}
       confirmDisabled={saving || classifying || !!pendingAi}

@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import useFilteredQueryFeedback from '../../../hooks/useFilteredQueryFeedback';
+import { notifyAction } from '../../../lib/actionFeedback';
 import { Image as ImageIcon } from 'lucide-react';
 import {
   exportToExcel,
@@ -52,6 +54,7 @@ function lineToExcel(line) {
 }
 
 export default function DailyWorkReportPage() {
+  const queryFeedback = useFilteredQueryFeedback('작업일보');
   const [ready, setReady] = useState(false);
   const [workday, setWorkday] = useState('');
   const [data, setData] = useState(null);
@@ -71,6 +74,7 @@ export default function DailyWorkReportPage() {
   useEffect(() => {
     if (!ready) return undefined;
     let cancelled = false;
+    const finish = queryFeedback.begin();
     setLoading(true);
     setError(null);
     const params = new URLSearchParams();
@@ -84,10 +88,13 @@ export default function DailyWorkReportPage() {
       .then((body) => {
         if (cancelled) return;
         setData(body);
+        finish();
         if (body.workday && body.workday !== workday) setWorkday(body.workday);
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message);
+        if (cancelled) return;
+        setError(err.message);
+        finish(false);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -95,18 +102,30 @@ export default function DailyWorkReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [ready, workday]);
+  }, [ready, workday, queryFeedback]);
+
+  function selectWorkday(day) {
+    if (day === workday) return;
+    queryFeedback.mark();
+    setWorkday(day);
+  }
 
   const report = data?.report;
   const lines = report?.lines || [];
 
   function downloadDay() {
     if (!data?.workday) return;
-    const stamp = data.workday.replace(/-/g, '');
-    exportToExcel(
-      lines.length ? lines.map(lineToExcel) : [{ 검사자: '', 품번: '', LOT: '', 시작: '', 종료: '', 양품수량: '', 불량수량: '', 불량유형별: '', 비고: '', 출처: '' }],
-      `검사공정_작업일보_${stamp}.xlsx`
-    );
+    setExportError(null);
+    try {
+      const stamp = data.workday.replace(/-/g, '');
+      exportToExcel(
+        lines.length ? lines.map(lineToExcel) : [{ 검사자: '', 품번: '', LOT: '', 시작: '', 종료: '', 양품수량: '', 불량수량: '', 불량유형별: '', 비고: '', 출처: '' }],
+        `검사공정_작업일보_${stamp}.xlsx`
+      );
+    } catch (err) {
+      setExportError(err.message);
+      notifyAction('작업일보 엑셀 내보내기에 실패했습니다.', 'error');
+    }
   }
 
   async function downloadRange() {
@@ -139,6 +158,7 @@ export default function DailyWorkReportPage() {
       exportWorkbook(sheets, `검사공정_작업일보_${formatDateRangeForFilename(from, to)}.xlsx`);
     } catch (err) {
       setExportError(err.message);
+      notifyAction('기간별 작업일보 엑셀 내보내기에 실패했습니다.', 'error');
     } finally {
       setExporting(false);
     }
@@ -153,7 +173,7 @@ export default function DailyWorkReportPage() {
           className={controlClass}
           aria-label="이전 근무일"
           disabled={!data?.prev || loading}
-          onClick={() => setWorkday(data.prev)}
+          onClick={() => selectWorkday(data.prev)}
         >
           이전 근무일
         </button>
@@ -163,7 +183,7 @@ export default function DailyWorkReportPage() {
             className={`${controlClass} mt-1 block`}
             type="date"
             value={data?.workday || workday}
-            onChange={(event) => setWorkday(event.target.value)}
+            onChange={(event) => selectWorkday(event.target.value)}
           />
         </label>
         <button
@@ -171,7 +191,7 @@ export default function DailyWorkReportPage() {
           className={controlClass}
           aria-label="다음 근무일"
           disabled={!data?.next || loading}
-          onClick={() => setWorkday(data.next)}
+          onClick={() => selectWorkday(data.next)}
         >
           다음 근무일
         </button>

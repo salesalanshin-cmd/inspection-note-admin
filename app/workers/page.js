@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import Link from 'next/link';
 import { useState } from 'react';
 import { useReports } from '../../lib/useReports';
@@ -27,6 +29,7 @@ export default function WorkersPage() {
   const [endDate, setEndDate] = useState(() => startOfDay(new Date()));
 
   function shiftDay(delta) {
+    notifyAction('작업자 현황을 조회했습니다.');
     setEndDate((prev) => {
       const next = new Date(prev);
       next.setDate(next.getDate() + delta);

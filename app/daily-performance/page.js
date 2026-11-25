@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Bell, RefreshCw, X } from 'lucide-react';
 import { useReports } from '../../lib/useReports';
@@ -529,6 +531,16 @@ export default function DailyPerformancePage() {
     setSortDir(dir);
   }
 
+  function showWorkerDetail(name) {
+    setDetailWorker(name);
+    notifyAction('작업자별 실적을 조회했습니다.');
+  }
+
+  function refreshMissList() {
+    setNow(new Date());
+    notifyAction('현재 시각 기준으로 미준수 목록을 갱신했습니다.');
+  }
+
   function scrollToWorker(name) {
     const el = rowRefs.current[name];
     if (!el) return;
@@ -656,7 +668,10 @@ export default function DailyPerformancePage() {
               data={shiftStageSummaryData}
               compliance={compliance}
               eligibleNames={frequentEligibleNames}
-              onOpenMissList={setStageMissSection}
+              onOpenMissList={(section) => {
+                setStageMissSection(section);
+                notifyAction('미준수 작업자 목록을 조회했습니다.');
+              }}
             />
 
             {isToday ? (
@@ -664,7 +679,7 @@ export default function DailyPerformancePage() {
                 workers={priorityMisses}
                 displayMap={displayMap}
                 onSelectWorker={scrollToWorker}
-                onRefresh={() => setNow(new Date())}
+                onRefresh={refreshMissList}
               />
             ) : null}
 
@@ -708,7 +723,7 @@ export default function DailyPerformancePage() {
                           <WorkerNameButton
                             name={row.worker_name}
                             displayName={displayMap.get(row.worker_name)}
-                            onClick={() => setDetailWorker(row.worker_name)}
+                            onClick={() => showWorkerDetail(row.worker_name)}
                           />
                         }
                         badge={<OverallBadge isWarning={isWarning} />}
@@ -853,7 +868,7 @@ export default function DailyPerformancePage() {
                           <WorkerNameButton
                             name={row.worker_name}
                             displayName={displayMap.get(row.worker_name)}
-                            onClick={() => setDetailWorker(row.worker_name)}
+                            onClick={() => showWorkerDetail(row.worker_name)}
                           />
                         </td>
                         <td className="px-4 py-3">

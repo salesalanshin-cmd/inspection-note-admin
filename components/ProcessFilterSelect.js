@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../lib/actionFeedback';
+
 import { DEFAULT_PROCESS_FILTER, PROCESS_FILTER_ALL, WORKER_PROCESSES } from '../lib/constants';
 
 const selectClass =
@@ -19,7 +21,10 @@ export default function ProcessFilterSelect({
       <span className="shrink-0 text-xs text-muted">공정</span>
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          notifyAction('공정 필터를 적용했습니다.');
+        }}
         aria-label="공정"
         className={selectClass}
       >

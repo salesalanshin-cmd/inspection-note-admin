@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useState } from 'react';
 import { MessageCircleQuestion, Send } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
@@ -57,9 +59,11 @@ export default function AskTestPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '요청 실패');
       setResult(data);
+      notifyAction('지식 검색을 마쳤습니다.');
       if (q) setQuestion(text);
     } catch (err) {
       setError(err.message || '질문 처리에 실패했습니다.');
+      notifyAction('지식을 검색하지 못했습니다.', 'error');
     } finally {
       setLoading(false);
     }

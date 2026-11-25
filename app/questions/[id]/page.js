@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../../lib/actionFeedback';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -177,11 +179,17 @@ export default function QuestionDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '저장 실패');
+      if (data.knowledge?.embeddingError) {
+        notifyAction('답변을 등록했지만 지식 저장 또는 색인에 실패했습니다.', 'warning');
+      } else {
+        notifyAction('답변을 등록했습니다.');
+      }
       setSaveResult(data);
       setAnswer('');
       await load();
     } catch (err) {
       setSaveError(err.message || '답변 등록에 실패했습니다.');
+      notifyAction('답변을 등록하지 못했습니다.', 'error');
     } finally {
       setSaving(false);
     }

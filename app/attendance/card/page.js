@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import useFilteredQueryFeedback from '../../../hooks/useFilteredQueryFeedback';
 import AttendanceCalendar from '../../../components/attendance-card/AttendanceCalendar';
 import AttendanceCardHeader from '../../../components/attendance-card/AttendanceCardHeader';
 import AttendanceIssues from '../../../components/attendance-card/AttendanceIssues';
@@ -39,6 +40,7 @@ function workerLabel(worker) {
 }
 
 function AttendanceCardPage() {
+  const queryFeedback = useFilteredQueryFeedback('근태 카드');
   const router = useRouter();
   const searchParams = useSearchParams();
   const name = searchParams.get('name')?.trim() || '';
@@ -79,6 +81,7 @@ function AttendanceCardPage() {
       return undefined;
     }
     let cancelled = false;
+    const finish = queryFeedback.begin();
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ name, month });
@@ -89,12 +92,15 @@ function AttendanceCardPage() {
         return body;
       })
       .then((body) => {
-        if (!cancelled) setCard(body);
+        if (cancelled) return;
+        setCard(body);
+        finish();
       })
       .catch((err) => {
         if (!cancelled) {
           setCard(null);
           setError(err?.message || '근태 카드를 불러오지 못했습니다.');
+          finish(false);
         }
       })
       .finally(() => {
@@ -103,7 +109,7 @@ function AttendanceCardPage() {
     return () => {
       cancelled = true;
     };
-  }, [name, month]);
+  }, [name, month, queryFeedback]);
 
   const organizationChoices = useMemo(() => organizationOptions(directory), [directory]);
 
@@ -121,6 +127,7 @@ function AttendanceCardPage() {
   }, [directory, includeHidden, organizationFilter, name]);
 
   function openCard(nextName, nextMonth) {
+    if (nextName && MONTH.test(nextMonth) && (nextName !== name || nextMonth !== month)) queryFeedback.mark();
     router.push(attendanceCardPath(nextName, nextMonth));
   }
 

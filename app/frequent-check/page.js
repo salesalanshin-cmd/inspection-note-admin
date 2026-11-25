@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { Fragment, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import {
@@ -406,7 +408,18 @@ export default function FrequentCheckPage() {
     setGallerySortDir(dir);
   }
 
+  function openPhoto(record) {
+    setSelectedPhoto(record);
+    notifyAction('검사 상세 기록을 조회했습니다.');
+  }
+
+  function openWorkerHistory(name) {
+    setModalWorker(name);
+    notifyAction('작업자 검사 이력을 조회했습니다.');
+  }
+
   function shiftDay(delta) {
+    notifyAction('자주검사 이력을 조회했습니다.');
     setDate((prev) => {
       const next = new Date(prev);
       next.setDate(next.getDate() + delta);
@@ -433,7 +446,7 @@ export default function FrequentCheckPage() {
         `자주검사_${formatDateRangeForFilename(galleryDateRange.start, galleryDateRange.end)}.zip`
       );
     } catch (err) {
-      alert(err.message || '다운로드에 실패했습니다.');
+      notifyAction(err.message || '다운로드에 실패했습니다.', 'error');
     } finally {
       setDownloadLoading(false);
     }
@@ -530,7 +543,7 @@ export default function FrequentCheckPage() {
                         header={displayMap.get(row.worker_name) || row.worker_name}
                         badge={<OverallBadge row={row} />}
                         className={clickableRowClass}
-                        onClick={() => setModalWorker(row.worker_name)}
+                        onClick={() => openWorkerHistory(row.worker_name)}
                       >
                         <MobileCardField label="시프트">
                           <ShiftBadge shift={row.shift} shiftSource={row.shiftSource} />
@@ -597,7 +610,7 @@ export default function FrequentCheckPage() {
                         <tr
                           key={row.worker_name}
                           className={`border-b border-border last:border-0 ${clickableRowClass}`}
-                          onClick={() => setModalWorker(row.worker_name)}
+                          onClick={() => openWorkerHistory(row.worker_name)}
                         >
                           <td className="px-4 py-3 font-medium text-text">
                             {displayMap.get(row.worker_name) || row.worker_name}
@@ -709,13 +722,13 @@ export default function FrequentCheckPage() {
                       >
                         <div
                           className="inspection-photo cursor-pointer"
-                          onClick={() => setSelectedPhoto(r)}
+                          onClick={() => openPhoto(r)}
                           role="button"
                           tabIndex={0}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
-                              setSelectedPhoto(r);
+                              openPhoto(r);
                             }
                           }}
                           aria-label={`${displayName} 자주검사 사진`}

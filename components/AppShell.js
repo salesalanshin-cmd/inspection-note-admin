@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import ActionToast from './ActionToast';
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
@@ -19,6 +20,7 @@ export default function AppShell({ children }) {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-bg print:block print:h-auto print:overflow-visible">
+      <ActionToast />
       <Sidebar mobileOpen={sidebarOpen} onMobileClose={closeSidebar} />
       <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-bg print:block print:h-auto print:overflow-visible">
         <TopBar onMenuOpen={openSidebar} menuOpen={sidebarOpen} />

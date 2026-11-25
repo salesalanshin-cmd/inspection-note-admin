@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../lib/actionFeedback';
+
 import { useMemo, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { defectLabel } from '../lib/constants';
@@ -145,7 +147,10 @@ export default function WorkerHistoryModal({
                 <li key={group.date}>
                   <button
                     type="button"
-                    onClick={() => setSelectedDate(group.date)}
+                    onClick={() => {
+                      setSelectedDate(group.date);
+                      notifyAction('날짜별 검사 이력을 조회했습니다.');
+                    }}
                     className="flex w-full items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-left text-sm transition-colors hover:bg-surface2"
                   >
                     <span className="font-medium text-text">
@@ -171,7 +176,10 @@ export default function WorkerHistoryModal({
                   <button
                     key={r.listKey}
                     type="button"
-                    onClick={() => setPreviewRecord(r)}
+                    onClick={() => {
+                      setPreviewRecord(r);
+                      notifyAction('검사 상세 기록을 조회했습니다.');
+                    }}
                     className="group overflow-hidden rounded-xl border border-border bg-surface text-left transition-colors hover:border-accent/40"
                   >
                     <div className="inspection-photo">

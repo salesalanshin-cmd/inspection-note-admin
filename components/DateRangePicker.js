@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../lib/actionFeedback';
+
 import {
   getRecentDaysRange,
   getThisMonthRange,
@@ -24,11 +26,12 @@ const PRESETS = [
  * @param {{ start: string, end: string }} value - YYYY-MM-DD
  * @param {(range: { start: string, end: string }) => void} onChange
  */
-export default function DateRangePicker({ value, onChange }) {
+export default function DateRangePicker({ value, onChange, announceChange = true }) {
   const valid = isDateRangeValid(value);
 
-  function update(field, next) {
-    onChange({ ...value, [field]: next });
+  function applyRange(range) {
+    onChange(range);
+    if (announceChange && isDateRangeValid(range)) notifyAction('선택한 기간을 적용했습니다.');
   }
 
   return (
@@ -37,7 +40,7 @@ export default function DateRangePicker({ value, onChange }) {
         <input
           type="date"
           value={value.start}
-          onChange={(e) => update('start', e.target.value)}
+          onChange={(e) => applyRange({ ...value, start: e.target.value })}
           className={inputClass}
           aria-label="시작일"
         />
@@ -45,7 +48,7 @@ export default function DateRangePicker({ value, onChange }) {
         <input
           type="date"
           value={value.end}
-          onChange={(e) => update('end', e.target.value)}
+          onChange={(e) => applyRange({ ...value, end: e.target.value })}
           className={inputClass}
           aria-label="종료일"
         />
@@ -55,7 +58,7 @@ export default function DateRangePicker({ value, onChange }) {
           <button
             key={preset.label}
             type="button"
-            onClick={() => onChange(preset.getRange())}
+            onClick={() => applyRange(preset.getRange())}
             className={presetBtnClass}
           >
             {preset.label}

@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../lib/actionFeedback';
+
 import { useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { getCompanyId } from '../lib/company';
@@ -131,6 +133,7 @@ export default function DefectEditModal({
           : [],
       };
       setAiSuggestion(suggestion);
+      notifyAction('사진 분석을 완료했습니다.');
       aiCompletedAtRef.current = completedAt;
       setAiCompletedAt(completedAt);
 
@@ -143,6 +146,7 @@ export default function DefectEditModal({
       // 다르면 덮어쓰지 않고 확인 팝업
       setPendingAi(suggestion);
     } catch (err) {
+      notifyAction('사진을 분석하지 못했습니다.', 'error');
       setError(err.message);
     } finally {
       setClassifying(false);
@@ -224,12 +228,14 @@ export default function DefectEditModal({
       .maybeSingle();
 
     if (updateError) {
+      notifyAction('기록을 저장하지 못했습니다.', 'error');
       setSaving(false);
       setError(updateError.message);
       return;
     }
     if (!data) {
       setSaving(false);
+      notifyAction('수정된 기록이 없습니다.', 'error');
       setError('저장되지 않았습니다. 권한(RLS) 또는 레코드 상태를 확인해 주세요.');
       return;
     }
@@ -243,6 +249,7 @@ export default function DefectEditModal({
         reportDefectType: DEFECT_CODE_LABELS[nextCode],
       });
     } catch (queueErr) {
+      notifyAction('기록은 저장했지만 알림 대기열 갱신에 실패했습니다.', 'warning');
       setSaving(false);
       setError(
         queueErr.message?.includes('defect_notification_queue') || queueErr.code === '42P01'
@@ -273,6 +280,7 @@ export default function DefectEditModal({
     });
 
     setSaving(false);
+    notifyAction('불량 기록을 수정했습니다.');
     onSaved?.(data);
     onClose?.();
   }
@@ -280,7 +288,15 @@ export default function DefectEditModal({
   const footerButtons = (
     <ModalFooterActions
       onCancel={onClose}
-      onConfirm={handleSave}
+      onConfirm={async () => {
+        try {
+          await handleSave();
+        } catch (err) {
+          setSaving(false);
+          setError(err?.message || '저장 결과를 확인해 주세요.');
+          notifyAction('저장 결과를 확인해 주세요.', 'error');
+        }
+      }}
       cancelLabel="취소"
       confirmLabel={saving ? '저장 중...' : '저장'}
       confirmDisabled={saving || classifying || !!pendingAi}

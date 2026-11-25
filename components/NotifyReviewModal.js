@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../lib/actionFeedback';
+
 import { useMemo, useRef, useState } from 'react';
 import { Copy, Check, Send, X, Loader2, RotateCcw } from 'lucide-react';
 import { getDisplayName, getWorkDateForRecord } from '../lib/analytics';
@@ -175,7 +177,7 @@ export default function NotifyReviewModal({
   async function handleSendAlimtalk() {
     if (sending || sendFinished) return;
     if (sendableCount === 0) {
-      window.alert('연락처가 등록된 대상자가 없습니다.');
+      notifyAction('연락처가 등록된 대상자가 없습니다.', 'warning');
       return;
     }
     const ok = window.confirm(
@@ -199,7 +201,7 @@ export default function NotifyReviewModal({
       const { res, data } = await postSendTargets(payload);
 
       if (!res.ok) {
-        window.alert(data.error || '발송 요청에 실패했습니다.');
+        notifyAction('알림톡 발송 요청에 실패했습니다.', 'error');
         return;
       }
 
@@ -212,8 +214,10 @@ export default function NotifyReviewModal({
         };
       }
       applyResults(next);
+      const sent = Object.values(next).filter((r) => r.success).length;
+      notifyAction(`알림톡 ${payload.length}건 중 ${sent}건 발송`, sent === payload.length ? 'success' : sent ? 'warning' : 'error');
     } catch (err) {
-      window.alert(err?.message || '발송 중 오류가 발생했습니다.');
+      notifyAction('알림톡 발송 결과를 확인해 주세요.', 'error');
     } finally {
       setSending(false);
     }
@@ -247,11 +251,13 @@ export default function NotifyReviewModal({
       ]);
 
       if (!res.ok) {
-        window.alert(data.error || '재시도에 실패했습니다.');
+        notifyAction('알림톡 재발송에 실패했습니다.', 'error');
         return;
       }
 
       const r = data.results?.[0];
+      if (r?.success) notifyAction('알림톡을 재발송했습니다.');
+      else notifyAction('알림톡을 재발송하지 못했습니다.', 'error');
       applyResults(
         {
           [workerName]: {
@@ -262,7 +268,7 @@ export default function NotifyReviewModal({
         { markFinished: true }
       );
     } catch (err) {
-      window.alert(err?.message || '재시도 중 오류가 발생했습니다.');
+      notifyAction('알림톡 재발송 결과를 확인해 주세요.', 'error');
     } finally {
       setRetryingName(null);
     }

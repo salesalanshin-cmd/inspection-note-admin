@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getCompanyId } from '../lib/company';
 import { supabase } from '../lib/supabase';
+import { notifyAction } from '../lib/actionFeedback';
 
 const inputClass =
   'w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-text focus:border-accent focus:outline-none';
@@ -60,13 +61,15 @@ export default function AttendanceMailRecipients() {
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'company_id,email' }
-      );
+      ).select('id').single();
       if (insErr) throw new Error(insErr.message);
       setEmail('');
       setName('');
+      notifyAction('근태 메일 수신자를 저장했습니다.');
       await load();
     } catch (err) {
       setError(err?.message || '저장 실패');
+      notifyAction('근태 메일 수신자를 저장하지 못했습니다.', 'error');
     } finally {
       setSaving(false);
     }
@@ -82,11 +85,15 @@ export default function AttendanceMailRecipients() {
           updated_at: new Date().toISOString(),
         })
         .eq('id', row.id)
-        .eq('company_id', companyId);
+        .eq('company_id', companyId)
+        .select('id')
+        .single();
       if (upErr) throw new Error(upErr.message);
+      notifyAction(row.is_active ? '근태 메일 수신을 껐습니다.' : '근태 메일 수신을 켰습니다.');
       await load();
     } catch (err) {
       setError(err?.message || '변경 실패');
+      notifyAction('메일 수신 설정을 변경하지 못했습니다.', 'error');
     }
   }
 
@@ -97,11 +104,15 @@ export default function AttendanceMailRecipients() {
         .from('attendance_mail_recipient')
         .delete()
         .eq('id', row.id)
-        .eq('company_id', companyId);
+        .eq('company_id', companyId)
+        .select('id')
+        .single();
       if (delErr) throw new Error(delErr.message);
+      notifyAction('근태 메일 수신자를 삭제했습니다.');
       await load();
     } catch (err) {
       setError(err?.message || '삭제 실패');
+      notifyAction('근태 메일 수신자를 삭제하지 못했습니다.', 'error');
     }
   }
 
@@ -124,8 +135,10 @@ export default function AttendanceMailRecipients() {
           ? `시험 메일 발송됨 → ${data.to}`
           : '시험 메일 발송됨'
       );
+      notifyAction('근태 시험 메일을 발송했습니다.');
     } catch (err) {
       setError(err?.message || '시험 발송 실패');
+      notifyAction('근태 시험 메일을 발송하지 못했습니다.', 'error');
     } finally {
       setTesting(false);
     }

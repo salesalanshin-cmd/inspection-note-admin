@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import useFilteredQueryFeedback from '../../../hooks/useFilteredQueryFeedback';
 import {
   Bar,
   CartesianGrid,
@@ -55,6 +56,7 @@ function sourceLabel(source) {
 }
 
 export default function InspectionDashboardPage() {
+  const queryFeedback = useFilteredQueryFeedback('검사공정 생산·불량 현황');
   const [preset, setPreset] = useState('project');
   const [bucket, setBucket] = useState('month');
   const [from, setFrom] = useState('');
@@ -66,6 +68,7 @@ export default function InspectionDashboardPage() {
   useEffect(() => {
     if (preset === 'custom' && (!from || !to)) return undefined;
     let cancelled = false;
+    const finish = queryFeedback.begin();
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ preset, bucket });
@@ -82,11 +85,14 @@ export default function InspectionDashboardPage() {
       .then((body) => {
         if (cancelled) return;
         setData(body);
+        finish();
         setFrom(body.from || '');
         setTo(body.to || '');
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message);
+        if (cancelled) return;
+        setError(err.message);
+        finish(false);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -94,7 +100,7 @@ export default function InspectionDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [preset, bucket, preset === 'custom' ? from : '', preset === 'custom' ? to : '']);
+  }, [preset, bucket, preset === 'custom' ? from : '', preset === 'custom' ? to : '', queryFeedback]);
 
   const kpi = data?.kpi;
   const previous = data?.previous;
@@ -128,7 +134,11 @@ export default function InspectionDashboardPage() {
             key={id}
             type="button"
             className={`${controlClass} ${preset === id ? 'border-accent bg-accentSoft text-accent' : ''}`}
-            onClick={() => setPreset(id)}
+            onClick={() => {
+              if (preset === id) return;
+              queryFeedback.mark();
+              setPreset(id);
+            }}
           >
             {label}
           </button>
@@ -140,6 +150,7 @@ export default function InspectionDashboardPage() {
             type="date"
             value={from}
             onChange={(event) => {
+              queryFeedback.mark();
               setPreset('custom');
               setFrom(event.target.value);
             }}
@@ -152,6 +163,7 @@ export default function InspectionDashboardPage() {
             type="date"
             value={to}
             onChange={(event) => {
+              queryFeedback.mark();
               setPreset('custom');
               setTo(event.target.value);
             }}
@@ -167,7 +179,11 @@ export default function InspectionDashboardPage() {
               key={id}
               type="button"
               className={`${controlClass} ${bucket === id ? 'border-accent bg-accentSoft text-accent' : ''}`}
-              onClick={() => setBucket(id)}
+              onClick={() => {
+                if (bucket === id) return;
+                queryFeedback.mark();
+                setBucket(id);
+              }}
             >
               {label}
             </button>

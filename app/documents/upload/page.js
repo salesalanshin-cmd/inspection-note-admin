@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../../lib/actionFeedback';
+
 import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -29,6 +31,7 @@ export default function DocumentUploadPage() {
   const inputRef = useRef(null);
   const [queue, setQueue] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [revisionPrompt, setRevisionPrompt] = useState(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -98,41 +101,44 @@ export default function DocumentUploadPage() {
     return json.existing;
   }
 
+  function reportUploadError(err, completed) {
+    setUploadError(err.message || '업로드 중 오류가 발생했습니다.');
+    notifyAction(
+      completed ? `문서 ${completed}건 업로드 후 중단됐습니다.` : '문서를 업로드하지 못했습니다.',
+      completed ? 'warning' : 'error'
+    );
+  }
+
   async function processQueue(items, startIndex = 0) {
-    if (startIndex >= items.length) {
-      router.push('/documents');
-      return;
+    for (let i = startIndex; i < items.length; i += 1) {
+      const { file, xlsxOptions } = items[i];
+      try {
+        const existing = await checkDuplicate(file.name);
+        if (existing) {
+          setRevisionPrompt({ file, existing, files: items, index: i, xlsxOptions });
+          return;
+        }
+        await uploadOne(file, {
+          isRevision: false,
+          xlsxOptions: isExcelFileType(detectFileType(file.name))
+            ? xlsxOptions || { useRecommended: true }
+            : undefined,
+        });
+      } catch (err) {
+        reportUploadError(err, i);
+        return;
+      }
     }
-
-    const item = items[startIndex];
-    const file = item.file;
-    const existing = await checkDuplicate(file.name);
-
-    if (existing) {
-      setRevisionPrompt({
-        file,
-        existing,
-        files: items,
-        index: startIndex,
-        xlsxOptions: item.xlsxOptions,
-      });
-      return;
-    }
-
-    const xlsxOptions = isExcelFileType(detectFileType(file.name))
-      ? item.xlsxOptions || { useRecommended: true }
-      : undefined;
-    await uploadOne(file, { isRevision: false, xlsxOptions });
-    await processQueue(items, startIndex + 1);
+    notifyAction(`문서 ${items.length}건을 업로드했습니다.`);
+    router.push('/documents');
   }
 
   async function handleStartUpload() {
     if (!queue.length || uploading) return;
+    setUploadError('');
     setUploading(true);
     try {
       await processQueue(queue);
-    } catch (err) {
-      alert(err.message || '업로드 중 오류가 발생했습니다.');
     } finally {
       setUploading(false);
     }
@@ -153,7 +159,7 @@ export default function DocumentUploadPage() {
       });
       await processQueue(files, index + 1);
     } catch (err) {
-      alert(err.message || '업로드 중 오류가 발생했습니다.');
+      reportUploadError(err, index);
     } finally {
       setUploading(false);
     }
@@ -173,6 +179,7 @@ export default function DocumentUploadPage() {
       />
 
       <div className="space-y-6 px-4 pb-8 pt-4 md:px-8">
+        {uploadError && <p className="text-sm text-danger">{uploadError}</p>}
         <div
           className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 transition-colors ${
             dragOver ? 'border-accent bg-accentSoft/30' : 'border-border bg-surface'

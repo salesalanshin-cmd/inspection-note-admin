@@ -1,5 +1,9 @@
 'use client';
 
+import useFilteredQueryFeedback from '../../hooks/useFilteredQueryFeedback';
+
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import ModalShell, { ModalFooterActions } from '../../components/ModalShell';
@@ -174,6 +178,7 @@ function ItemModal({ open, title, form, setForm, error, saving, onClose, onSave 
 }
 
 export default function InspectionItemsPage() {
+  const queryFeedback = useFilteredQueryFeedback('점검 항목');
   const [process, setProcess] = useState('주조');
   const [kind, setKind] = useState('equipment_check');
   const [includeInactive, setIncludeInactive] = useState(true);
@@ -187,6 +192,7 @@ export default function InspectionItemsPage() {
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
+    const finish = queryFeedback.begin();
     setLoading(true);
     setListError(null);
     try {
@@ -196,13 +202,15 @@ export default function InspectionItemsPage() {
         includeInactive: includeInactive ? '1' : '',
       });
       setRows(data.rows || []);
+      finish();
     } catch (err) {
       setRows([]);
       setListError(err?.message || '목록을 불러오지 못했습니다.');
+      finish(false);
     } finally {
       setLoading(false);
     }
-  }, [process, kind, includeInactive]);
+  }, [process, kind, includeInactive, queryFeedback]);
 
   useEffect(() => {
     load();
@@ -259,10 +267,12 @@ export default function InspectionItemsPage() {
       } else {
         await createInspectionItem(payload);
       }
+      notifyAction(editingId ? '점검 항목을 수정했습니다.' : '점검 항목을 추가했습니다.');
       setModalOpen(false);
       await load();
     } catch (err) {
       setFormError(err?.message || '저장에 실패했습니다.');
+      notifyAction('점검 항목을 저장하지 못했습니다.', 'error');
     } finally {
       setSaving(false);
     }
@@ -272,19 +282,23 @@ export default function InspectionItemsPage() {
     const index = sorted.findIndex((r) => r.id === row.id);
     const swapWith = sorted[index + direction];
     if (!swapWith) return;
+    let firstSaved = false;
     setListError(null);
     try {
       await patchInspectionItem({
         id: row.id,
         patch: { sort_order: swapWith.sort_order },
       });
+      firstSaved = true;
       await patchInspectionItem({
         id: swapWith.id,
         patch: { sort_order: row.sort_order },
       });
+      notifyAction('점검 항목 순서를 변경했습니다.');
       await load();
     } catch (err) {
       setListError(err?.message || '순서 변경에 실패했습니다.');
+      notifyAction(firstSaved ? '점검 순서가 일부만 변경되었습니다.' : '점검 순서를 변경하지 못했습니다.', firstSaved ? 'warning' : 'error');
     }
   }
 
@@ -295,9 +309,11 @@ export default function InspectionItemsPage() {
         id: row.id,
         patch: { is_active: !row.is_active },
       });
+      notifyAction('점검 항목 사용 상태를 변경했습니다.');
       await load();
     } catch (err) {
       setListError(err?.message || '상태 변경에 실패했습니다.');
+      notifyAction('점검 항목 상태를 변경하지 못했습니다.', 'error');
     }
   }
 
@@ -321,7 +337,7 @@ export default function InspectionItemsPage() {
             <select
               className={selectClass}
               value={process}
-              onChange={(e) => setProcess(e.target.value)}
+              onChange={(e) => { queryFeedback.mark(); setProcess(e.target.value); }}
             >
               {WORKER_PROCESSES.map((p) => (
                 <option key={p} value={p}>
@@ -335,7 +351,7 @@ export default function InspectionItemsPage() {
             <select
               className={selectClass}
               value={kind}
-              onChange={(e) => setKind(e.target.value)}
+              onChange={(e) => { queryFeedback.mark(); setKind(e.target.value); }}
             >
               <option value="equipment_check">설비일상점검</option>
               <option value="production_condition">생산조건</option>
@@ -345,7 +361,7 @@ export default function InspectionItemsPage() {
             <input
               type="checkbox"
               checked={includeInactive}
-              onChange={(e) => setIncludeInactive(e.target.checked)}
+              onChange={(e) => { queryFeedback.mark(); setIncludeInactive(e.target.checked); }}
             />
             사용 중지 포함
           </label>

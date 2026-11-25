@@ -1,5 +1,7 @@
 'use client';
 
+import useFilteredQueryFeedback from '../../../hooks/useFilteredQueryFeedback';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../../lib/supabase';
@@ -40,6 +42,7 @@ function moldNameFromMap(id, moldMap) {
 }
 
 export default function MoldHistoryPage() {
+  const queryFeedback = useFilteredQueryFeedback('금형 교체 이력');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [equipment, setEquipment] = useState([]);
@@ -62,6 +65,7 @@ export default function MoldHistoryPage() {
   }, [equipment]);
 
   const load = useCallback(async () => {
+    const finish = queryFeedback.begin();
     setError(null);
     setLoading(true);
     try {
@@ -126,12 +130,14 @@ export default function MoldHistoryPage() {
       setEquipment(eqRes.data || []);
       setMolds(moldRes.data || []);
       setWorkers(dirRes.data || []);
+      finish();
     } catch (err) {
       setError(err?.message || '불러오기에 실패했습니다.');
+      finish(false);
     } finally {
       setLoading(false);
     }
-  }, [dateRange, equipmentId]);
+  }, [dateRange, equipmentId, queryFeedback]);
 
   useEffect(() => {
     load();
@@ -157,7 +163,7 @@ export default function MoldHistoryPage() {
             <span className="text-xs text-muted">설비</span>
             <select
               value={equipmentId}
-              onChange={(e) => setEquipmentId(e.target.value)}
+              onChange={(e) => { queryFeedback.mark(); setEquipmentId(e.target.value); }}
               className={`${inputClass} min-w-[12rem]`}
             >
               <option value="">전체</option>
@@ -171,7 +177,7 @@ export default function MoldHistoryPage() {
           </label>
           <div>
             <div className="mb-1 text-xs text-muted">기간</div>
-            <DateRangePicker value={dateRange} onChange={setDateRange} />
+            <DateRangePicker announceChange={false} value={dateRange} onChange={(range) => { queryFeedback.mark(); setDateRange(range); }} />
           </div>
         </div>
 

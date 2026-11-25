@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../../lib/actionFeedback';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell, ChevronDown, ChevronUp, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
@@ -190,14 +192,18 @@ export default function MessagesSettingsPage() {
       if (error) {
         setLogsError(error.message);
         setLogs([]);
+        return false;
       } else {
         setLogs(data || []);
+        return true;
       }
     } catch (err) {
       setLogsError(err?.message || '로그를 불러오지 못했습니다.');
       setLogs([]);
+      return false;
+    } finally {
+      setLoadingLogs(false);
     }
-    setLoadingLogs(false);
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -225,8 +231,15 @@ export default function MessagesSettingsPage() {
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
     setNow(new Date());
-    await Promise.all([loadLogs(), refetchReports()]);
-    setRefreshing(false);
+    try {
+      const outcomes = await Promise.all([loadLogs(), refetchReports()]);
+      if (outcomes.every(Boolean)) notifyAction('메시지 현황을 조회했습니다.');
+      else notifyAction('메시지 현황을 모두 조회하지 못했습니다.', 'error');
+    } catch {
+      notifyAction('메시지 현황 조회에 실패했습니다.', 'error');
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadLogs, refetchReports]);
 
   useEffect(() => {
@@ -395,11 +408,13 @@ export default function MessagesSettingsPage() {
       );
 
       if (error) {
-        window.alert(error.message || '설정 저장에 실패했습니다.');
+        notifyAction('자동 발송 설정을 저장하지 못했습니다.', 'error');
         setSettings((s) => ({ ...s, [key]: prev }));
+      } else {
+        notifyAction(`자동 발송을 ${nextEnabled ? '켰습니다' : '껐습니다'}.`);
       }
-    } catch (err) {
-      window.alert(err?.message || '설정 저장에 실패했습니다.');
+    } catch {
+      notifyAction('자동 발송 설정을 저장하지 못했습니다.', 'error');
       setSettings((s) => ({ ...s, [key]: prev }));
     }
     setTogglingKey(null);
@@ -441,16 +456,15 @@ export default function MessagesSettingsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        window.alert(data.error || '재발송에 실패했습니다.');
+        notifyAction('알림톡을 재발송하지 못했습니다.', 'error');
       } else {
         const result = data.results?.[0];
-        if (result && !result.success) {
-          window.alert(result.error || '재발송에 실패했습니다.');
-        }
+        if (result?.success) notifyAction('알림톡을 재발송했습니다.');
+        else notifyAction('알림톡 재발송 결과를 확인해 주세요.', 'error');
         await loadLogs();
       }
     } catch (err) {
-      window.alert(err?.message || '재발송 중 오류가 발생했습니다.');
+      notifyAction('알림톡 재발송 결과를 확인해 주세요.', 'error');
     } finally {
       setResendingId(null);
     }

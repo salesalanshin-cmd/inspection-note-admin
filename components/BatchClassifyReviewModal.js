@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../lib/actionFeedback';
+
 import { useMemo, useState } from 'react';
 import SignedImage from './SignedImage';
 import { SimilarCorrectionNotes } from './AiSuggestionBanner';
@@ -83,8 +85,10 @@ export default function BatchClassifyReviewModal({
     setSaving(true);
     try {
       await onSave(updates);
+      notifyAction(`분류 결과 ${updates.length}건을 저장했습니다.`);
       onClose();
     } catch (err) {
+      notifyAction('분류 결과를 모두 저장하지 못했습니다.', 'error');
       setError(err.message || '저장에 실패했습니다.');
     } finally {
       setSaving(false);

@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { notifyAction } from '../../lib/actionFeedback';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import PageHeader from '../../components/PageHeader';
 import ModalShell, { ModalFooterActions } from '../../components/ModalShell';
@@ -83,7 +85,10 @@ export default function QuestionsPage() {
   const [hiding, setHiding] = useState(false);
   const [restoringId, setRestoringId] = useState(null);
 
-  const load = useCallback(async () => {
+  const previousList = useRef(null);
+  const latestRequest = useRef(0);
+  const load = useCallback(async (announce = false) => {
+    const request = ++latestRequest.current;
     try {
       setLoading(true);
       const companyId = await getCompanyId();
@@ -95,6 +100,7 @@ export default function QuestionsPage() {
       const managerByThread = showHidden
         ? null
         : await fetchManagerMessagesForThreads(threads.map((t) => t.id));
+      if (request !== latestRequest.current) return;
       setRows(
         buildQuestionListRows(threads, directoryRes.data || [], {
           managerMessagesByThread: managerByThread,
@@ -102,15 +108,21 @@ export default function QuestionsPage() {
       );
       setSelectedIds(new Set());
       setError(null);
+      if (announce) notifyAction('질문 목록을 조회했습니다.');
     } catch (err) {
+      if (request !== latestRequest.current) return;
       setError(err.message || '목록을 불러오지 못했습니다.');
+      if (announce) notifyAction('질문 목록을 불러오지 못했습니다.', 'error');
     } finally {
-      setLoading(false);
+      if (request === latestRequest.current) setLoading(false);
     }
   }, [tab, showHidden]);
 
   useEffect(() => {
-    load();
+    const changed = previousList.current !== null && previousList.current !== load;
+    previousList.current = load;
+    load(changed);
+    return () => { latestRequest.current += 1; };
   }, [load]);
 
   const emptyLabel = useMemo(() => {
@@ -152,7 +164,7 @@ export default function QuestionsPage() {
       const activeCount = (json.items || []).filter((k) => k.is_active).length;
       setDeactivateKnowledge(activeCount > 0);
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '연결된 지식을 불러오지 못했습니다.', 'error');
       setHideDialog(null);
     } finally {
       setLoadingKnowledge(false);
@@ -173,10 +185,11 @@ export default function QuestionsPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '숨기기 실패');
+      notifyAction(`질문 ${json.hidden}건을 숨겼습니다.`, json.hidden === hideDialog.threadIds.length ? 'success' : 'warning');
       setHideDialog(null);
       await load();
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '질문을 숨기지 못했습니다.', 'error');
     } finally {
       setHiding(false);
     }
@@ -193,9 +206,11 @@ export default function QuestionsPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '복원 실패');
+      if (json.restored > 0) notifyAction('질문을 복원했습니다.');
+      else notifyAction('복원할 질문이 없습니다.', 'warning');
       await load();
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '질문을 복원하지 못했습니다.', 'error');
     } finally {
       setRestoringId(null);
     }
@@ -210,7 +225,7 @@ export default function QuestionsPage() {
         title="질문 답변"
         description="AI가 답하지 못한 작업자 질문에 답하고 지식으로 축적합니다."
         actions={
-          <button type="button" onClick={load} className={btnSecondary}>
+          <button type="button" onClick={() => load(true)} className={btnSecondary}>
             새로고침
           </button>
         }

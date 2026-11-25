@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../../../lib/actionFeedback';
+
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -94,10 +96,11 @@ export default function DocumentChunksPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '저장 실패');
+      notifyAction('문서 조각을 수정했습니다.');
       setEditing(null);
       fetchAll();
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '문서 조각을 수정하지 못했습니다.', 'error');
     } finally {
       setSaving(false);
     }

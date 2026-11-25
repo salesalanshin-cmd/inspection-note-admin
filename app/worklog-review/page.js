@@ -1,5 +1,9 @@
 'use client';
 
+import useFilteredQueryFeedback from '../../hooks/useFilteredQueryFeedback';
+
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import WorklogPhotoViewer from '../../components/WorklogPhotoViewer';
 import records from '../../components/RecordTable.module.css';
@@ -82,6 +86,8 @@ function formatAccuracy(value) {
 }
 
 export default function WorklogReviewPage() {
+  const listFeedback = useFilteredQueryFeedback('작업일보 목록');
+  const detailFeedback = useFilteredQueryFeedback('작업일보 사진');
   const [scope, setScope] = useState('needs');
   const [form, setForm] = useState('all');
   const [from, setFrom] = useState('');
@@ -117,13 +123,17 @@ export default function WorklogReviewPage() {
   useEffect(() => {
     let cancelled = false;
     setListError(null);
-    loadList().catch((err) => {
-      if (!cancelled) setListError(err.message);
+    const finish = listFeedback.begin();
+    loadList().then(() => { if (!cancelled) finish(); }).catch((err) => {
+      if (!cancelled) {
+        setListError(err.message);
+        finish(false);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [loadList]);
+  }, [loadList, listFeedback]);
 
   const loadDetail = useCallback(async (id) => {
     const response = await fetch(`/api/worklog-review/${id}`, { cache: 'no-store' });
@@ -143,13 +153,17 @@ export default function WorklogReviewPage() {
     }
     let cancelled = false;
     setDetailError(null);
-    loadDetail(selectedId).catch((err) => {
-      if (!cancelled) setDetailError(err.message);
+    const finish = detailFeedback.begin();
+    loadDetail(selectedId).then(() => { if (!cancelled) finish(); }).catch((err) => {
+      if (!cancelled) {
+        setDetailError(err.message);
+        finish(false);
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, [selectedId, loadDetail]);
+  }, [selectedId, loadDetail, detailFeedback]);
 
   const dirtyIds = useMemo(() => {
     if (!detail) return [];
@@ -172,6 +186,7 @@ export default function WorklogReviewPage() {
   async function saveRow(id) {
     const values = drafts[id];
     if (!values) return;
+    let saved = false;
     setBusy(true);
     setNotice(null);
     setDetailError(null);
@@ -186,11 +201,14 @@ export default function WorklogReviewPage() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || '저장에 실패했습니다.');
+      saved = true;
       setNotice(body.corrections ? `저장했습니다. 수정 ${body.corrections}칸.` : '저장했습니다.');
       await loadDetail(selectedId);
       await loadList();
+      notifyAction(isNew ? '작업일보 행을 추가했습니다.' : '작업일보 행을 수정했습니다.');
     } catch (err) {
       setDetailError(err.message);
+      notifyAction(saved ? '변경을 저장했지만 최신 내용을 조회하지 못했습니다.' : '작업일보 행을 저장하지 못했습니다.', saved ? 'warning' : 'error');
     } finally {
       setBusy(false);
     }
@@ -206,6 +224,7 @@ export default function WorklogReviewPage() {
       return;
     }
     if (!window.confirm('이 행을 삭제할까요?')) return;
+    let saved = false;
     setBusy(true);
     setNotice(null);
     setDetailError(null);
@@ -213,11 +232,14 @@ export default function WorklogReviewPage() {
       const response = await fetch(`/api/worklog-review/rows/${id}`, { method: 'DELETE' });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || '삭제에 실패했습니다.');
+      saved = true;
       setNotice('행을 삭제했습니다.');
       await loadDetail(selectedId);
       await loadList();
+      notifyAction('작업일보 행을 삭제했습니다.');
     } catch (err) {
       setDetailError(err.message);
+      notifyAction(saved ? '변경을 저장했지만 최신 내용을 조회하지 못했습니다.' : '작업일보 행을 삭제하지 못했습니다.', saved ? 'warning' : 'error');
     } finally {
       setBusy(false);
     }
@@ -236,6 +258,7 @@ export default function WorklogReviewPage() {
     }
     const ids = list?.photos?.map((photo) => photo.id) || [];
     const nextId = ids[ids.indexOf(selectedId) + 1] || null;
+    let saved = false;
     setBusy(true);
     setNotice(null);
     setDetailError(null);
@@ -243,12 +266,16 @@ export default function WorklogReviewPage() {
       const response = await fetch(`/api/worklog-review/${selectedId}`, { method: 'POST' });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || '검토 완료에 실패했습니다.');
-      setNotice(`검토 완료. ${body.updated}행을 확인 처리했습니다.`);
+      saved = body.updated > 0;
+      const message = saved ? `작업일보 ${body.updated}행의 검토를 완료했습니다.` : '검토 완료 처리할 행이 없습니다.';
+      setNotice(message);
       await loadList();
       if (andNext) setSelectedId(nextId);
       else await loadDetail(selectedId);
+      notifyAction(message, saved ? 'success' : 'warning');
     } catch (err) {
       setDetailError(err.message);
+      notifyAction(saved ? '변경을 저장했지만 최신 내용을 조회하지 못했습니다.' : '작업일보 검토를 완료하지 못했습니다.', saved ? 'warning' : 'error');
     } finally {
       setBusy(false);
     }
@@ -265,6 +292,12 @@ export default function WorklogReviewPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [completePhoto]);
 
+  function viewPhoto(id) {
+    if (!id || id === selectedId) return;
+    detailFeedback.mark();
+    setSelectedId(id);
+  }
+
   function goNext() {
     if (dirtyIds.length) {
       setDetailError('저장하지 않은 수정이 있습니다.');
@@ -272,7 +305,8 @@ export default function WorklogReviewPage() {
     }
     const ids = list?.photos?.map((photo) => photo.id) || [];
     const nextId = ids[ids.indexOf(selectedId) + 1] || null;
-    setSelectedId(nextId);
+    if (nextId) viewPhoto(nextId);
+    else setSelectedId(null);
   }
 
   const rows = [
@@ -301,14 +335,14 @@ export default function WorklogReviewPage() {
         <div className="mt-3 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
           <label className="text-xs text-muted">
             범위
-            <select className={`${inputClass} mt-1`} value={scope} onChange={(event) => setScope(event.target.value)}>
+            <select className={`${inputClass} mt-1`} value={scope} onChange={(event) => { listFeedback.mark(); setScope(event.target.value); }}>
               <option value="needs">검토 필요만</option>
               <option value="all">전체</option>
             </select>
           </label>
           <label className="text-xs text-muted">
             양식
-            <select className={`${inputClass} mt-1`} value={form} onChange={(event) => setForm(event.target.value)}>
+            <select className={`${inputClass} mt-1`} value={form} onChange={(event) => { listFeedback.mark(); setForm(event.target.value); }}>
               <option value="all">전체</option>
               <option value="final_inspection">최종검사</option>
               <option value="working_report">작업일보</option>
@@ -316,11 +350,11 @@ export default function WorklogReviewPage() {
           </label>
           <label className="text-xs text-muted">
             근무일 시작
-            <input className={`${inputClass} mt-1`} type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+            <input className={`${inputClass} mt-1`} type="date" value={from} onChange={(event) => { listFeedback.mark(); setFrom(event.target.value); }} />
           </label>
           <label className="text-xs text-muted">
             근무일 끝
-            <input className={`${inputClass} mt-1`} type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+            <input className={`${inputClass} mt-1`} type="date" value={to} onChange={(event) => { listFeedback.mark(); setTo(event.target.value); }} />
           </label>
         </div>
         {listError ? <p className="mt-3 text-sm text-danger">{listError}</p> : null}
@@ -333,7 +367,7 @@ export default function WorklogReviewPage() {
               <button
                 key={photo.id}
                 type="button"
-                onClick={() => setSelectedId(photo.id)}
+                onClick={() => viewPhoto(photo.id)}
                 className={`block w-full border-b border-border px-3 py-2 text-left ${
                   photo.id === selectedId ? 'bg-accentSoft' : 'hover:bg-surface2'
                 }`}

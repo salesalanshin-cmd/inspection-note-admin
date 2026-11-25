@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { DOC_ERROR_CODES, docLabel } from '../../lib/constants';
@@ -167,6 +169,11 @@ export default function DocumentsPage() {
     }
   }
 
+  function openRecord(record) {
+    setSelected(record);
+    notifyAction('문서 스캔 기록을 조회했습니다.');
+  }
+
   function openTrashConfirm() {
     setTrashError(null);
     setTrashConfirm(true);
@@ -182,11 +189,13 @@ export default function DocumentsPage() {
     setTrashLoading(true);
     setTrashError(null);
     try {
-      await moveToTrash(TRASH_TABLES.doc, [...selectedIds]);
+      const moved = await moveToTrash(TRASH_TABLES.doc, [...selectedIds]);
+      notifyAction(`기록 ${moved.length}건을 휴지통으로 옮겼습니다.`);
       clearAll();
       setTrashConfirm(false);
       refetch();
     } catch (err) {
+      notifyAction('휴지통 이동 결과를 확인해 주세요.', 'error');
       setTrashError(err?.message || '휴지통으로 옮기지 못했습니다.');
     } finally {
       setTrashLoading(false);
@@ -325,13 +334,13 @@ export default function DocumentsPage() {
             <div key={d.id} className="bg-surface rounded-xl shadow-card overflow-hidden group">
               <div
                 className="relative aspect-square bg-surface2 cursor-pointer"
-                onClick={() => setSelected(d)}
+                onClick={() => openRecord(d)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    setSelected(d);
+                    openRecord(d);
                   }
                 }}
               >

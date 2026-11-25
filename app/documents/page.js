@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -212,6 +214,7 @@ export default function KnowledgeDocumentsPage() {
   });
 
   const [historyDoc, setHistoryDoc] = useState(null);
+  const historyRequest = useRef(0);
   const [historyChain, setHistoryChain] = useState([]);
   const [reprocessId, setReprocessId] = useState(null);
 
@@ -290,6 +293,7 @@ export default function KnowledgeDocumentsPage() {
 
   useEffect(() => {
     fetchAll();
+    return () => { historyRequest.current += 1; };
   }, [fetchAll]);
 
   const hasProcessing = useMemo(
@@ -346,9 +350,11 @@ export default function KnowledgeDocumentsPage() {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || '이동 실패');
+        notifyAction('문서를 이동했습니다.');
       } catch (err) {
         setRows(prevRows);
         setMoveError(err.message || '문서 이동에 실패했습니다.');
+        notifyAction('문서를 이동하지 못했습니다.', 'error');
       }
     },
     [rows]
@@ -473,6 +479,7 @@ export default function KnowledgeDocumentsPage() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error);
         if (parentId) setExpandedFolders((p) => new Set(p).add(parentId));
+        notifyAction('폴더를 만들었습니다.');
       } else if (folderDialog.mode === 'rename') {
         const res = await fetch(`/api/documents/folders/${folderDialog.folder.id}`, {
           method: 'PATCH',
@@ -481,6 +488,7 @@ export default function KnowledgeDocumentsPage() {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error);
+        notifyAction('폴더 이름을 수정했습니다.');
       } else if (folderDialog.mode === 'delete') {
         const res = await fetch(`/api/documents/folders/${folderDialog.folder.id}`, {
           method: 'DELETE',
@@ -490,12 +498,13 @@ export default function KnowledgeDocumentsPage() {
         if (selectedFolderId === folderDialog.folder.id) {
           setSelectedFolderId(folderDialog.folder.parent_id);
         }
+        notifyAction('폴더를 삭제했습니다.');
       }
       setFolderDialog(null);
       setFolderNameInput('');
       await fetchAll();
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '폴더 변경에 실패했습니다.', 'error');
     } finally {
       setFolderSaving(false);
     }
@@ -511,9 +520,10 @@ export default function KnowledgeDocumentsPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || '재처리 실패');
+      notifyAction('문서 재처리를 요청했습니다.');
       fetchAll();
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '문서 재처리를 요청하지 못했습니다.', 'error');
     } finally {
       setReprocessId(null);
     }
@@ -522,18 +532,34 @@ export default function KnowledgeDocumentsPage() {
   async function bulkDeactivateFailed() {
     if (!filterCounts.failed) return;
     if (!window.confirm(`실패 문서 ${filterCounts.failed}건을 비활성화할까요? (삭제 아님)`)) return;
-    const res = await fetch('/api/documents/bulk-deactivate-failed', { method: 'POST' });
-    const json = await res.json();
-    if (!res.ok) {
-      alert(json.error || '정리 실패');
-      return;
+    try {
+      const res = await fetch('/api/documents/bulk-deactivate-failed', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || '정리 실패');
+      notifyAction(`문서 ${json.count}건을 비활성화했습니다.`);
+      fetchAll();
+    } catch (err) {
+      notifyAction(err.message || '문서를 비활성화하지 못했습니다.', 'error');
     }
-    alert(`${json.count}건 비활성화했습니다.`);
-    fetchAll();
   }
 
   async function openHistory(doc) {
+    const request = ++historyRequest.current;
     setHistoryDoc(doc);
+    setHistoryChain([]);
+    try {
+      const chain = await loadHistoryChain(doc);
+      if (request !== historyRequest.current) return;
+      setHistoryChain(chain);
+      notifyAction('문서 버전 이력을 조회했습니다.');
+    } catch (err) {
+      if (request !== historyRequest.current) return;
+      setHistoryDoc(null);
+      notifyAction(err.message || '문서 이력을 불러오지 못했습니다.', 'error');
+    }
+  }
+
+  async function loadHistoryChain(doc) {
     const companyId = await getCompanyId();
 
     const successorBySupersedes = new Map();
@@ -557,19 +583,20 @@ export default function KnowledgeDocumentsPage() {
       seenForward.add(currentId);
       let item = rows.find((r) => r.id === currentId);
       if (!item) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('document')
           .select('id, title, version, supersedes, created_at, is_active, status, file_name')
           .eq('company_id', companyId)
           .eq('id', currentId)
           .maybeSingle();
+        if (error) throw error;
         item = data;
       }
       if (!item) break;
       chain.push(item);
       currentId = successorBySupersedes.get(currentId) ?? null;
     }
-    setHistoryChain(chain);
+    return chain;
   }
 
   function openEdit(doc) {
@@ -595,9 +622,10 @@ export default function KnowledgeDocumentsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
       setEditDoc(null);
+      notifyAction('문서 정보를 수정했습니다.');
       fetchAll();
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '문서 정보를 저장하지 못했습니다.', 'error');
     } finally {
       setSavingEdit(false);
     }
@@ -634,6 +662,7 @@ export default function KnowledgeDocumentsPage() {
 
   async function processUploadQueue(items, startIndex = 0, options = {}) {
     const folderId = selectedFolderId || '';
+    let failed = options.failed ?? 0;
     for (let i = startIndex; i < items.length; i += 1) {
       const item = items[i];
       const file = item.file || item;
@@ -650,6 +679,7 @@ export default function KnowledgeDocumentsPage() {
             files: items,
             index: i,
             folderId,
+            failed,
             xlsxOptions: item.xlsxOptions,
           });
           return;
@@ -662,12 +692,18 @@ export default function KnowledgeDocumentsPage() {
           q.map((row) => (row.name === fileName ? { ...row, status: 'done' } : row))
         );
       } catch (err) {
+        failed += 1;
         setUploadQueue((q) =>
           q.map((row) =>
             row.name === fileName ? { ...row, status: 'error', error: err.message } : row
           )
         );
       }
+    }
+    if (failed) {
+      notifyAction(`문서 업로드 성공 ${items.length - failed}건, 실패 ${failed}건입니다.`, failed === items.length ? 'error' : 'warning');
+    } else {
+      notifyAction(`문서 ${items.length}건을 업로드했습니다.`);
     }
     fetchAll();
   }
@@ -712,11 +748,13 @@ export default function KnowledgeDocumentsPage() {
         folderId,
         xlsxOptions: { useRecommended: true },
       });
+      notifyAction('문서를 업로드했습니다.');
       setUploadQueue((q) =>
         q.map((item) => (item.name === file.name ? { ...item, status: 'done' } : item))
       );
       fetchAll();
     } catch (err) {
+      notifyAction('문서를 업로드하지 못했습니다.', 'error');
       setUploadQueue((q) =>
         q.map((item) =>
           item.name === file.name ? { ...item, status: 'error', error: err.message } : item
@@ -733,7 +771,7 @@ export default function KnowledgeDocumentsPage() {
 
   async function handleRevisionChoice(isRevision) {
     if (!revisionPrompt) return;
-    const { file, existing, files, index, folderId, xlsxOptions } = revisionPrompt;
+    const { file, existing, files, index, folderId, xlsxOptions, failed } = revisionPrompt;
     setRevisionPrompt(null);
     setUploadQueue((q) =>
       q.map((item) => (item.name === file.name ? { ...item, status: 'uploading' } : item))
@@ -750,8 +788,9 @@ export default function KnowledgeDocumentsPage() {
       setUploadQueue((q) =>
         q.map((item) => (item.name === file.name ? { ...item, status: 'done' } : item))
       );
-      await processUploadQueue(files, index + 1, { skipDuplicateCheck: true });
+      await processUploadQueue(files, index + 1, { skipDuplicateCheck: true, failed });
     } catch (err) {
+      notifyAction(`문서 업로드가 중단됐습니다. 완료 ${index - failed}건.`, index > failed ? 'warning' : 'error');
       setUploadQueue((q) =>
         q.map((item) =>
           item.name === file.name ? { ...item, status: 'error', error: err.message } : item
@@ -772,10 +811,11 @@ export default function KnowledgeDocumentsPage() {
         folderId: doc.folder_id || '',
         xlsxOptions,
       });
+      notifyAction('문서 개정본을 업로드했습니다.');
       fetchAll();
       setEditDoc(null);
     } catch (err) {
-      alert(err.message);
+      notifyAction(err.message || '개정본을 업로드하지 못했습니다.', 'error');
     }
   }
 
@@ -1262,6 +1302,7 @@ export default function KnowledgeDocumentsPage() {
         <ModalShell
           title="개정 이력"
           onClose={() => {
+            historyRequest.current += 1;
             setHistoryDoc(null);
             setHistoryChain([]);
           }}

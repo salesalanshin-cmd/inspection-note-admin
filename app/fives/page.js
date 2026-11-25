@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useEffect, useMemo, useState } from 'react';
 import { useReports } from '../../lib/useReports';
 import { SOS_ERROR_CODES, ZONE_CODES, fivesErrorCode, fivesLabel, getZoneLabel } from '../../lib/constants';
@@ -166,7 +168,14 @@ export default function FivesPage() {
         setBatchProgress({ done, total });
       });
       setBatchResults(results);
+      const failed = results.filter((item) => item.error).length;
+      if (failed) {
+        notifyAction(`사진 분류 ${results.length}건 중 ${failed}건 실패`, failed === results.length ? 'error' : 'warning');
+      } else {
+        notifyAction('사진 분류를 완료했습니다.');
+      }
     } catch (err) {
+      notifyAction('사진을 분류하지 못했습니다.', 'error');
       setBatchError(err.message);
     } finally {
       setBatchProgress(null);
@@ -187,6 +196,8 @@ export default function FivesPage() {
           })
           .eq('id', u.id)
           .eq('company_id', companyId)
+          .select('id')
+          .single()
       )
     );
     const failed = responses.find((r) => r.error);
@@ -247,6 +258,11 @@ export default function FivesPage() {
     }
   }
 
+  function openRecord(record) {
+    setSelected(record);
+    notifyAction('3정5S 기록을 조회했습니다.');
+  }
+
   function openTrashConfirm() {
     setTrashError(null);
     setTrashConfirm(true);
@@ -262,11 +278,13 @@ export default function FivesPage() {
     setTrashLoading(true);
     setTrashError(null);
     try {
-      await moveToTrash(TRASH_TABLES.fives, [...selectedIds]);
+      const moved = await moveToTrash(TRASH_TABLES.fives, [...selectedIds]);
+      notifyAction(`기록 ${moved.length}건을 휴지통으로 옮겼습니다.`);
       clearAll();
       setTrashConfirm(false);
       refetch();
     } catch (err) {
+      notifyAction('휴지통 이동 결과를 확인해 주세요.', 'error');
       setTrashError(err?.message || '휴지통으로 옮기지 못했습니다.');
     } finally {
       setTrashLoading(false);
@@ -379,13 +397,13 @@ export default function FivesPage() {
                     <div key={f.id} className="group overflow-hidden rounded-xl bg-surface shadow-card">
                       <div
                         className="relative aspect-square cursor-pointer bg-surface2"
-                        onClick={() => setSelected(f)}
+                        onClick={() => openRecord(f)}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
-                            setSelected(f);
+                            openRecord(f);
                           }
                         }}
                         aria-label={`${displayName} 3정5S 기록 수정`}

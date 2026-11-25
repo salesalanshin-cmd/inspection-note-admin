@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import useFilteredQueryFeedback from '../../../hooks/useFilteredQueryFeedback';
 import {
   CartesianGrid,
   ComposedChart,
@@ -55,6 +56,7 @@ function basisLabel(basis) {
 }
 
 export default function ProjectKpiPage() {
+  const queryFeedback = useFilteredQueryFeedback('과제 성과지표');
   const [fromA, setFromA] = useState('2026-06-01');
   const [toA, setToA] = useState('2026-07-31');
   const [fromB, setFromB] = useState('2026-09-01');
@@ -68,6 +70,7 @@ export default function ProjectKpiPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const finish = queryFeedback.begin();
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ fromA, toA, fromB });
@@ -79,10 +82,14 @@ export default function ProjectKpiPage() {
         return body;
       })
       .then((body) => {
-        if (!cancelled) setData(body);
+        if (cancelled) return;
+        setData(body);
+        finish();
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message);
+        if (cancelled) return;
+        setError(err.message);
+        finish(false);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -90,7 +97,13 @@ export default function ProjectKpiPage() {
     return () => {
       cancelled = true;
     };
-  }, [fromA, toA, fromB, toB]);
+  }, [fromA, toA, fromB, toB, queryFeedback]);
+
+  function changePeriod(setDate, current, next) {
+    if (current === next) return;
+    queryFeedback.mark();
+    setDate(next);
+  }
 
   const digital = data?.digital;
   const compare = data?.compare;
@@ -240,10 +253,10 @@ export default function ProjectKpiPage() {
       <section className="rounded-xl border border-border bg-surface p-5">
         <div className="mb-3 flex flex-wrap items-end gap-2 print:hidden">
           <span className="mr-auto text-sm font-medium text-text">전후 비교</span>
-          <label className="text-xs text-muted">기간 A 시작<input className={`${controlClass} mt-1 block`} type="date" value={fromA} onChange={(event) => setFromA(event.target.value)} /></label>
-          <label className="text-xs text-muted">기간 A 끝<input className={`${controlClass} mt-1 block`} type="date" value={toA} onChange={(event) => setToA(event.target.value)} /></label>
-          <label className="text-xs text-muted">기간 B 시작<input className={`${controlClass} mt-1 block`} type="date" value={fromB} onChange={(event) => setFromB(event.target.value)} /></label>
-          <label className="text-xs text-muted">기간 B 끝<input className={`${controlClass} mt-1 block`} type="date" value={toB || compare?.b?.to || ''} onChange={(event) => setToB(event.target.value)} /></label>
+          <label className="text-xs text-muted">기간 A 시작<input className={`${controlClass} mt-1 block`} type="date" value={fromA} onChange={(event) => changePeriod(setFromA, fromA, event.target.value)} /></label>
+          <label className="text-xs text-muted">기간 A 끝<input className={`${controlClass} mt-1 block`} type="date" value={toA} onChange={(event) => changePeriod(setToA, toA, event.target.value)} /></label>
+          <label className="text-xs text-muted">기간 B 시작<input className={`${controlClass} mt-1 block`} type="date" value={fromB} onChange={(event) => changePeriod(setFromB, fromB, event.target.value)} /></label>
+          <label className="text-xs text-muted">기간 B 끝<input className={`${controlClass} mt-1 block`} type="date" value={toB || compare?.b?.to || ''} onChange={(event) => changePeriod(setToB, toB, event.target.value)} /></label>
         </div>
         <div className="overflow-x-auto print:overflow-visible">
           <table className="w-full min-w-[29rem] border-collapse text-sm print:min-w-0">

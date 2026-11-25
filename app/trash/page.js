@@ -1,5 +1,7 @@
 'use client';
 
+import { notifyAction } from '../../lib/actionFeedback';
+
 import { useMemo, useState } from 'react';
 import { useTrash, trashItemKey, parseTrashItemKey } from '../../lib/useTrash';
 import {
@@ -104,9 +106,12 @@ export default function TrashPage() {
       ]);
       clearSelection();
       setRestoreConfirm(false);
+      notifyAction('선택한 기록을 복구했습니다.');
       refetch();
     } catch (err) {
+      notifyAction('기록 복구 결과를 확인해 주세요.', 'error');
       setRestoreError(err?.message || '복구하지 못했습니다.');
+      refetch();
     } finally {
       setActionLoading(false);
     }
@@ -145,16 +150,19 @@ export default function TrashPage() {
         const msg = `삭제 실패: RLS 정책 필요 — 요청 ${requestedTotal}건 중 ${deletedTotal}건만 삭제되었습니다. Supabase에서 defect_reports / fives_reports / ocr_results 테이블에 DELETE RLS 정책을 추가해야 합니다.`;
         // eslint-disable-next-line no-console
         console.error('[trash delete]', msg);
+        notifyAction(`요청 ${requestedTotal}건 중 ${deletedTotal}건을 삭제했습니다.`, deletedTotal ? 'warning' : 'error');
         setDeleteError(msg);
         refetch(); // 실제 서버 상태로 복원
         return;
       }
 
+      notifyAction(`기록 ${deletedTotal}건을 영구 삭제했습니다.`);
       clearSelection();
       refetch();
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('[trash delete]', err);
+      notifyAction('영구 삭제 결과를 확인해 주세요.', 'error');
       setDeleteError(`삭제 실패: ${err?.message || err}`);
       refetch(); // 낙관적 제거 복원
     } finally {
