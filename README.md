@@ -9,6 +9,12 @@
 > - 모든 스키마 변경은 앱 레포(**defect-inspector**)의 `supabase/migrations/`에서만 합니다.
 > - Supabase SQL Editor에 수동으로 DDL을 실행하지 않습니다. 앱 레포 마이그레이션을 적용하세요.
 
+## 공지 제목과 본문 번역
+
+관리자는 기존 공지 화면에서 한국어로 작성·수정합니다. 앱이 영어·베트남어·태국어·크메르어로 공지를 열면 `POST /api/notices/translations`가 같은 회사에 공개된 공지를 확인하고 해당 언어의 제목과 본문을 반환합니다. 이전에 작성된 공지도 첫 조회 때 번역합니다. Vercel에 설정된 `ANTHROPIC_API_KEY`로 원문의 번역을 요청하며 작업자 답글은 전송 대상에서 제외합니다.
+
+앱 저장소의 `supabase/migrations/20261125093000_notice_translations.sql`을 적용한 뒤 관리자 웹을 게시하고 앱을 업데이트합니다. 서버에는 기존 `SUPABASE_SERVICE_ROLE_KEY`, 회사 설정과 `ANTHROPIC_API_KEY`가 필요합니다. 번역 캐시는 원문 해시와 언어를 확인하며 공지 수정 후 새 원문에 맞춰 갱신됩니다. 번역 서비스가 응답하지 않을 때는 원문으로 공지를 읽고 다음 조회에서 다시 번역할 수 있습니다.
+
 ## 구성
 
 - `defect_reports`, `good_reports`, `fives_reports` 3개 테이블을 조회해서
