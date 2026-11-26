@@ -1,6 +1,5 @@
 'use client';
 
-import { confirmedWrite } from '../../lib/confirmedWrite';
 import { notifyAction } from '../../lib/actionFeedback';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -694,8 +693,19 @@ export default function WorkerManagementPage() {
     });
   }
 
-  function insertWorker(data) {
-    return confirmedWrite(supabase.from('worker_directory').insert(data), 'worker_name');
+  async function saveWorker(action, name, changes) {
+    const response = await fetch('/api/workers/manage', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, name, changes }),
+    });
+    const result = await response.json();
+    if (!response.ok || result.data?.worker_name !== name) {
+      return { error: new Error(result.error || '작업자 저장 결과를 확인할 수 없습니다.') };
+    }
+    return result;
+  }
+
+  function insertWorker({ worker_name, company_id, ...changes }) {
+    return saveWorker('create', worker_name, changes);
   }
 
   async function writeWorker(name, existing, patch, companyId) {
@@ -705,10 +715,7 @@ export default function WorkerManagementPage() {
     if (!existing) return insertWorker({
       ...buildNewWorkerRow({ name }, companyId), display_name: '', nationality: '', removed: false, ...patch,
     });
-    return confirmedWrite(
-      supabase.from('worker_directory').update(patch).eq('worker_name', name).eq('company_id', companyId),
-      'worker_name'
-    );
+    return saveWorker('update', name, patch);
   }
 
   async function upsertWorker(worker_name, patch) {
