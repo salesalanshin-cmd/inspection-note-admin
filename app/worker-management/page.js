@@ -43,6 +43,7 @@ import PageHeader from '../../components/PageHeader';
 import ListTruncationNotice from '../../components/ListTruncationNotice';
 import MobileListCard, { MobileCardField } from '../../components/MobileListCard';
 import WorkerEditModal from '../../components/WorkerEditModal';
+import WorkerEquipmentAccessFields from '../../components/WorkerEquipmentAccessFields';
 import { useWorkerMesSync } from '../../hooks/useWorkerMesSync';
 
 const inputClass =
@@ -550,7 +551,7 @@ export default function WorkerManagementPage() {
         const companyId = await getCompanyId();
         const { data, error: eqError } = await supabase
           .from('equipment')
-          .select('id, name, line')
+          .select('id, name, line, external_source, external_code, mes_location')
           .eq('company_id', companyId)
           .order('name');
         if (cancelled) return;
@@ -1212,6 +1213,8 @@ export default function WorkerManagementPage() {
                 className={`${inputClass} mt-1.5 w-full`}
               />
             </label>
+            <WorkerEquipmentAccessFields value={addForm.equipmentAccess || {}} equipment={equipmentList}
+              disabled={saving === '__new__'} onChange={patch => patchAddForm({ equipmentAccess: { ...addForm.equipmentAccess, ...patch } })} />
           </div>
           {showAddWarnings
             ? addWarnings.map((warning) => (
@@ -1558,6 +1561,7 @@ export default function WorkerManagementPage() {
         <WorkerEditModal
           workerName={editTarget}
           row={directoryMap.get(editTarget)}
+          equipment={equipmentList}
           organizationOptions={organizationChoices}
           saving={saving === editTarget}
           onSave={upsertWorker}

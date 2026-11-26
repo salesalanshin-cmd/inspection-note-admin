@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import ModalShell, { ModalFooterActions } from './ModalShell';
 import ConfirmDialog from './ConfirmDialog';
+import WorkerEquipmentAccessFields from './WorkerEquipmentAccessFields';
 import {
   NATIONALITY_LANG_HINTS,
   WORKER_LANGS,
@@ -104,6 +105,7 @@ export default function WorkerEditModal({
   row,
   saving,
   organizationOptions = [],
+  equipment = [],
   onSave,
   onRequestDelete,
   onClose,
@@ -118,6 +120,7 @@ export default function WorkerEditModal({
     row?.handles_defects ?? row?.defect_enabled ?? true
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [equipmentPatch, setEquipmentPatch] = useState({});
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -130,6 +133,7 @@ export default function WorkerEditModal({
     setHandlesDefects(row?.handles_defects ?? row?.defect_enabled ?? true);
     setError(null);
     setConfirmDelete(false);
+    setEquipmentPatch({});
   }, [workerName, row]);
 
   const processLabel = row?.process || '미지정';
@@ -153,6 +157,7 @@ export default function WorkerEditModal({
   async function handleSave() {
     setError(null);
     const ok = await onSave(workerName, {
+      ...equipmentPatch,
       display_name: displayName.trim(),
       nationality: nationality.trim(),
       organization: organization.trim() || null,
@@ -297,6 +302,8 @@ export default function WorkerEditModal({
             />
           </label>
 
+          <WorkerEquipmentAccessFields value={{ ...row, ...equipmentPatch }} equipment={equipment}
+            disabled={saving} onChange={patch => setEquipmentPatch(previous => ({ ...previous, ...patch }))} />
           <div className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-3">
             <div>
               <p className="text-sm font-medium text-text">불량관리</p>

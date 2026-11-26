@@ -21,6 +21,7 @@ const DAILY_NAV = [
   { href: '/defects', label: '불량기록', code: '05', icon: TriangleAlert },
   { href: '/attendance', label: '근태', code: '14', icon: Clock },
   { href: '/equipment-checks', label: '설비·생산조건 점검', code: '21', icon: Wrench },
+  { href: '/production-review', label: '생산 LOT 점검', code: '22', icon: ListChecks },
   { href: '/questions', label: '질문 답변', code: '13', icon: MessagesSquare, badgeKey: 'questions' },
   { href: '/notices', label: '공지사항', code: '09', icon: Megaphone },
 ];
