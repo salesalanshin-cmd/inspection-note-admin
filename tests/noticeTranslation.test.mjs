@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseNoticeRequest, localizeNotices, noticeTranslationStore } from '../lib/noticeTranslation.js';
 import { requestTranslations } from '../lib/noticeTranslationProvider.js';
+import { WORKER_LANGS } from '../lib/constants.js';
 
 const id = '00000000-0000-4000-8000-000000000001';
 const foreign = '00000000-0000-4000-8000-000000000002';
@@ -31,6 +32,9 @@ function fakeStore() {
 }
 
 test('only bounded notice ID lists and known locales are accepted, no user-supplied text', () => {
+  for (const { value: locale } of WORKER_LANGS.filter(({ value }) => value !== 'ko')) {
+    assert.deepEqual(parseNoticeRequest({ locale, noticeIds: [id] }), { locale, noticeIds: [id], includeBodies: false });
+  }
   assert.deepEqual(parseNoticeRequest({ locale: 'en', noticeIds: [id, id] }), { locale: 'en', noticeIds: [id], includeBodies: false });
   for (const v of [null, { ...valid, text: 'free text' }, { ...valid, noticeIds: [42] }, { ...valid, locale: 'toString' },
     { ...valid, noticeIds: new Array(21).fill(id) }, { ...valid, includeBodies: 1 }]) assert.equal(parseNoticeRequest(v), null);

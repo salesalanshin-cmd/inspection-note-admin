@@ -103,8 +103,9 @@ describe('classifyWorkerImport', () => {
   });
 
   it('복원할 때 지원하는 언어를 선택한 경우에만 기존 사용 언어를 변경한다', () => {
-    assert.deepEqual(buildRestorePatch({ lang: 'ko' }), { removed: false, lang: 'ko' });
-    assert.deepEqual(buildRestorePatch({ lang: 'km' }), { removed: false, lang: 'km' });
+    for (const lang of ['ko', 'km', 'uz', 'ne', 'kk', 'id']) {
+      assert.deepEqual(buildRestorePatch({ lang }), { removed: false, lang });
+    }
     for (const lang of [undefined, '', 'unsupported']) {
       assert.deepEqual(buildRestorePatch({ lang }), { removed: false });
     }
@@ -144,7 +145,7 @@ describe('buildNewWorkerRow', () => {
   });
 
   it('국적과 별도로 선택한 사용 언어를 저장한다', () => {
-    for (const lang of ['ko', 'en', 'vi', 'th', 'km']) {
+    for (const lang of ['ko', 'en', 'vi', 'th', 'km', 'uz', 'ne', 'kk', 'id']) {
       const row = buildNewWorkerRow({ name: '신규자', nationality: '베트남', lang }, 'company-1');
       assert.equal(row.nationality, '베트남');
       assert.equal(row.lang, lang);
